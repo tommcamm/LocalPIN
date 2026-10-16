@@ -1,0 +1,40 @@
+{
+  "actual_locker_mac_denial_tested": false,
+  "broker_hold_control_removed": true,
+  "cases": [
+    {
+      "capture_set_item": 0,
+      "case": "reachable confined fixture broker",
+      "contact": {
+        "outcome": 0,
+        "selinux_type": "unconfined_t"
+      },
+      "human_single_entry_unlock": true,
+      "kde_unlocked_observed": true,
+      "same_greeter_contact_verified": true
+    },
+    {
+      "capture_set_item": 0,
+      "case": "fixture socket deliberately DAC denied",
+      "contact": {
+        "outcome": 3,
+        "selinux_type": "unconfined_t"
+      },
+      "human_single_entry_unlock": true,
+      "kde_unlocked_observed": true,
+      "same_greeter_contact_verified": true
+    }
+  ],
+  "complete_fallback_latency_certified": false,
+  "fixture": "actual stock KDE fallback-only fixed broker contact",
+  "new_greeter_for_denied_case": true,
+  "original_kde_pam_restored": true,
+  "original_kde_sha256": "7d91b3ad73a998e8b10f9edccd74ba04179a778c4a5e61d9176872f43c7bbac3",
+  "production_pin_authorization_tested": false,
+  "schema_version": 1,
+  "selinux": "Enforcing",
+  "socket_denial_kind": "DAC only; separate confined-client fixture covers MAC",
+  "target_original_shadow_record_restored": true,
+  "test_adapter_and_backup_removed": true,
+  "whole_vm_snapshot_restored": false
+}

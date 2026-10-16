@@ -1,0 +1,12 @@
+{
+  "actual_locker_contact_proven_by_orchestrator": false,
+  "broker_ready": true,
+  "cleanup_completed": true,
+  "completion": "finish request",
+  "dac_deny_applied": true,
+  "fixture": "disposable KDE contact broker hold",
+  "locker_type_policy_target": "unconfined_t",
+  "password_or_account_operation": false,
+  "schema_version": 1,
+  "selinux": "Enforcing"
+}

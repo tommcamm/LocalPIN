@@ -1,0 +1,33 @@
+{
+  "capture_set_item_codes": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "fixture": "fallback-only; always PAM_IGNORE with default=ignore",
+  "missing_module_single_entry": {
+    "module_absent_verified": true,
+    "unlocked_observed": true,
+    "user_confirmed": true
+  },
+  "original_target_shadow_restored_by_supervisor": true,
+  "pin_authentication_tested": false,
+  "restoration": {
+    "module_removed": true,
+    "original_sha256": "7d91b3ad73a998e8b10f9edccd74ba04179a778c4a5e61d9176872f43c7bbac3",
+    "restored": true
+  },
+  "schema": 1,
+  "selinux": "Enforcing",
+  "six_digit_password_single_entry": {
+    "unlocked_observed": true,
+    "user_confirmed": true
+  },
+  "whole_vm_snapshot_restored": false,
+  "wrong_then_ordinary_password": {
+    "same_greeter_for_last_two_captures": true,
+    "unlocked_observed": true,
+    "user_confirmed": true
+  }
+}
