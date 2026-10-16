@@ -1,0 +1,220 @@
+{
+  "completed": true,
+  "correct_password_still_denied_after_checker": true,
+  "fixture": "root-private password-free checker plus simulated success gate",
+  "fixture_counter_reset": true,
+  "healthy_password_baseline": {
+    "account": 0,
+    "auth": 0,
+    "capture_calls": 0,
+    "naive_success": 0,
+    "prompts": 1,
+    "setcred": 0
+  },
+  "last_observation": {
+    "stage": 54,
+    "values": {
+      "account": 0,
+      "conversation_calls": 0,
+      "counter_unchanged": true,
+      "counter_valid": true,
+      "eligible": true,
+      "gated_auth": 0,
+      "identity_unchanged": true,
+      "policy_unchanged": true,
+      "preauth": 0,
+      "raw_result": 0
+    }
+  },
+  "last_stage": 55,
+  "malformed_hash_setup": {
+    "actual_account_case_tested": false,
+    "classification": "invalid_fixture_rejected",
+    "target_record_unchanged": true,
+    "tool_exit": 1
+  },
+  "missing_tally_after_healthy_baseline": false,
+  "not_tested": [
+    "malformed enabled account hash: packaged chpasswd rejected fixture; strict parser tested only by pure C checks",
+    "production IPC or enrollment identity lifecycle",
+    "account/policy changes after delivered authorization",
+    "confined production eligibility worker",
+    "whole-VM snapshot restoration"
+  ],
+  "policy_sha256": {
+    "faillock.conf": "662303cf89938c12d95a7fc59d92cbe76c398312527fa908894fb319809093b3",
+    "kde": "7d91b3ad73a998e8b10f9edccd74ba04179a778c4a5e61d9176872f43c7bbac3",
+    "password-auth": "de00ea01b5ffe6b08efd7027e437bdd4a3bad18e231e9593f6b45cc64b334276",
+    "postlogin": "c1ecd4d1a5b5de7d26e3336cd33551d1d65e13751b5f46405183472895838a9d"
+  },
+  "primary_failure": null,
+  "production_eligibility_implemented": false,
+  "profile": "faillock",
+  "restoration_failures": [],
+  "results": [
+    {
+      "case": "healthy account permits simulated success",
+      "counter_digest_unchanged": true,
+      "observation": {
+        "account": 0,
+        "conversation_calls": 0,
+        "counter_unchanged": true,
+        "counter_valid": true,
+        "eligible": true,
+        "gated_auth": 0,
+        "identity_unchanged": true,
+        "policy_unchanged": true,
+        "preauth": 0,
+        "raw_result": 0
+      },
+      "passed": true
+    },
+    {
+      "case": "locked password denies simulated success",
+      "counter_digest_unchanged": true,
+      "observation": {
+        "account": -1,
+        "conversation_calls": 0,
+        "counter_unchanged": true,
+        "counter_valid": true,
+        "eligible": false,
+        "gated_auth": 6,
+        "identity_unchanged": true,
+        "policy_unchanged": true,
+        "preauth": -1,
+        "raw_result": 2
+      },
+      "passed": true
+    },
+    {
+      "case": "expired account denies simulated success",
+      "counter_digest_unchanged": true,
+      "observation": {
+        "account": -1,
+        "conversation_calls": 0,
+        "counter_unchanged": true,
+        "counter_valid": true,
+        "eligible": false,
+        "gated_auth": 6,
+        "identity_unchanged": true,
+        "policy_unchanged": true,
+        "preauth": -1,
+        "raw_result": 3
+      },
+      "passed": true
+    },
+    {
+      "case": "expired password denies simulated success",
+      "counter_digest_unchanged": true,
+      "observation": {
+        "account": -1,
+        "conversation_calls": 0,
+        "counter_unchanged": true,
+        "counter_valid": true,
+        "eligible": false,
+        "gated_auth": 6,
+        "identity_unchanged": true,
+        "policy_unchanged": true,
+        "preauth": -1,
+        "raw_result": 4
+      },
+      "passed": true
+    },
+    {
+      "case": "private nologin fixture denies simulated success",
+      "counter_digest_unchanged": true,
+      "observation": {
+        "account": 7,
+        "conversation_calls": 0,
+        "counter_unchanged": true,
+        "counter_valid": true,
+        "eligible": false,
+        "gated_auth": 6,
+        "identity_unchanged": true,
+        "policy_unchanged": true,
+        "preauth": 0,
+        "raw_result": 0
+      },
+      "passed": true
+    },
+    {
+      "case": "changed expected identity denies simulated success",
+      "counter_digest_unchanged": true,
+      "observation": {
+        "account": -1,
+        "conversation_calls": 0,
+        "counter_unchanged": true,
+        "counter_valid": true,
+        "eligible": false,
+        "gated_auth": 6,
+        "identity_unchanged": false,
+        "policy_unchanged": true,
+        "preauth": -1,
+        "raw_result": 1
+      },
+      "passed": true
+    },
+    {
+      "case": "active failure lockout denies without resetting counter",
+      "counter_digest_unchanged": true,
+      "observation": {
+        "account": -1,
+        "conversation_calls": 0,
+        "counter_unchanged": true,
+        "counter_valid": true,
+        "eligible": false,
+        "gated_auth": 6,
+        "identity_unchanged": true,
+        "policy_unchanged": true,
+        "preauth": 7,
+        "raw_result": 0
+      },
+      "passed": true
+    },
+    {
+      "case": "healthy after explicit fixture counter reset",
+      "counter_digest_unchanged": true,
+      "observation": {
+        "account": 0,
+        "conversation_calls": 0,
+        "counter_unchanged": true,
+        "counter_valid": true,
+        "eligible": true,
+        "gated_auth": 0,
+        "identity_unchanged": true,
+        "policy_unchanged": true,
+        "preauth": 0,
+        "raw_result": 0
+      },
+      "passed": true
+    },
+    {
+      "case": "noncanonical tally mode denies before PAM without normalization",
+      "counter_digest_unchanged": true,
+      "noncanonical_mode_retained_by_checker": true,
+      "observation": {
+        "account": -1,
+        "conversation_calls": 0,
+        "counter_unchanged": false,
+        "counter_valid": false,
+        "eligible": false,
+        "gated_auth": 6,
+        "identity_unchanged": true,
+        "policy_unchanged": true,
+        "preauth": -1,
+        "raw_result": 0
+      },
+      "passed": true
+    }
+  ],
+  "schema": 1,
+  "selinux": "Enforcing",
+  "snapshot_restore_required_for_failed_cleanup": false,
+  "target_shadow_record_restored": true,
+  "versions": [
+    "pam-1.7.2-2.fc44.x86_64",
+    "authselect-1.7.1-1.fc44.x86_64",
+    "selinux-policy-targeted-44.11-1.fc44.noarch"
+  ],
+  "whole_vm_snapshot_restored": false
+}

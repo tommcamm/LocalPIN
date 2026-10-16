@@ -1,0 +1,270 @@
+{
+  "faillock_reset": true,
+  "faillock_threshold": 3,
+  "guard": {
+    "selinux": "Enforcing",
+    "target": "localpintest",
+    "virtual_machine": true
+  },
+  "not_tested": [
+    "stock KDE conversation and keyboard input",
+    "production LocalPIN adapter/backend/eligibility worker",
+    "production broker SELinux domain and service sandbox",
+    "whole-VM rollback: restore the clean snapshot separately"
+  ],
+  "policy": {
+    "password-auth": "de00ea01b5ffe6b08efd7027e437bdd4a3bad18e231e9593f6b45cc64b334276"
+  },
+  "results": [
+    {
+      "case": "real password positive baseline",
+      "observations": [
+        {
+          "account": 0,
+          "auth": 0,
+          "capture_calls": 0,
+          "naive_success": 0,
+          "prompts": 1,
+          "setcred": 0
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "real password negative baseline",
+      "observations": [
+        {
+          "account": -1,
+          "auth": 7,
+          "capture_calls": 0,
+          "naive_success": 0,
+          "prompts": 1,
+          "setcred": -1
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "same-entry ordinary password",
+      "observations": [
+        {
+          "account": 0,
+          "auth": 0,
+          "capture_calls": 1,
+          "naive_success": 0,
+          "prompts": 1,
+          "setcred": 0
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "six-digit password positive baseline",
+      "observations": [
+        {
+          "account": 0,
+          "auth": 0,
+          "capture_calls": 0,
+          "naive_success": 0,
+          "prompts": 1,
+          "setcred": 0
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "same-entry six-digit password",
+      "observations": [
+        {
+          "account": 0,
+          "auth": 0,
+          "capture_calls": 1,
+          "naive_success": 0,
+          "prompts": 1,
+          "setcred": 0
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "reused handle correct-wrong-correct",
+      "observations": [
+        {
+          "account": -1,
+          "auth": 0,
+          "capture_calls": 1,
+          "naive_success": 0,
+          "prompts": 1,
+          "setcred": 0
+        },
+        {
+          "account": -1,
+          "auth": 7,
+          "capture_calls": 1,
+          "naive_success": 0,
+          "prompts": 1,
+          "setcred": -1
+        },
+        {
+          "account": -1,
+          "auth": 0,
+          "capture_calls": 1,
+          "naive_success": 0,
+          "prompts": 1,
+          "setcred": 0
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "locked password rejects real auth",
+      "observations": [
+        {
+          "account": 0,
+          "auth": 7,
+          "capture_calls": 0,
+          "naive_success": 0,
+          "prompts": 1,
+          "setcred": -1
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "naive PIN bypasses locked password auth",
+      "observations": [
+        {
+          "account": 0,
+          "auth": 0,
+          "capture_calls": 1,
+          "naive_success": 1,
+          "prompts": 1,
+          "setcred": 0
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "expired account phase denies",
+      "observations": [
+        {
+          "account": 13,
+          "auth": 0,
+          "capture_calls": 0,
+          "naive_success": 0,
+          "prompts": 1,
+          "setcred": 0
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "naive PIN success still needs expired-account check",
+      "observations": [
+        {
+          "account": 13,
+          "auth": 0,
+          "capture_calls": 1,
+          "naive_success": 1,
+          "prompts": 1,
+          "setcred": 0
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "expired password phase denies normal unlock eligibility",
+      "observations": [
+        {
+          "account": 12,
+          "auth": 0,
+          "capture_calls": 0,
+          "naive_success": 0,
+          "prompts": 1,
+          "setcred": 0
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "naive PIN success still needs password-expiry check",
+      "observations": [
+        {
+          "account": 12,
+          "auth": 0,
+          "capture_calls": 1,
+          "naive_success": 1,
+          "prompts": 1,
+          "setcred": 0
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "active faillock denies correct password",
+      "observations": [
+        {
+          "account": -1,
+          "auth": 7,
+          "capture_calls": 0,
+          "naive_success": 0,
+          "prompts": 1,
+          "setcred": -1
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "naive PIN bypasses active auth failure lockout",
+      "observations": [
+        {
+          "account": -1,
+          "auth": 0,
+          "capture_calls": 1,
+          "naive_success": 1,
+          "prompts": 1,
+          "setcred": 0
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "account phase observed under failure lockout",
+      "observations": [
+        {
+          "account": 0,
+          "auth": 0,
+          "capture_calls": 1,
+          "naive_success": 1,
+          "prompts": 1,
+          "setcred": 0
+        }
+      ],
+      "passed": true
+    },
+    {
+      "case": "password recovery after fixture counter reset",
+      "observations": [
+        {
+          "account": 0,
+          "auth": 0,
+          "capture_calls": 0,
+          "naive_success": 0,
+          "prompts": 1,
+          "setcred": 0
+        }
+      ],
+      "passed": true
+    }
+  ],
+  "schema": 1,
+  "target_shadow_record_restored": true,
+  "versions": [
+    "pam-1.7.2-2.fc44.x86_64",
+    "pam-devel-1.7.2-2.fc44.x86_64",
+    "authselect-1.7.1-1.fc44.x86_64",
+    "kscreenlocker-6.7.5-1.fc44.x86_64",
+    "selinux-policy-targeted-44.11-1.fc44.noarch"
+  ],
+  "whole_vm_snapshot_restored": false
+}
