@@ -1,0 +1,27 @@
+name: Feature request
+description: Propose a focused improvement or discuss a requirement.
+title: "Feature: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the product specification and implementation plan first. Planned functionality is not implemented functionality.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Explain who needs this and what they are trying to do.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the outcome and any alternatives you considered.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and validation
+      description: Note relevant specification requirements, milestones, platform constraints, and how success could be demonstrated.

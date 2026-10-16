@@ -1,0 +1,41 @@
+name: Bug report
+description: Report a reproducible, non-sensitive problem in LocalPIN.
+title: "Bug: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        LocalPIN is at the repository-foundation milestone; authentication and installation are not implemented.
+        For suspected vulnerabilities, follow SECURITY.md. Do not include secrets or private exploit details here.
+  - type: input
+    id: revision
+    attributes:
+      label: Affected commit or version
+      placeholder: Commit SHA
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, architecture, Rust version, and relevant tool versions. Include desktop or TPM details only when relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Use a minimal example and synthetic data.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and observed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Include relevant errors only. Remove passwords, PINs, credential material, personal information, and unrelated logs.
