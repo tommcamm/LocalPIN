@@ -28,6 +28,7 @@ PACKAGES = (
     "pam", "authselect", "systemd", "selinux-policy", "selinux-policy-targeted",
     "swtpm", "tpm2-tss", "kernel-core",
 )
+SESSION_PROPERTIES = ("User", "Type", "Class", "Remote", "Active", "State", "Seat", "Desktop")
 
 
 def logical_lines(text: str):
@@ -239,23 +240,35 @@ def collect_sessions(pid):
     membership, direct = pid_membership(pid)
     result, output = command(["loginctl", "list-sessions", "--json=short", "--no-pager"])
     report = {"query": result, "pid_membership": membership, "sessions": [],
-              "authorization_proven": False}
+              "complete": False, "authorization_proven": False}
     if result["status"] != "ok":
         return report
     try:
         sessions = json.loads(output)
         if not isinstance(sessions, list) or len(sessions) > 256:
             raise ValueError
+        report["complete"] = True
         seats = {}
         for index, session in enumerate(sessions):
             identifier = session["session"]
             if not isinstance(identifier, str) or not NAME.fullmatch(identifier):
                 raise ValueError
+            # loginctl v259 treats each -p argument as one property, without
+            # splitting commas. Unmatched comma strings return empty success.
             status, values = command(["loginctl", "show-session", identifier, "--no-pager",
-                                      "--property=User,Type,Class,Remote,Active,State,Seat,Desktop"])
+                                      *(f"--property={name}" for name in SESSION_PROPERTIES)])
             entry = {"session": f"session-{index + 1}", "query": status}
             if status["status"] == "ok":
                 props = dict(line.split("=", 1) for line in values.splitlines() if "=" in line)
+                if (not set(SESSION_PROPERTIES).issubset(props)
+                        or not props["User"].isdigit()
+                        or props["Remote"] not in {"yes", "no"}
+                        or props["Active"] not in {"yes", "no"}
+                        or not all(props[name] for name in ("Type", "Class", "State"))):
+                    entry["query"] = {"status": "unsupported_session_properties"}
+                    report["complete"] = False
+                    report["sessions"].append(entry)
+                    continue
                 seat = props.get("Seat", "")
                 if seat:
                     seats.setdefault(seat, f"seat-{len(seats) + 1}")
@@ -268,9 +281,12 @@ def collect_sessions(pid):
                              seat=seats.get(seat),
                              kde_desktop=props.get("Desktop", "").lower() in {"kde", "plasma", "plasmax11"},
                              discovery_candidate=session_candidate(props, os.getuid()))
+            else:
+                report["complete"] = False
             report["sessions"].append(entry)
     except (ValueError, KeyError, TypeError):
         report["query"] = {"status": "unsupported_loginctl_output"}
+        report["complete"] = False
         report["sessions"] = []
     return report
 

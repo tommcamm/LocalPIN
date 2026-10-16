@@ -5,8 +5,9 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
-from inventory import MAX_PAM_BYTES, collect_pam_graph, session_candidate
+from inventory import MAX_PAM_BYTES, SESSION_PROPERTIES, collect_pam_graph, collect_sessions, session_candidate
 
 
 class PamGraphTests(unittest.TestCase):
@@ -147,6 +148,37 @@ class SessionDiscoveryTests(unittest.TestCase):
     def test_multiple_seats_are_discovered_independently_not_arbitrarily_selected(self):
         sessions = [self.props, {**self.props, "Seat": "seat1", "Type": "x11"}]
         self.assertEqual(sum(session_candidate(item, 1200) for item in sessions), 2)
+
+    def test_loginctl_properties_are_repeated_and_private_fields_are_not_exported(self):
+        calls = []
+
+        def command(args):
+            calls.append(args)
+            if "list-sessions" in args:
+                return {"status": "ok"}, json.dumps([{"session": "c17", "user": "PRIVATE_USER"}])
+            return {"status": "ok"}, "\n".join(f"{key}={value}" for key, value in self.props.items()) + "\nActive=yes\n"
+
+        with patch("inventory.command", side_effect=command), \
+             patch("inventory.pid_membership", return_value=({"status": "observed"}, "c17")), \
+             patch("inventory.os.getuid", return_value=1200):
+            report = collect_sessions(123)
+        self.assertTrue(report["complete"])
+        self.assertTrue(report["sessions"][0]["discovery_candidate"])
+        self.assertTrue(report["sessions"][0]["direct_pid_session"])
+        self.assertTrue(all(f"--property={name}" in calls[1] for name in SESSION_PROPERTIES))
+        self.assertFalse(any("," in arg for arg in calls[1]))
+        for private in ["PRIVATE_USER", "c17", "seat0"]:
+            self.assertNotIn(private, json.dumps(report))
+
+    def test_empty_successful_property_query_is_incomplete_not_false_eligibility(self):
+        with patch("inventory.command", side_effect=[({"status": "ok"}, '[{"session":"c17"}]'),
+                                                      ({"status": "ok"}, "")]), \
+             patch("inventory.pid_membership", return_value=({"status": "observed"}, None)):
+            report = collect_sessions(123)
+        self.assertFalse(report["complete"])
+        self.assertEqual(report["sessions"][0]["query"]["status"], "unsupported_session_properties")
+        self.assertNotIn("peer_uid", report["sessions"][0])
+        self.assertNotIn("discovery_candidate", report["sessions"][0])
 
 
 if __name__ == "__main__":
