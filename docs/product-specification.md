@@ -1,4 +1,4 @@
-# LocalPIN: production specification for a Rust Linux screen-unlock PIN system
+# LocalPIN product specification
 
 **Specification version:** 1.0  
 **Date:** 2026-10-16  

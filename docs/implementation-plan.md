@@ -1,8 +1,8 @@
 # LocalPIN implementation plan
 
-Date: 2026-10-16  
-Status: Proposed implementation roadmap; implementation has not started.  
-Source of requirements: [specs.md](../specs.md), version 1.0.
+- Date: 2026-10-16
+- Status: Accepted roadmap; M0 repository foundations in progress.
+- Source of requirements: [product-specification.md](product-specification.md), version 1.0.
 
 This plan turns the specification into independently reviewable changes and evidence gates. The specification remains authoritative. An unresolved design question below must be resolved in an architecture decision record (ADR), with a specification amendment if necessary, rather than silently changing the requirements.
 
@@ -16,9 +16,9 @@ The improvement to pursue is a narrower supported integration, protected authori
 
 Use `pam_pinlock` as migration context. Its documented features already include Argon2id, throttling, a CLI, and password fallback. Avoid claiming those as novel, or claiming a source audit has been completed. Start with original Rust code; any upstream code or documentation reused must retain the applicable attribution and license notices. See the [upstream project](https://github.com/saltnpepper97/pam_pinlock).
 
-## Current baseline
+## Planning baseline
 
-- The workspace contains `specs.md`; no application implementation or initialized Git history was found.
+- At planning time, the workspace contained the original `specs.md`; no application implementation or initialized Git history was found. M0 moves that specification to `docs/product-specification.md` and establishes the repository.
 - The machine details in the specification are an initial deployment record, not a supported-platform certification.
 - Read-only inspection during planning found the temporary `pam_pinlock` block in the KDE service. No installation, password-fallback test, TPM provisioning, or PAM change was performed as part of this plan.
 - Dependency versions, Fedora package inputs, actual TPM suitability, and the supported PAM layout must be established and recorded during implementation.
