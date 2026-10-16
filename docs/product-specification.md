@@ -1,6 +1,7 @@
 # LocalPIN product specification
 
-**Specification version:** 1.0  
+**Specification version:** 1.1
+
 **Date:** 2026-10-16  
 **Status:** Implementation specification for a future production project; no Rust implementation or system installation is implied by this document.  
 **Initial deployment:** Fedora Linux, KDE Plasma, local user accounts.  
@@ -169,7 +170,7 @@ OS randomness failures abort enrollment. Secrets use zeroizing buffers, bounded 
 
 ## 11. Authoritative throttling and crash consistency
 
-The same broker-managed throttle applies to both backends. The default is five submitted valid-format guesses per rolling 60-second window, followed by a five-minute PIN cooldown. Password authentication is not counted by LocalPIN and remains governed by the existing password stack.
+The same broker-managed throttle applies to both backends. The default is five submitted valid-format guesses per rolling 60-second window, followed by a five-minute PIN cooldown. Candidates outside six ASCII digits do not invoke or consume LocalPIN verification attempts. A six-digit account password is also a PIN-format candidate and may consume a LocalPIN attempt before succeeding through password fallback. The fallback remains governed by the existing password stack, including any failure accounting when a wrong PIN is forwarded as the same candidate. LocalPIN must not suppress or reset those password counters. This accounting clarification is recorded in [ADR 0001](adr/0001-pam-candidate-and-account-policy.md); the exact fifth-attempt state transition is defined and tested in M2.
 
 For each UID and credential generation:
 
