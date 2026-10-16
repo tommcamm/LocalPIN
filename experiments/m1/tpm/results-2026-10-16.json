@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "fixture": "synthetic; disposable swtpm; no production TPM",
+  "versions": {
+    "swtpm": "TPM emulator version 0.10.2, Copyright (c) 2014-2022 IBM Corp. and others",
+    "tpm2_create": "tool=\"tpm2_create\" version=\"5.7\" tctis=\"libtss2-tctildr\" tcti-default=tcti-device",
+    "rpm": "swtpm-0.10.2-1.fc44.x86_64\nlibtpms-0.10.2-3.fc44.x86_64\ntpm2-tools-5.7-5.fc44.x86_64\ntpm2-tss-4.1.3-9.fc44.x86_64\nlibargon2-20190702-10.fc44.x86_64",
+    "python": "3.14.8",
+    "kernel": "7.2.9-200.fc44.x86_64"
+  },
+  "results": {
+    "simulator_properties": "TPM2_PT_FAMILY_INDICATOR:\n  raw: 0x322E3000\n  value: \"2.0\"\nTPM2_PT_LEVEL:\n  raw: 0\nTPM2_PT_REVISION:\n  raw: 0xB7\n  value: 1.83\nTPM2_PT_DAY_OF_YEAR:\n  raw: 0x19\nTPM2_PT_YEAR:\n  raw: 0x7E8\nTPM2_PT_MANUFACTURER:\n  raw: 0x49424D00\n  value: \"IBM\"\nTPM2_PT_VENDOR_STRING_1:\n  raw: 0x53572020\n  value: \"SW\"\nTPM2_PT_VENDOR_STRING_2:\n  raw: 0x2054504D\n  value: \"TPM\"\nTPM2_PT_VENDOR_STRING_3:\n  raw: 0x0\n  value: \"\"\nTPM2_PT_VENDOR_STRING_4:\n  raw: 0x0\n  value: \"\"\nTPM2_PT_VENDOR_TPM_TYPE:\n  raw: 0x1\nTPM2_PT_FIRMWARE_VERSION_1:\n  raw: 0x20240125\nTPM2_PT_FIRMWARE_VERSION_2:\n  raw: 0x120000\nTPM2_PT_INPUT_BUFFER:\n  raw: 0x400\nTPM2_PT_HR_TRANSIENT_MIN:\n  raw: 0x3\nTPM2_PT_HR_PERSISTENT_MIN:\n  raw: 0x7\nTPM2_PT_HR_LOADED_MIN:\n  raw: 0x3\nTPM2_PT_ACTIVE_SESSIONS_MAX:\n  raw: 0x40\nTPM2_PT_PCR_COUNT:\n  raw: 0x18\nTPM2_PT_PCR_SELECT_MIN:\n  raw: 0x3\nTPM2_PT_CONTEXT_GAP_MAX:\n  raw: 0xFFFF\nTPM2_PT_NV_COUNTERS_MAX:\n  raw: 0x0\nTPM2_PT_NV_INDEX_MAX:\n  raw: 0x800\nTPM2_PT_MEMORY:\n  raw: 0x6\nTPM2_PT_CLOCK_UPDATE:\n  raw: 0x1000\nTPM2_PT_CONTEXT_HASH:\n  raw: 0xD\nTPM2_PT_CONTEXT_SYM:\n  raw: 0x6\nTPM2_PT_CONTEXT_SYM_SIZE:\n  raw: 0x100\nTPM2_PT_ORDERLY_COUNT:\n  raw: 0xFF\nTPM2_PT_MAX_COMMAND_SIZE:\n  raw: 0x1000\nTPM2_PT_MAX_RESPONSE_SIZE:\n  raw: 0x1000\nTPM2_PT_MAX_DIGEST:\n  raw: 0x40\nTPM2_PT_MAX_OBJECT_CONTEXT:\n  raw: 0xA8C\nTPM2_PT_MAX_SESSION_CONTEXT:\n  raw: 0x194\nTPM2_PT_PS_FAMILY_INDICATOR:\n  raw: 0x1\nTPM2_PT_PS_LEVEL:\n  raw: 0x0\nTPM2_PT_PS_REVISION:\n  raw: 0x106\nTPM2_PT_PS_DAY_OF_YEAR:\n  raw: 0x19\nTPM2_PT_PS_YEAR:\n  raw: 0x7E8\nTPM2_PT_SPLIT_MAX:\n  raw: 0x80\nTPM2_PT_TOTAL_COMMANDS:\n  raw: 0x6E\nTPM2_PT_LIBRARY_COMMANDS:\n  raw: 0x6E\nTPM2_PT_VENDOR_COMMANDS:\n  raw: 0x0\nTPM2_PT_NV_BUFFER_MAX:\n  raw: 0x400\nTPM2_PT_MODES:\n  raw: 0x0\n",
+    "parent_recreation": "identical public and Name after transient flush, clean simulator process restart with saved state, and recreate",
+    "metadata": "keyedhash/sha256/null; attrs=0x52; empty policy; Name/public/generation checked; mutations, generation mismatch, and actual same-TPM object substitution rejected",
+    "protected_sessions": "salted AES-128-CFB/SHA-256 HMAC and command protection flags verified on wire; plaintext response negative control passes; protected create/unseal contains neither raw auth nor 32-byte secret",
+    "native_timeout": {
+      "deadline_seconds": 0.5,
+      "killed_and_reaped_seconds": 0.501,
+      "late_output": false,
+      "reservation_retained": true,
+      "fresh_context_recovery": true,
+      "limitation": "stopped simulator transport; not a kernel task stuck in uninterruptible device I/O"
+    },
+    "wrong_auth_da": {
+      "before": 0,
+      "after_empty_and_wrong": 2,
+      "error": "TPM_RC_AUTH_FAIL 0x98e"
+    },
+    "alternate_paths": "empty password rejected (AUTH_FAIL); empty policy session rejected (POLICY_FAIL); no policy/PCR authorization provisioned",
+    "foreign_tpm": "different primary Name; copied blob load rejected with INTEGRITY 0x1df",
+    "reserve_and_race": {
+      "max_tries": 8,
+      "reserve": 2,
+      "preflight_counter": 5,
+      "other_client_counter": 6,
+      "stale_submission_counter": 7,
+      "in_lockout_before": false,
+      "in_lockout_at_counter_8": true,
+      "correct_auth_at_counter_8": "TPM_RC_LOCKOUT 0x921"
+    }
+  },
+  "not_tested": [
+    "real TPM/hierarchy authorization and resource manager",
+    "tss-esapi Rust integration and secret erasure",
+    "power cycle/clear/suspend lifecycle",
+    "production broker scheduling, durable storage fault injection, per-UID responsiveness",
+    "independent TPM specialist review"
+  ]
+}
