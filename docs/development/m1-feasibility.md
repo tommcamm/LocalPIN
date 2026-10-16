@@ -2,25 +2,30 @@
 
 Date: 2026-10-16. Branch: `codex/m1-feasibility`.
 
-**Status: isolated experiments implemented; M1 exit gate remains open.** No
-disposable Fedora KDE VM with SELinux enforcing is available yet. The maintainer
-confirmed this and requested [VM setup steps](m1-vm-setup.md). The current host's
-authentication configuration and real TPM were not changed.
+**Status: enforcing-VM feasibility experiments delivered; M1 exit gate remains
+open for two real desktops of one UID and actual second-seat coverage.** The maintainer supplied a disposable
+Fedora 44 KDE VM with an ordinary test account and a clean snapshot. Actual
+lock-screen, real-account and confined-worker results are now available. The
+everyday host's authentication configuration and real TPM were not changed.
 
 ## Delivered evidence and its limits
 
 | Area | Evidence | Remaining gate |
 | --- | --- | --- |
-| PAM | 30 private `pam_start_confdir` assertions with known permit/deny baselines; five optional real `pam_unix` assertions with correct/wrong baselines and namespace-private synthetic accounts; candidate bytes, six-digit fallback and repeated handles | Real KDE conversation and the complete supported Fedora password/account/failure-counter policy in an enforcing VM |
-| Packaged locker | Matching Fedora source RPM and installed-binary metadata inspection identify `kde` and authentication/credential-refresh calls without account management | Runtime tests of the actual installed VM build, supported authselect profiles and account restrictions |
+| PAM | 30 private assertions; five namespace-private `pam_unix` assertions; twelve default-profile and sixteen `with-faillock` real-account cases; six/nine password-free experimental eligibility cases under enforcing SELinux | Complete explicit password-free eligibility, required-check preservation, supported-profile and account-change race implementation |
+| Packaged locker | Matching Fedora source/build inspection identifies `kde` and auth-only behavior; actual stock KDE one-entry six-digit/ordinary password, wrong-then-correct, missing-adapter, reachable-broker and DAC-denied-broker fallback passed | Production PIN-success path, account restrictions and complete failure/latency matrix |
 | TPM | Disposable swtpm object authorization, exact template/Name checks, protected sessions, parent recreation, rejection on another TPM, DA budget/races and stopped-transport timeout | Production tss-esapi/resource-manager integration, real-hardware lifecycle and specialist review |
-| Platform | Read-only PAM graph with digests and sanitized versions/session metadata; synthetic graph/session discovery regression tests | Actual multiple graphical sessions/seats, user-manager locker identity and enforcing SELinux broker/password-worker policy |
-| Native worker | Six tests of blocked native calls, deadline/result fencing, reserve-before-spawn marker, reaping and bounded capacity | Production asynchronous cleanup, durable storage, privileges/sandbox and IPC |
-| CI | Fedora container job runs the isolated suites | Hosted execution result; containers do not establish desktop or enforcing-SELinux compatibility |
+| Platform | Complete guest PAM graph; actual user-manager locker identity; corrected user-unit discovery; 20 synthetic regressions; five real logind metadata cases; two genuine different-UID KDE desktops on seat0; enforcing broker/client MAC/DAC controls | Two real desktops for one UID, an actual second seat, and complete production caller/eligibility contract |
+| Native worker | Six deadline/capacity tests; eight enforcing real-password/helper/account cases in a separate own-UID worker; no direct shadow-read or password-update SELinux grant | Production privileged grant binding, supported profiles, durable storage and IPC |
+| CI | Fedora container job runs isolated suites plus safe VM-source compilation and guard tests | Hosted execution result; guest mutations never run in CI |
 
 Detailed commands, versions, source digests and outcomes belong in the
 [PAM report](m1-pam.md), [TPM report](m1-tpm.md), and
-[platform report](m1-platform.md). Run the tools using
+[platform report](m1-platform.md), with separate [real-account](m1-vm-pam.md),
+[KDE UI](m1-vm-kde.md), [actual broker contact](m1-vm-kde-contact.md),
+[password-free eligibility](m1-vm-eligibility.md), [sessions](m1-vm-sessions.md),
+and [SELinux/worker](m1-vm-selinux.md) reports. Reviewed
+JSON is in [VM results](../../experiments/m1/vm/results/README.md). Run the tools using
 [experiments/m1/README.md](../../experiments/m1/README.md).
 
 The PAM permit baseline fails inside Codex's restricted syscall sandbox, as
@@ -34,7 +39,12 @@ failures are recorded separately from test assertions.
 - [ADR 0001](../adr/0001-pam-candidate-and-account-policy.md): preserve candidate
   bytes through Linux-PAM's token API, acquire a new candidate for every
   authentication, and add explicit account eligibility before PIN success.
-  Synthetic modules cannot prove Fedora account/failure-counter behavior.
+  Real-account tests demonstrate that password locks and active faillock can be
+  bypassed by naive fixture success. Account management alone is insufficient
+  and can reset failure counters; it is not the selected eligibility shortcut.
+  The bounded root-private preflight preserves required checks and explicit
+  preauth without that resetting account hook; production implementation still
+  requires broader hash/policy support and confinement.
 - [ADR 0002](../adr/0002-tpm-construction.md): select the tested sealed-object
   construction as the candidate for M4, with exact public identity/metadata
   checks, protected sessions and the shared-DA reserve limitation. Another TPM
@@ -51,12 +61,15 @@ Specification 1.1 makes the candidate-shape accounting in ADR 0001 explicit:
 six-digit account passwords can consume a PIN attempt before fallback, and
 wrong PIN candidates can affect the original password failure counters. No
 counter bypass is introduced. The exact fifth-attempt boundary remains M2 work.
+The experimental eligibility route left active faillock bytes/metadata unchanged
+and a separate correct-password attempt was still denied; fixture cleanup reset counters afterward, separately.
 
 No product requirement is waived by these experiments. Production support for
 UID reuse, reboot throttling, revocation races, failure accounting and activation
 authority must be made explicit in M2/M3/M5/M6 as assigned by the roadmap and
-ADRs. In particular, actual Fedora same-entry fallback and enforcing password
-worker checks remain prerequisites for treating the desktop design as proven.
+ADRs. Actual Fedora same-entry fallback and the bounded enforcing password worker
+now have positive evidence. Those results do not certify the complete desktop
+design or waive the remaining account/session and production integration gates.
 
 ## Local repository checks
 
@@ -65,16 +78,44 @@ and cached dependency advisory/license/source/bans checks pass. The Rust library
 still contains no authentication behavior and no third-party dependencies.
 Workflow YAML and shell blocks parse, and action pins/read-only permissions are
 retained. Final local runs pass 30 synthetic PAM assertions, five packaged
-`pam_unix` assertions, 18 platform tests, six worker tests, and the full TPM
+`pam_unix` assertions, 20 platform tests, six worker tests, and the full TPM
 simulator suite. The final simulator results match the sanitized reference
-assertions, with native timeout cleanup measured at 0.501 seconds. No successful
-GitHub-hosted M1 run is claimed.
+assertions, with native timeout cleanup measured at 0.501 seconds.
+New local source checks additionally pass 13 SELinux fixture tests, five
+positive-worker tests, five contact-hold tests, six session-fixture tests and
+four eligibility guard tests, plus strict C compilation and pure hash-format
+checks. Seven fixed-contact namespace cases passed, including the stalled
+reply deadline. No successful GitHub-hosted M1 run is claimed.
 
-## Next required action
+## Remaining M1 gate
 
-Prepare the [Fedora KDE test VM](m1-vm-setup.md), verify SELinux says `Enforcing`,
-and report its VM name and available console/SSH access. No password needs to be
-sent. Then complete the real password, account/failure-counter, sessions/seats,
-SELinux contact/worker and recovery matrix, record observations, and update the
-ADRs before closing M1. Keep the everyday `pam_pinlock` setup separate until a
-later tested migration milestone.
+The bounded session/contact/eligibility experiments are complete. Two genuine
+KDE/Wayland desktops for different UIDs ran together on seat0, and the inactive
+locked test desktop remained its UID's sole candidate while the foreign active
+management desktop was excluded. The actual greeter again had no direct session
+and matched its user-manager UID.
+
+Two real KDE desktops for the same UID and an actual second independent seat
+remain untested. The [multiple-seat gap report](m1-multiseat-gap.md) records the
+current one-GPU/SPICE limitation and exact packaged login-manager source findings;
+it does not claim a second-seat runtime failure was reproduced. Another display
+head or root-declared metadata does not close these gates. A dedicated routed
+second-seat VM configuration and genuine desktop/locker interactions remain
+required. M1 is not marked complete and these requirements are not waived.
+
+Production eligibility, complete required-policy preservation, UID lifecycle,
+peer/process races, grant binding and the full integration/fault matrix retain
+their M2–M8 implementation/release gates. The SHA512-only administrative-domain
+eligibility fixture is evidence for a direction, not a deployable worker.
+
+## Recovery completed
+
+The [final cleanup record](../../experiments/m1/vm/results/2026-10-16-cleanup.json)
+confirms exact account restoration in the account/UI reports, original PAM graph
+and authselect profile verification, removal of fixture modules/units/paths,
+explicit temporary guest-key removal, and whole-VM clean-snapshot restoration.
+The VM restarted and its guest agent responded; the local temporary key pair was
+deleted. SELinux was checked Enforcing before rollback; its post-restore mode was
+not independently queried. Per-run reports keep their historical pre-snapshot
+flags and are interpreted alongside this separate final record. The everyday
+host's authentication setup and real TPM were not changed.

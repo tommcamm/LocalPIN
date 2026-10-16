@@ -1,0 +1,25 @@
+{
+  "audit_lost_count_before_restore": 76,
+  "clean_snapshot_name": "m1-clean-enforcing",
+  "current_snapshot_matches_clean": true,
+  "dedicated_account_exact_restoration_verified_in_each_account_report": true,
+  "fixture_modules_units_and_paths_absent_before_restore": true,
+  "guest_agent_responded_after_restart": true,
+  "local_temporary_private_and_public_key_files_deleted": true,
+  "notes": [
+    "Per-run reports retain historical pre-snapshot flags.",
+    "The clean snapshot was captured with SELinux enforcing; post-restore mode was not independently queried.",
+    "No everyday-host PAM, account or TPM state was changed."
+  ],
+  "original_pam_graph_and_authselect_profile_checked_before_restore": true,
+  "other_guest_authorized_keys_preserved_during_key_removal": true,
+  "recorded_at_utc": "2026-10-16T17:30:28.220199+00:00",
+  "schema_version": 1,
+  "selinux_enforcing_checked_before_restore": true,
+  "selinux_mode_not_requeried_after_restore": true,
+  "snapshot_captured_state": "shutoff",
+  "temporary_guest_authorized_key_removed_before_restore": true,
+  "test_guard_removed_before_restore": true,
+  "vm_restarted": true,
+  "whole_vm_snapshot_restored": true
+}

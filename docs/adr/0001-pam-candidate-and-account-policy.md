@@ -1,7 +1,8 @@
 # ADR 0001: PAM candidate reuse and explicit PIN eligibility
 
-Date: 2026-10-16. Status: accepted experimental candidate contract; production
-eligibility policy and activation remain blocked on enforcing-VM evidence.
+Date: 2026-10-16. Status: accepted experimental candidate contract and bounded
+eligibility path, supported by Enforcing-VM evidence. Production eligibility
+implementation and activation remain release blockers.
 
 ## Context and evidence
 
@@ -16,7 +17,22 @@ The [M1 report](../development/m1-pam.md) records exact source inputs, observed
 module behavior, baselines and remaining limits. Thirty synthetic assertions
 passed, and five assertions against Fedora's packaged `pam_unix` passed inside a
 namespace containing only synthetic accounts. The latter demonstrates same-entry
-reuse for the tested `pam_unix` options, not the complete KDE/authselect policy.
+reuse for the tested `pam_unix` options. Subsequent
+[real-account VM tests](../development/m1-vm-pam.md) passed twelve default-profile
+and sixteen lockout-profile cases, and the
+[stock KDE UI tests](../development/m1-vm-kde.md) passed three fallback-only cases.
+The locked-password and failure-lockout bypass demonstrated by naive fixture
+success reinforces the explicit eligibility requirement; no production PIN
+success branch was installed in KDE.
+
+The subsequent [password-free eligibility experiment](../development/m1-vm-eligibility.md)
+passed six default-profile and nine lockout-profile cases in the Enforcing guest.
+It denied locked/expired accounts, a private nologin restriction, identity
+mismatch, active failure lockout and noncanonical counter state before its
+private simulated-success gate. Active lockout remained effective after the
+checker, and eligible canonical-state checks preserved the measured tally.
+This establishes the experimental policy below, with root execution in
+`unconfined_t` and synthetic SHA512-crypt account passwords.
 
 ## Decision
 
@@ -43,13 +59,14 @@ reuse for the tested `pam_unix` options, not the complete KDE/authselect policy.
    username lookup nor `pam_acct_mgmt` alone is accepted as proof of all these
    conditions. Missing, failed or ambiguous eligibility disables the PIN route
    and leaves original password policy authoritative.
-5. Resolve the concrete worker policy by testing the exact supported Fedora
-   graph in an enforcing VM. A separate password-only worker must not include
+5. Use the measured password-free preflight below as the experimental policy
+   direction for the exact reviewed Fedora graph. A separate password-only
+   worker must not include
    LocalPIN, the previous PIN module, or alternative authentication shortcuts.
    Do not recursively invoke the screen-lock auth stack from the adapter. The
    system broker can host or invoke a narrowly scoped privileged eligibility
    worker; its APIs, deadlines, permissions and account-change races require
-   evidence before this architecture is fixed.
+   production implementation and further evidence before activation.
 6. Preserve existing failure accounting. A submitted six-digit account password
    may consume a LocalPIN PIN-format attempt before succeeding as a password.
    A wrong PIN passed to the password route can also increment original password
@@ -59,6 +76,33 @@ reuse for the tested `pam_unix` options, not the complete KDE/authselect policy.
    The exact fifth-attempt reservation/cooldown boundary remains an explicit M2
    state-machine decision with deterministic tests.
 
+## Experimental eligibility path
+
+For the two exact reviewed authselect graphs, the root-private fixture first
+checks fresh local passwd/shadow identity, password lock markers and conservative
+account/password aging. It accepts only the tested, strictly parsed SHA512-crypt
+format. It independently establishes bounded, canonical failure-counter state
+before PAM; a missing tally is acceptable only after the same run's healthy
+password/account baseline established that fixture starting condition.
+
+Its private password-free PAM route preserves required `pam_env` and
+`pam_faildelay delay=2000000`, adds explicit `pam_faillock preauth silent` for the
+reviewed lockout profile, and checks `pam_unix`/`pam_nologin` account policy.
+It excludes `pam_faillock account`, `authsucc` and `authfail` from eligibility.
+Preauth alone is insufficient: upstream can accept some failed tally opens and
+can normalize file metadata. The fixture checks tally bytes and metadata around
+PAM, rechecks local identity/shadow and the exact policy/configuration inputs,
+rejects conversation requests, and supplies no candidate to this route. Unknown,
+unreadable, changed or noncanonical state disables its simulated gate.
+
+This fixture selects a policy direction, not a production worker API. It does
+not verify a PIN, deliver an authorization grant, establish confinement, support
+yescrypt or solve enrolled UID reuse. A real malformed-account hash case remains
+untested because the packaged account tool refused its setup; pure C checks
+exercise the strict parser separately. The private nologin-file test does not
+establish complete desktop/access-policy coverage. Fresh checks around PAM do
+not resolve account/policy changes after an authorization is delivered.
+
 ## Consequences and required tests
 
 The candidate API is feasible for this Linux-PAM/`pam_unix` version and can guide
@@ -67,12 +111,14 @@ conversation or refusal remains required if a supported downstream module cannot
 reuse the candidate. No full password may be normalized, validated as a PIN, or
 logged.
 
-The production eligibility implementation remains a release blocker. VM evidence
-must include locked password markers, expired account and password, nologin/access
-restrictions, each supported authselect profile including `with-faillock`, required
-checks before and inside substacks, and races with account changes. Test PIN
-success and password success/failure while inspecting original counters; no
-permissive stand-in or mocked account result passes that gate.
+The production eligibility implementation remains a release blocker. The guarded
+fixture supplies concrete lock/aging/nologin/failure-lockout evidence for its two
+reviewed profiles. Production must validate supported hash formats, complete
+nologin/access restrictions, every activated authselect graph and required
+substack check, enrolled identity lifecycle, account-change races, worker
+confinement and authenticated grant binding. Test real PIN success and password
+success/failure while inspecting original counters; the fixture's permissive
+sentinel and simulated gate do not satisfy that production validation.
 
 The original stack may delay password fallback independently. Mock timeout
 results demonstrate mapping only; elapsed deadline guarantees need blocked-native

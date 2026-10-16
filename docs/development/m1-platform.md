@@ -1,8 +1,9 @@
 # M1 platform inventory and session feasibility
 
-Date: 2026-10-16. Status: tooling and source evidence delivered; disposable-VM
-session, account-policy and enforcing-SELinux evidence pending. This report does
-not certify the observed host or authorize authentication changes.
+Date: 2026-10-16. Status: tooling, source inspection and bounded enforcing-VM
+session/account/worker evidence delivered. Production caller selection,
+eligibility and UID lifecycle remain open. This report does not certify the
+observed host or authorize authentication changes.
 
 ## Reproduce the inventory
 
@@ -42,7 +43,7 @@ The collector never flattens a substack into an include, evaluates control rules
 opens a PAM transaction or validates an activation layout. It deliberately
 refuses noncanonical include paths instead of guessing their interpretation.
 
-The synthetic suite currently has 18 passing tests, including missing includes,
+The synthetic suite currently has 20 passing tests, including missing includes,
 cycles, all phases, comments/arguments redaction, symlinks, FIFO/directory
 rejection, continuation and malformed syntax, and local/remote/root/other-UID
 session filters. These tests establish inventory behavior, not authorization.
@@ -105,10 +106,10 @@ failed under the execution sandbox, and no live session/seat matrix was tested.
 
 A read-only `virsh --connect qemu:///session list --all` outside the syscall
 sandbox returned an empty inventory. No Fedora guest image was found in the
-scoped local/Downloads/libvirt locations inspected. The user also confirmed no
-VM is available. Follow the [disposable VM setup](m1-vm-setup.md) before the
-remaining guest-only tests. No guest was started and no host SELinux, PAM or
-TPM setting was changed.
+scoped local/Downloads/libvirt locations inspected. At that initial stage the maintainer confirmed no VM was available. That
+initial host inspection started no guest and changed no host SELinux, PAM or TPM
+setting. The maintainer subsequently supplied the disposable enforcing VM used
+for the evidence below.
 
 ## Source evidence and decisions
 
@@ -140,7 +141,33 @@ must survive integration. The inventory is intentionally smaller than PAM's
 interpreter; an error blocks automatic interpretation instead of approximating
 an unfamiliar policy.
 
-## Remaining VM evidence
+## Collected enforcing-VM evidence
+
+The [reviewed session inventory](../../experiments/m1/vm/results/2026-10-16-session-discovery.json)
+records Fedora 44 KDE with the same selected PAM, locker, authselect, systemd and
+SELinux package versions above. Its unmodified KDE service digest is
+`7d91b3ad73a998e8b10f9edccd74ba04179a778c4a5e61d9176872f43c7bbac3`;
+password-auth and postlogin match the listed digests. The installed greeter hash
+matches the packaged-source inspection in the PAM report.
+
+The actual greeter ran with the ordinary test UID as both real/effective UID in
+`unconfined_t`. Direct sd-login lookup returned -61; user-manager ownership
+resolved to the same UID. A separate corrected collector invocation from a
+`systemd-run --user` unit observed that same membership shape and exactly one
+own-UID local seated Wayland KDE candidate. Its sanitized JSON is the user-unit
+observation, not a live greeter observation. Root/remote SSH and seatless manager
+sessions were discovered and excluded. Discovery still does not attest a caller
+as genuine KDE or establish production authorization.
+
+[Real-account policy tests](m1-vm-pam.md), [stock KDE fallback](m1-vm-kde.md), and
+[enforcing boundary/worker tests](m1-vm-selinux.md) now supply separate evidence.
+None installs a production PIN verifier. See each report for its precise scope.
+
+## Coverage and remaining VM gates
+
+The linked reports above record the collected subset of this coverage matrix.
+Two genuine different-UID desktops on seat0 and the bounded experiments passed;
+same-UID two-real-desktop and actual second-seat coverage remain open.
 
 Use a dedicated local test account with no reused personal password and a
 snapshot that can be discarded. Before any experiment, require `Enforcing` and
@@ -163,6 +190,16 @@ labels/domains. Do not generate broad allow rules or set permissive mode. The
 broker's no-network/state/device sandbox and the password worker's legitimate
 PAM-helper requirements are separate experiments. A same-domain Unix-socket
 demo or a generic worker timeout test cannot certify either one.
+
+The first VM session inventory exposed a collector defect: `loginctl` v259
+treats a comma-separated `--property` value as one unmatched property and returns
+empty output with status 0. The collector now repeats the flag for each required
+property and marks missing/invalid fields as incomplete, without substituting
+false eligibility observations. Two regressions cover the actual command shape,
+metadata redaction and empty-success refusal. The
+[versioned argument parser](https://github.com/systemd/systemd/blob/v259/src/login/loginctl.c)
+supports that correction. Earlier all-false guest session rows from the defective
+query must not be used as evidence of an ineligible session.
 
 UID deletion/recreation remains unresolved: matching UID/name/home fields do
 not detect an identically recreated account. Enrolled-UID reuse is unsupported,

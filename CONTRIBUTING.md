@@ -1,7 +1,7 @@
 # Contributing to LocalPIN
 
-LocalPIN has isolated M1 feasibility experiments; desktop/SELinux gates remain
-open. Read the
+LocalPIN has isolated and guarded enforcing-VM M1 feasibility experiments.
+Same-UID desktop, second-seat and production integration gates remain open. Read the
 [product specification](docs/product-specification.md) and
 [implementation plan](docs/implementation-plan.md) before proposing implementation
 changes. Authentication behavior needs evidence appropriate to its risk, including

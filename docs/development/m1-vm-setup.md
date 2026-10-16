@@ -1,8 +1,10 @@
 # M1 disposable Fedora KDE VM
 
-M1's enforcing-SELinux and real KDE tests need a disposable graphical VM. No
-such VM is currently available. The host's SELinux is disabled, so local
-observations cannot pass this gate. The isolated harnesses can run separately.
+M1's enforcing-SELinux and real KDE tests use a disposable graphical VM. The
+maintainer supplied one on 2026-10-16; collected results are linked from the
+[M1 evidence report](m1-feasibility.md). This runbook remains the setup procedure
+for reproducing those tests. The development host's disabled SELinux cannot
+substitute for enforcing guest evidence.
 
 ## What the maintainer needs to do
 
@@ -69,7 +71,7 @@ synthetic account files, never the VM's real account database. Namespace
 unavailability is a separate infrastructure failure. These commands do not
 install a PAM adapter in KDE or implement enrollment.
 
-## Remaining VM evidence checklist
+## VM evidence checklist
 
 Record package versions, PAM graph/digests, authselect features and the source
 RPM digest for the VM's actual build before changing an experimental service.
@@ -85,8 +87,11 @@ RPM digest for the VM's actual build before changing an experimental service.
 | Recovery | Password unlock and VM console recovery after each failure; restore the snapshot between destructive account/policy cases |
 
 Keep the clean snapshot and an administrator console available while testing.
-Experimental PAM modules accept synthetic test fixtures and must never be
-installed into `/etc/pam.d/kde`. A later VM-only adapter and reviewed test policy
-must establish actual password and account behavior before any product
-activation is considered. This checklist is pending work, not a record of tests
-already performed.
+The synthetic modules in `experiments/m1/pam` must never be installed into a
+system PAM service. The separate guarded [VM KDE adapter](../../experiments/m1/vm/kde/README.md)
+is fallback-only and may be installed only in the disposable guest using its
+reviewed backup/restore manager. Real-account and SELinux fixtures likewise
+require their explicit guards and snapshot confirmation. This checklist defines
+coverage; consult the evidence report for each collected result and remaining
+gap. Restore the whole snapshot after exporting sanitized reports, including
+removal of temporary remote-access keys.

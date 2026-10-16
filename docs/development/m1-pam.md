@@ -1,8 +1,11 @@
 # M1 PAM candidate and account-policy experiment
 
-Date: 2026-10-16. Status: isolated API feasibility demonstrated; Fedora KDE
-integration remains unverified. No everyday-host PAM service was changed, no real
-password was requested, and no real password database was used by these tests.
+Date: 2026-10-16. Status: isolated API feasibility demonstrated. The later
+[real-account VM report](m1-vm-pam.md) and [stock KDE fallback report](m1-vm-kde.md)
+add enforcing-guest evidence for candidate reuse and characterize lock/expiry
+restrictions; production PIN eligibility remains unresolved. No everyday-host PAM
+service was changed, no real password was requested, and no real password database
+was used by the isolated tests recorded below.
 
 ## Delivered and reproduced
 
@@ -147,7 +150,7 @@ and [token sanitization](https://github.com/linux-pam/linux-pam/blob/v1.7.2/libp
 clear tokens around completed authentication. These observations explain the
 measured behavior; the tests establish only the recorded installed version.
 
-## Gates still open
+## Follow-up and remaining gates
 
 The [candidate/account ADR](../adr/0001-pam-candidate-and-account-policy.md)
 requires an explicit eligibility policy before PIN success. The read-only host
@@ -156,10 +159,18 @@ lockout-enabled supported profile. Required checks inside the original password
 substack would be skipped by naive insertion at the beginning of `auth`; KDE's
 account section is not a later safety net.
 
-A disposable Fedora KDE VM with SELinux enforcing must still prove the complete
-include/substack graph and stock-theme conversations, locked and expired account
-behavior, nologin/access restrictions, authselect `with-faillock` preauth/failure
-accounting and counter boundaries, and preceding required checks. That VM must
-also cover real broker failures/timeouts, worker denial/crash, repeated locker
-attempts, keyboard/encoding behavior, and password recovery. No activation tool
-or host integration is delivered by this experiment.
+The subsequent [real-account VM report](m1-vm-pam.md) records the reviewed graph,
+lock/expiry and failure-counter behavior. [Stock KDE UI tests](m1-vm-kde.md)
+establish the tested same-entry fallback cases; a separate
+[broker-contact fixture](m1-vm-kde-contact.md) measures the actual greeter's fixed
+non-secret contact and unavailable-endpoint fallback. The
+[password-free eligibility experiment](m1-vm-eligibility.md) supplies a concrete
+preflight direction for two exact profiles, preserving required checks and active
+failure lockout before a simulated-success gate.
+
+These fixtures do not establish a production PIN branch or confined eligibility
+worker. Supported hash formats and full nologin/access coverage, authorization
+races and binding, real backend failure/crash handling, complete counter
+boundaries, keyboard/encoding/recovery coverage and production Rust integration
+remain required. No everyday-host activation tool or integration is delivered by
+this experiment.

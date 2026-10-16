@@ -16,9 +16,16 @@ Changes will be recorded here before versioned releases. There are no releases y
 - Sanitized PAM graph/session inventory and regression tests, a disposable TPM
   simulator experiment, and bounded native-worker deadline tests.
 - Architecture decisions, evidence reports, enforcing Fedora KDE VM setup
-  instructions and an isolated-experiment CI job. M1's VM gate remains open.
+  instructions and an isolated-experiment CI job.
+- Guarded real-account/password-free eligibility, actual KDE fallback/contact,
+  logind registration and
+  enforcing SELinux broker/worker experiments with sanitized VM reports. The
+  complete M1 session/seat gate remains open.
 
 ### Changed
+
+- Session inventory repeats each `loginctl` property flag and rejects incomplete
+  successful responses; guest discovery exposed the previous comma-list bug.
 
 - Specification 1.1 clarifies that six-digit account passwords can consume a PIN
   attempt before fallback and that forwarded failures retain password accounting.

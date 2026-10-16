@@ -94,6 +94,24 @@ depend on the runner's container restrictions. Local optional-suite results and
 enforcing-VM results must be recorded separately. M1 CI execution has not yet
 been verified on GitHub.
 
+## Guarded M1 VM fixtures
+
+Real-account, KDE, logind and enforcing SELinux fixtures add guest-only test
+inputs: `selinux-policy-devel`, `make`, `policycoreutils`, `setools-console`,
+`shadow-utils` and `libxcrypt`, alongside the PAM/compiler/Python inputs above.
+These are not production Rust dependencies. The actual guest's PAM/authselect,
+kscreenlocker, systemd and SELinux versions are recorded in the
+[VM evidence reports](m1-feasibility.md) and sanitized JSON. Exact supported
+policy digests are fixture allowlists, not automatic product-activation rules.
+
+The guarded runners require a dedicated ordinary account, a UUID-bound
+root-owned VM marker, SELinux Enforcing and explicit snapshot confirmation.
+They must never be run on an everyday host. CI invokes only their pure tests and
+compile-only branches; it does not install policy, open a PAM transaction, change
+an account, register sessions or edit the KDE service. The independent isolated
+PAM/TPM suites retain their earlier container-only scope. Temporary VM access and
+all test state were removed through the recorded final snapshot restoration.
+
 ## CI limits
 
 CI runs formatting, Clippy with warnings denied, tests and doctests, and release

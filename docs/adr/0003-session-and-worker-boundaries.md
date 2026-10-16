@@ -9,10 +9,17 @@ lifecycle and SELinux integration remain experimental and block activation.
 
 The broker must restrict PIN verification to the Unix peer's own eligible local
 graphical session. A Plasma process can run in a systemd user unit without a
-direct logind session. The observed development process demonstrates that case,
-but no disposable enforcing guest or multiple-seat test has run. A claimed PAM
-service, PID, desktop or session from the client is not authoritative. Same-UID
-malware can impersonate a locker request, as already stated in the specification.
+direct logind session. Both the development process and the actual enforcing
+VM greeter demonstrate that case: direct lookup returned -61 while user-manager
+ownership matched the ordinary UID. A separate user-unit collector found one
+eligible discovery candidate. The guest also passed bounded root-declared
+logind metadata registrations, including an ambiguous two-candidate inventory;
+a separate manual login established two real different-UID KDE desktops on seat0.
+The inactive locked test desktop remained its UID's single candidate while the
+active foreign desktop was excluded. Two real desktops for one UID and actual
+multiple-seat GUI behavior remain untested. A claimed PAM service, PID, desktop
+or session from the client is not authoritative. Same-UID malware can impersonate
+a locker request, as already stated in the specification.
 
 KDE's authentication-only flow does not automatically run the PAM account
 phase. Password verification also loads privileged modules/helpers that need a
@@ -82,19 +89,61 @@ encode those ordinary account fields as if they solve UID reuse.
 ## Evidence and required tests
 
 The [platform report](../development/m1-platform.md) records source references,
-exact observed packages/hashes, 18 synthetic inventory/discovery tests and the
-host's direct-session/user-manager distinction. The
-[PAM report](../development/m1-pam.md) records matching Fedora source and synthetic
-authentication evidence. Neither report establishes real guest authorization.
+exact observed packages/hashes, 20 synthetic inventory/discovery tests and both
+host and enforcing-VM process observations. The actual greeter and a separately
+observed user-manager collector had no direct session but matching user-manager
+ownership. The collector completed property enumeration and found one own-UID
+local seated KDE candidate. Its exported process-membership values concern the
+collector, not a live greeter; neither observation attests caller authenticity.
 
-M1 must still exercise the real locker plus a user-manager-launched process,
-multiple local KDE sessions and seats, remote/tty/greeter/foreign-UID/root cases,
-session disappearance, account restrictions, and separate enforcing SELinux
-broker-contact/password-worker boundaries. M5 must test credential stability,
-PID reuse/exit, peer UID spoofing, ambiguity refusal and bounded stalled-worker
-cleanup. M6/M8 must test fresh authorization versus administrative integration
-and the supported PAM helpers. M2/M3 must prove lifecycle/revocation generation
-fencing before accepting an account-identity design.
+The [guest registration report](../development/m1-vm-sessions.md) records five
+passed cases through actual `pam_systemd` and logind: a private seatless PTY,
+remote-declared graphical metadata, greeter class, root UID and additional local
+KDE/Wayland metadata. Each newly registered session matched its declared
+properties and direct sd-login membership, had its 45-second scope runtime
+verified, and disappeared during cleanup. Seated fixtures stayed on a verified
+unused inactive seat0 VT; the real desktop's active session/VT was unchanged.
+Only the additional ordinary-user local graphical metadata raised the actual
+candidate count from one to two. This proves an enumeration ambiguity exists;
+it does not prove that a production broker refused it or that a second desktop,
+remote connection or another seat was operating.
+
+The separate
+[two-real-desktop result](../../experiments/m1/vm/results/2026-10-16-two-real-desktops.json)
+records a user-confirmed management login through the stock Plasma Login
+Manager's `SwitchToGreeter` while the original locked test desktop was retained.
+Both UIDs had live `plasmashell` and `kwin_wayland` processes and actual
+KDE/Wayland sessions on seat0. Each UID had one own-UID discovery candidate;
+the active foreign management desktop was excluded for the test UID, whose
+inactive locked desktop remained eligible. The live test locker again lacked a
+direct session (-61) while its user-manager owner matched its real/effective
+UID. This establishes concurrent different-UID desktops and discovery behavior,
+not a production authorization result, same-UID ambiguity or a second seat.
+
+[Real-account PAM tests](../development/m1-vm-pam.md) and
+[stock KDE fallback](../development/m1-vm-kde.md) establish separate candidate and
+lock/expiry findings. The [enforcing boundary/worker report](../development/m1-vm-selinux.md)
+records confined broker/client/negative-helper checks and a separate positive
+own-user password worker against one reviewed policy copy. Password-worker
+success does not establish password-free PIN eligibility, enrollment grant
+binding or production service confinement. These experiments do not authorize a
+production PIN path.
+
+M1 must still exercise multiple-seat GUI behavior and two real KDE desktops for
+one UID. The [gap assessment](../development/m1-multiseat-gap.md) records the
+current hardware and stock login-manager limitations. Root-declared metadata,
+a private PTY and the passed different-UID same-seat desktops do not replace
+those cases or complete remote/TTY/foreign-ordinary-UID caller flows.
+Production caller routing, supported account restrictions and the complete
+broker-contact/password-worker contract remain implementation gates; each
+experiment report states its narrower observations. Whole-VM snapshot
+restoration is a separate operator action, not implied by fixture cleanup.
+M5 must test stable kernel credentials/process references, PID reuse/exit,
+session disappearance/replacement during verification, zero/ambiguous-candidate
+refusal responses, generation fences and bounded stalled-worker cleanup. M6/M8
+must test fresh authorization versus administrative integration and the supported
+PAM helpers. M2/M3 must prove lifecycle/revocation fencing before accepting an
+account-identity design.
 
 ## Consequences
 

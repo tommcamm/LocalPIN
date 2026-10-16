@@ -8,7 +8,9 @@ Repository: [tommcamm/LocalPIN](https://github.com/tommcamm/LocalPIN).
 
 **Development status: M1 feasibility experiments.** This repository contains the
 specification, implementation roadmap, initial Rust workspace, and isolated
-PAM/TPM/platform experiments. M1's enforcing Fedora KDE VM gate remains open.
+PAM/TPM/platform experiments and guarded Fedora KDE VM tests under enforcing
+SELinux. Actual password fallback, account restrictions and a confined worker
+have evidence; M1's complete session/seat gate remains open.
 It does not yet provide a production PIN verifier, broker, PAM module, CLI, or
 installable package. There is no supported production release.
 
@@ -53,7 +55,8 @@ The [build-input inventory](docs/development/dependencies.md) records the initia
 toolchain and dependency policy, and the [M0 report](docs/development/m0-foundation.md)
 records foundation validation. The [M1 evidence report](docs/development/m1-feasibility.md)
 links the runnable experiments and architecture decisions, with
-[VM setup steps](docs/development/m1-vm-setup.md) for the remaining desktop tests.
+[VM setup steps](docs/development/m1-vm-setup.md) for reproducing the desktop tests
+and their remaining gates.
 Changes are tracked in [CHANGELOG.md](CHANGELOG.md).
 
 The existing [pam_pinlock project](https://github.com/saltnpepper97/pam_pinlock)

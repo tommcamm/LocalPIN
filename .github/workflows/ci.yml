@@ -109,6 +109,24 @@ jobs:
           persist-credentials: false
       - name: Test sanitized PAM graph and session discovery
         run: python3 -m unittest discover -s experiments/m1/platform -p 'test_*.py' -v
+      - name: Check guarded VM fixture sources without installing them
+        run: |
+          python3 -m unittest discover -s experiments/m1/vm/selinux -p 'test_*.py' -v
+          python3 -m unittest discover -s experiments/m1/vm/worker-positive -p 'test_*.py' -v
+          python3 -m unittest discover -s experiments/m1/vm/kde-contact -p 'test_*.py' -v
+          python3 -m unittest discover -s experiments/m1/vm/sessions -p 'test_*.py' -v
+          python3 -m unittest discover -s experiments/m1/vm/eligibility -p 'test_*.py' -v
+          python3 experiments/m1/vm/pam/run.py --compile-only
+          python3 experiments/m1/vm/kde/manage.py compile-only
+          python3 experiments/m1/vm/kde/manage.py compile-only --contact-fixture
+          python3 experiments/m1/vm/sessions/run.py --compile-only
+          python3 experiments/m1/vm/eligibility/run.py --compile-only
+          gcc -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror experiments/m1/vm/eligibility/test_format.c -lpam -o /tmp/localpin-m1-format-only
+          /tmp/localpin-m1-format-only
+          rm /tmp/localpin-m1-format-only
+          python3 experiments/m1/vm/worker-positive/run.py --compile-only
+          gcc -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror experiments/m1/vm/selinux/fixture.c -lpam -o /tmp/localpin-m1-boundary-compile-only
+          rm /tmp/localpin-m1-boundary-compile-only
       - name: Run isolated PAM baselines and candidate tests
         run: experiments/m1/pam/run.sh
       - name: Test native worker deadlines and bounds
