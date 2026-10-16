@@ -1,0 +1,20 @@
+{
+  "audit_after": {
+    "backlog": 0,
+    "enabled": 1,
+    "lost": 76
+  },
+  "audit_before": {
+    "backlog": 0,
+    "enabled": 1,
+    "lost": 76
+  },
+  "audit_loss_increased": false,
+  "bounded_reruns_cleanup": {
+    "boundaries": true,
+    "positive": true
+  },
+  "existing_audit_loss_limits_earlier_log_inferences": true,
+  "schema_version": 1,
+  "whole_vm_snapshot_restored": false
+}

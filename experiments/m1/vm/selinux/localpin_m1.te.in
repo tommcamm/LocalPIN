@@ -1,0 +1,84 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Purpose-written disposable fixture policy. No auth_use_pam/shadow-read grant.
+policy_module(localpin_m1, 1.0.0)
+
+type localpin_m1_broker_t;
+type localpin_m1_broker_exec_t;
+init_daemon_domain(localpin_m1_broker_t, localpin_m1_broker_exec_t)
+init_domain(localpin_m1_broker_t, localpin_m1_broker_exec_t)
+type localpin_m1_client_t;
+type localpin_m1_client_exec_t;
+init_daemon_domain(localpin_m1_client_t, localpin_m1_client_exec_t)
+init_domain(localpin_m1_client_t, localpin_m1_client_exec_t)
+type localpin_m1_denied_t;
+type localpin_m1_denied_exec_t;
+init_daemon_domain(localpin_m1_denied_t, localpin_m1_denied_exec_t)
+init_domain(localpin_m1_denied_t, localpin_m1_denied_exec_t)
+type localpin_m1_worker_t;
+type localpin_m1_worker_exec_t;
+init_daemon_domain(localpin_m1_worker_t, localpin_m1_worker_exec_t)
+init_domain(localpin_m1_worker_t, localpin_m1_worker_exec_t)
+
+# Fedora's installed init_daemon_domain does not itself set up direct init_t
+# execution. Its maintained init_domain interface supplies that exact transition,
+# system_r role membership and scoped process2 nnp/nosuid-transition permissions.
+# Retain daemon attributes and require the direct-systemd contract explicitly.
+
+type localpin_m1_runtime_t;
+files_pid_file(localpin_m1_runtime_t)
+type localpin_m1_private_t;
+files_type(localpin_m1_private_t)
+type localpin_m1_pam_conf_t;
+files_config_file(localpin_m1_pam_conf_t)
+
+# Dynamic linker and inherited /dev/null stdio only; no shell/interpreter grant.
+libs_use_ld_so(localpin_m1_broker_t)
+libs_use_shared_libs(localpin_m1_broker_t)
+dev_rw_null(localpin_m1_broker_t)
+libs_use_ld_so(localpin_m1_client_t)
+libs_use_shared_libs(localpin_m1_client_t)
+dev_rw_null(localpin_m1_client_t)
+libs_use_ld_so(localpin_m1_denied_t)
+libs_use_shared_libs(localpin_m1_denied_t)
+dev_rw_null(localpin_m1_denied_t)
+libs_use_ld_so(localpin_m1_worker_t)
+libs_use_shared_libs(localpin_m1_worker_t)
+dev_rw_null(localpin_m1_worker_t)
+# Read the current process security attribute for an explicit domain assertion.
+kernel_read_system_state(localpin_m1_broker_t)
+kernel_read_system_state(localpin_m1_client_t)
+kernel_read_system_state(localpin_m1_denied_t)
+kernel_read_system_state(localpin_m1_worker_t)
+allow { localpin_m1_broker_t localpin_m1_client_t localpin_m1_denied_t localpin_m1_worker_t } self:process getattr;
+
+files_search_pids(localpin_m1_broker_t)
+files_search_pids(localpin_m1_client_t)
+files_search_pids(localpin_m1_denied_t)
+files_search_var_lib(localpin_m1_broker_t)
+allow localpin_m1_broker_t localpin_m1_runtime_t:dir { search write add_name getattr };
+allow localpin_m1_broker_t localpin_m1_runtime_t:sock_file { create setattr getattr unlink };
+allow localpin_m1_broker_t self:unix_stream_socket create_stream_socket_perms;
+read_files_pattern(localpin_m1_broker_t, localpin_m1_private_t, localpin_m1_private_t)
+
+# Both client UIDs have identical socket DAC and sock_file permissions. Only the
+# allowed domain receives connectto; the denied domain must fail under Enforcing.
+allow localpin_m1_client_t self:unix_stream_socket create_stream_socket_perms;
+allow localpin_m1_denied_t self:unix_stream_socket create_stream_socket_perms;
+allow { localpin_m1_client_t localpin_m1_denied_t } localpin_m1_runtime_t:dir search;
+allow { localpin_m1_client_t localpin_m1_denied_t } localpin_m1_runtime_t:sock_file write;
+allow localpin_m1_client_t localpin_m1_broker_t:unix_stream_socket connectto;
+# No private_t access is granted to either client. The canary is DAC-readable.
+
+# A dedicated private PAM configuration, plus only the packaged helper domain
+# transition. Deliberately do not use auth_use_pam: it grants broad shadow access.
+files_search_etc(localpin_m1_worker_t)
+read_files_pattern(localpin_m1_worker_t, localpin_m1_pam_conf_t, localpin_m1_pam_conf_t)
+gen_require(`
+    type chkpwd_t, chkpwd_exec_t;
+')
+corecmd_search_bin(localpin_m1_worker_t)
+domtrans_pattern(localpin_m1_worker_t, chkpwd_exec_t, chkpwd_t)
+
+# Optional observed locker-domain socket rule is inserted here by the guarded
+# runner. It is never evidence that a real locker made a request.
+@LOCKER_RULE@

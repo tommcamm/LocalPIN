@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+/usr/libexec/localpin-m1/broker -- gen_context(system_u:object_r:localpin_m1_broker_exec_t,s0)
+/usr/libexec/localpin-m1/client -- gen_context(system_u:object_r:localpin_m1_client_exec_t,s0)
+/usr/libexec/localpin-m1/denied -- gen_context(system_u:object_r:localpin_m1_denied_exec_t,s0)
+/usr/libexec/localpin-m1/worker -- gen_context(system_u:object_r:localpin_m1_worker_exec_t,s0)
+/run/localpin-m1(/.*)? gen_context(system_u:object_r:localpin_m1_runtime_t,s0)
+/run/localpin-m1-canary(/.*)? gen_context(system_u:object_r:localpin_m1_private_t,s0)
+/var/lib/localpin-m1(/.*)? gen_context(system_u:object_r:localpin_m1_private_t,s0)
+/etc/localpin-m1-pam(/.*)? gen_context(system_u:object_r:localpin_m1_pam_conf_t,s0)

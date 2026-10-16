@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+policy_module(localpin_m1_positive, 1.0.0)
+
+type localpin_m1_positive_t;
+type localpin_m1_positive_exec_t;
+init_daemon_domain(localpin_m1_positive_t, localpin_m1_positive_exec_t)
+init_domain(localpin_m1_positive_t, localpin_m1_positive_exec_t)
+type localpin_m1_positive_conf_t;
+files_config_file(localpin_m1_positive_conf_t)
+
+libs_use_ld_so(localpin_m1_positive_t)
+libs_use_shared_libs(localpin_m1_positive_t)
+dev_rw_null(localpin_m1_positive_t)
+kernel_read_system_state(localpin_m1_positive_t)
+allow localpin_m1_positive_t self:process { getattr getcap };
+files_search_etc(localpin_m1_positive_t)
+files_read_etc_files(localpin_m1_positive_t)
+miscfiles_read_localization(localpin_m1_positive_t)
+read_files_pattern(localpin_m1_positive_t, localpin_m1_positive_conf_t, localpin_m1_positive_conf_t)
+
+gen_require(`
+    type passwd_file_t, chkpwd_t, chkpwd_exec_t;
+')
+# Local files only: no broad PAM, NSS network/DBus or password-update interface.
+allow localpin_m1_positive_t passwd_file_t:file read_file_perms;
+corecmd_search_bin(localpin_m1_positive_t)
+domtrans_pattern(localpin_m1_positive_t, chkpwd_exec_t, chkpwd_t)
+allow localpin_m1_positive_t chkpwd_exec_t:file map;
+logging_send_syslog_msg(localpin_m1_positive_t)
+logging_send_audit_msgs(localpin_m1_positive_t)
+# No shadow_t read or updpwd_t transition is granted. The runner verifies this
+# against the compiled installed policy before mutating the test account.

@@ -1,0 +1,52 @@
+{
+  "cleanup_completed": true,
+  "direct_shadow_read_rule": false,
+  "fixture": "disposable confined own-user worker",
+  "password_auth_sha256": "2e53f704372b6c7fb69cdc4dfd6c27456d642c83feff8b1588fa1f9cb1126cd0",
+  "password_update_transition": false,
+  "production_worker_complete": false,
+  "results": [
+    {
+      "case": "permit",
+      "native_assertions_passed": true
+    },
+    {
+      "case": "deny",
+      "native_assertions_passed": true
+    },
+    {
+      "case": "correct",
+      "native_assertions_passed": true
+    },
+    {
+      "case": "wrong",
+      "native_assertions_passed": true
+    },
+    {
+      "case": "locked",
+      "native_assertions_passed": true
+    },
+    {
+      "case": "expired-account",
+      "native_assertions_passed": true
+    },
+    {
+      "case": "expired-password",
+      "native_assertions_passed": true
+    },
+    {
+      "case": "recovery",
+      "native_assertions_passed": true
+    }
+  ],
+  "schema_version": 1,
+  "selinux": "Enforcing",
+  "target_shadow_record_restored": true,
+  "versions": [
+    "pam-1.7.2-2.fc44.x86_64",
+    "pam-devel-1.7.2-2.fc44.x86_64",
+    "systemd-259.9-1.fc44.x86_64",
+    "selinux-policy-targeted-44.11-1.fc44.noarch"
+  ],
+  "whole_vm_snapshot_restored": false
+}

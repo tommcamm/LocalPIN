@@ -1,0 +1,45 @@
+{
+  "actual_locker_contact_tested": false,
+  "checks": {
+    "client": true,
+    "denied": true,
+    "mac_canary_and_root_state_denied_to_clients": true,
+    "root_owned_broker_socket": true,
+    "worker": true,
+    "worker_private_permit_deny_and_missing_account_helper": true
+  },
+  "cleanup_completed": true,
+  "complete_product_policy": false,
+  "executable_labels": {
+    "broker": {
+      "actual_type": "localpin_m1_broker_exec_t",
+      "expected_type": "localpin_m1_broker_exec_t",
+      "policy_type": "localpin_m1_broker_exec_t"
+    },
+    "client": {
+      "actual_type": "localpin_m1_client_exec_t",
+      "expected_type": "localpin_m1_client_exec_t",
+      "policy_type": "localpin_m1_client_exec_t"
+    },
+    "denied": {
+      "actual_type": "localpin_m1_denied_exec_t",
+      "expected_type": "localpin_m1_denied_exec_t",
+      "policy_type": "localpin_m1_denied_exec_t"
+    },
+    "unix_chkpwd": {
+      "actual_type": "chkpwd_exec_t",
+      "expected_type": "chkpwd_exec_t",
+      "policy_type": "chkpwd_exec_t"
+    },
+    "worker": {
+      "actual_type": "localpin_m1_worker_exec_t",
+      "expected_type": "localpin_m1_worker_exec_t",
+      "policy_type": "localpin_m1_worker_exec_t"
+    }
+  },
+  "fixture": "guarded disposable VM only",
+  "locker_type_policy_target": null,
+  "real_password_authentication_tested": false,
+  "schema_version": 1,
+  "selinux": "Enforcing"
+}
