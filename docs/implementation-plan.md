@@ -1,7 +1,7 @@
 # LocalPIN implementation plan
 
 - Date: 2026-10-16
-- Status: Accepted roadmap; M0 repository foundations in progress.
+- Status: Accepted roadmap; M0 implemented locally, hosted CI validation pending publication.
 - Source of requirements: [product-specification.md](product-specification.md), version 1.0.
 
 This plan turns the specification into independently reviewable changes and evidence gates. The specification remains authoritative. An unresolved design question below must be resolved in an architecture decision record (ADR), with a specification amendment if necessary, rather than silently changing the requirements.
@@ -49,13 +49,15 @@ Documentation, SELinux policy experiments, and test infrastructure progress alon
 Deliverables:
 
 - Initialize Git with `main`. Preserve the supplied specification in the first commit, then commit the proposed roadmap separately so its review history is clear.
-- Add an honest development-status README, build/contribution instructions, changelog, security-reporting policy, and issue/PR templates. Confirm the maintainer's license choice before public publication or accepting contributions; proposed default: `MIT OR Apache-2.0` for original code.
+- Add an honest development-status README, build/contribution instructions, changelog, security-reporting policy, and issue/PR templates. Use `MIT OR Apache-2.0` for original code, the default adopted during M0; preserve applicable third-party notices.
 - Add a scoped `.gitignore` for Rust outputs, local test state, VM images, sockets, generated packages, and local secrets. Commit `Cargo.lock` once the workspace exists. Keep sanitized fixtures distinct from real machine state.
 - Pin an exact stable Rust toolchain, use edition 2024, declare the MSRV, and record why the selected dependencies/native libraries are suitable. Do not guess versions from the specification's machine inventory.
 - Bootstrap only the crates needed for the first change; grow into the workspace layout in specification section 17. Avoid empty abstractions for all components on day one.
 - Establish formatting, Clippy, locked builds/tests, dependency advisory/license checks, and a Fedora build job. Add simulator/desktop jobs when their harnesses exist. Pin external CI actions and give ordinary CI jobs read-only permissions.
 
 Exit gate: a clean checkout builds the initial workspace with the pinned toolchain; the specification and roadmap have separate commits; CI runs without access to host authentication files or production credentials. GitHub publication remains a separate later operation.
+
+M0's local delivery and validation are recorded in the [foundation report](development/m0-foundation.md). Hosted workflow execution remains unverified until GitHub publication; configuration validation and local builds are not presented as a successful GitHub run.
 
 ### M1 — Prove the risky platform assumptions
 
@@ -233,7 +235,7 @@ Each milestone records three things: delivered changes, evidence actually collec
 
 Use deterministic unit/property tests for policy; fault-injected filesystem tests for persistence; socket tests for IPC; simulator tests for TPM; permit/deny-baselined PAM harnesses for the adapter; enforcing Fedora VMs for packaging/desktop flows; and physical hardware for the final usability/performance matrix. Add regression tests when a discovered failure threatens authentication, persistence or recovery.
 
-The most useful next implementation batch is M0 plus the M1 PAM/session feasibility harness and TPM simulator experiment. It should end with a reviewable repository and resolved architecture risks, while the current everyday authentication setup remains available throughout development.
+With M0 implemented locally, the next implementation batch is the M1 PAM/session feasibility harness and TPM simulator experiment. It should resolve the early architecture risks in isolated environments, while the current everyday authentication setup remains available throughout development.
 
 No calendar estimate is committed before the feasibility work. Subsequent estimates should use measured test infrastructure effort and availability of independent review/hardware, with review and recovery work included in the schedule.
 

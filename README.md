@@ -47,7 +47,8 @@ Read the [implementation plan](docs/implementation-plan.md) for milestones and
 evidence gates, [CONTRIBUTING.md](CONTRIBUTING.md) for the Git and validation
 workflow, and [SECURITY.md](SECURITY.md) for private security reporting guidance.
 The [build-input inventory](docs/development/dependencies.md) records the initial
-toolchain and dependency policy. Changes are tracked in [CHANGELOG.md](CHANGELOG.md).
+toolchain and dependency policy, and the [M0 report](docs/development/m0-foundation.md)
+records validation actually performed. Changes are tracked in [CHANGELOG.md](CHANGELOG.md).
 
 The existing [pam_pinlock project](https://github.com/saltnpepper97/pam_pinlock)
 provides migration context. LocalPIN begins as an independent implementation;
