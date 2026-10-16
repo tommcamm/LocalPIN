@@ -7,8 +7,9 @@ it is not evidence that those requirements have been implemented or tested.
 
 ## Reporting a vulnerability
 
-When this project is hosted on GitHub and private vulnerability reporting is
-enabled, use the repository's **Security → Report a vulnerability** option.
+If private vulnerability reporting is enabled, use
+[the repository's Security page](https://github.com/tommcamm/LocalPIN/security)
+and select **Report a vulnerability**.
 Otherwise, contact the maintainer privately using contact information they have
 published on their profile. No dedicated reporting address, monitored channel,
 or response-time commitment has been established yet. If no private contact is

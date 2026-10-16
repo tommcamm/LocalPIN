@@ -4,6 +4,8 @@ LocalPIN is a personal project to build six-digit PIN unlocking for an existing
 Fedora KDE graphical session, with the account password as the recovery route.
 It is intended to become useful, reviewable open-source software.
 
+Repository: [tommcamm/LocalPIN](https://github.com/tommcamm/LocalPIN).
+
 **Development status: repository foundation (M0).** This repository contains the
 specification, implementation roadmap, and an initial Rust workspace. It does not
 yet provide a PIN verifier, broker, PAM module, CLI, or installable package. There
@@ -54,6 +56,12 @@ The existing [pam_pinlock project](https://github.com/saltnpepper97/pam_pinlock)
 provides migration context. LocalPIN begins as an independent implementation;
 no compatibility, migration tooling, or security improvement over that project
 has been demonstrated.
+
+## AI disclosure
+
+LocalPIN is developed using OpenAI Codex and other large language models (LLMs),
+with human code review and maintainer oversight. AI assistance does not replace
+testing or the independent security review required before a production release.
 
 ## License
 

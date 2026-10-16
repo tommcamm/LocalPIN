@@ -2,8 +2,10 @@
 
 Date: 2026-10-16.
 
-The LocalPIN repository foundation is implemented and validated locally. Hosted CI
-execution remains pending GitHub publication. M1 feasibility work has not started.
+The LocalPIN repository foundation is implemented and validated locally. At the
+time of the local checks below, hosted CI had not run. M1 feasibility work has
+not started. The project repository is
+[tommcamm/LocalPIN](https://github.com/tommcamm/LocalPIN).
 
 ## Delivered
 
@@ -67,13 +69,14 @@ Additional checks passed:
 
 ## Remaining evidence and publication work
 
-The GitHub-hosted workflow and its Fedora container provisioning have not run.
-The local Fedora build is not a substitute for those execution results. Run the
-workflow after creating the remote and resolve any runner-specific failures.
+The GitHub-hosted workflow and its Fedora container provisioning had not run at
+the time of this report's local checks. The local Fedora build is not a substitute
+for those execution results. Verify the initial hosted run and resolve any
+runner-specific failures.
 
 Before accepting external security reports, enable GitHub private vulnerability
-reporting or establish a maintained private contact. Repository ownership,
-branch protection and release signing remain publication/release tasks.
+reporting or establish a maintained private contact. Branch protection and
+release signing remain publication/release tasks.
 
 No authentication or TPM operation was tested, and no system PAM configuration
 was changed during M0. The next implementation work is the isolated feasibility

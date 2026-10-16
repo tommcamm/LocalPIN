@@ -18,9 +18,9 @@ failure and recovery paths.
   specification when requirements change. Do not silently weaken release gates.
 - Keep unrelated refactoring and generated artifacts out of a change.
 
-GitHub publication is a later step. Until a remote exists, the same branch and
-commit discipline applies locally. Do not invent upstream links or mark local
-checks as GitHub CI results.
+Use [tommcamm/LocalPIN](https://github.com/tommcamm/LocalPIN) for issues and pull
+requests, targeting `main`. Distinguish local validation from GitHub CI results
+and link the relevant workflow run when reporting hosted checks.
 
 ## Local checks
 

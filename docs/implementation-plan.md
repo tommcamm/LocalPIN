@@ -1,7 +1,7 @@
 # LocalPIN implementation plan
 
 - Date: 2026-10-16
-- Status: Accepted roadmap; M0 implemented locally, hosted CI validation pending publication.
+- Status: Accepted roadmap; M0 implemented locally, initial hosted CI validation pending.
 - Source of requirements: [product-specification.md](product-specification.md), version 1.0.
 
 This plan turns the specification into independently reviewable changes and evidence gates. The specification remains authoritative. An unresolved design question below must be resolved in an architecture decision record (ADR), with a specification amendment if necessary, rather than silently changing the requirements.
@@ -55,9 +55,9 @@ Deliverables:
 - Bootstrap only the crates needed for the first change; grow into the workspace layout in specification section 17. Avoid empty abstractions for all components on day one.
 - Establish formatting, Clippy, locked builds/tests, dependency advisory/license checks, and a Fedora build job. Add simulator/desktop jobs when their harnesses exist. Pin external CI actions and give ordinary CI jobs read-only permissions.
 
-Exit gate: a clean checkout builds the initial workspace with the pinned toolchain; the specification and roadmap have separate commits; CI runs without access to host authentication files or production credentials. GitHub publication remains a separate later operation.
+Exit gate: a clean checkout builds the initial workspace with the pinned toolchain; the specification and roadmap have separate commits; CI runs without access to host authentication files or production credentials. The project repository is [tommcamm/LocalPIN](https://github.com/tommcamm/LocalPIN).
 
-M0's local delivery and validation are recorded in the [foundation report](development/m0-foundation.md). Hosted workflow execution remains unverified until GitHub publication; configuration validation and local builds are not presented as a successful GitHub run.
+M0's local delivery and validation are recorded in the [foundation report](development/m0-foundation.md). The initial hosted workflow run must be verified separately; configuration validation and local builds are not presented as a successful GitHub run.
 
 ### M1 — Prove the risky platform assumptions
 
