@@ -1,0 +1,28 @@
+# Rust build output. Cargo.lock is intentionally committed.
+/target/
+
+# Local experiments, credentials, machine state, PAM backups, and tool caches
+# belong under .local/. Never put real authentication material in fixtures.
+/.local/
+/artifacts/
+/dist/
+/.env
+/.env.*
+!/.env.example
+
+# Generated virtual-machine images, packages, sockets, and core dumps.
+*.qcow2
+*.vmdk
+*.vdi
+*.iso
+*.rpm
+*.sock
+*.core
+/core
+/core.[0-9]*
+
+# Editor/OS scratch files.
+*.swp
+*.swo
+*~
+.DS_Store
