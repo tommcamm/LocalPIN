@@ -1,0 +1,452 @@
+{
+  "host_observation": {
+    "compatibility_certified": false,
+    "os_release": {
+      "ID": "fedora",
+      "VARIANT_ID": "kde",
+      "VERSION_ID": "44"
+    },
+    "packages": [
+      {
+        "nevra": [],
+        "package": "fedora-release",
+        "query": {
+          "exit_code": 1,
+          "status": "command_failed"
+        }
+      },
+      {
+        "nevra": [],
+        "package": "fedora-release-kde",
+        "query": {
+          "exit_code": 1,
+          "status": "command_failed"
+        }
+      },
+      {
+        "nevra": [
+          "kscreenlocker-0:6.7.5-1.fc44.x86_64"
+        ],
+        "package": "kscreenlocker",
+        "query": {
+          "exit_code": 0,
+          "status": "ok"
+        }
+      },
+      {
+        "nevra": [
+          "plasma-workspace-0:6.7.5-1.fc44.x86_64"
+        ],
+        "package": "plasma-workspace",
+        "query": {
+          "exit_code": 0,
+          "status": "ok"
+        }
+      },
+      {
+        "nevra": [
+          "pam-0:1.7.2-2.fc44.x86_64"
+        ],
+        "package": "pam",
+        "query": {
+          "exit_code": 0,
+          "status": "ok"
+        }
+      },
+      {
+        "nevra": [
+          "authselect-0:1.7.1-1.fc44.x86_64"
+        ],
+        "package": "authselect",
+        "query": {
+          "exit_code": 0,
+          "status": "ok"
+        }
+      },
+      {
+        "nevra": [
+          "systemd-0:259.9-1.fc44.x86_64"
+        ],
+        "package": "systemd",
+        "query": {
+          "exit_code": 0,
+          "status": "ok"
+        }
+      },
+      {
+        "nevra": [
+          "selinux-policy-0:44.11-1.fc44.noarch"
+        ],
+        "package": "selinux-policy",
+        "query": {
+          "exit_code": 0,
+          "status": "ok"
+        }
+      },
+      {
+        "nevra": [
+          "selinux-policy-targeted-0:44.11-1.fc44.noarch"
+        ],
+        "package": "selinux-policy-targeted",
+        "query": {
+          "exit_code": 0,
+          "status": "ok"
+        }
+      },
+      {
+        "nevra": [
+          "swtpm-0:0.10.2-1.fc44.x86_64"
+        ],
+        "package": "swtpm",
+        "query": {
+          "exit_code": 0,
+          "status": "ok"
+        }
+      },
+      {
+        "nevra": [
+          "tpm2-tss-0:4.1.3-9.fc44.x86_64"
+        ],
+        "package": "tpm2-tss",
+        "query": {
+          "exit_code": 0,
+          "status": "ok"
+        }
+      },
+      {
+        "nevra": [
+          "kernel-core-0:6.19.10-300.fc44.x86_64",
+          "kernel-core-0:7.2.10-200.fc44.x86_64"
+        ],
+        "package": "kernel-core",
+        "query": {
+          "exit_code": 0,
+          "status": "ok"
+        }
+      }
+    ],
+    "selinux": {
+      "mode": "Enforcing",
+      "query": {
+        "exit_code": 0,
+        "status": "ok"
+      }
+    },
+    "sessions": {
+      "authorization_proven": false,
+      "complete": true,
+      "pid_membership": {
+        "direct_session_found": false,
+        "direct_session_result": -61,
+        "status": "observed",
+        "user_manager_owner_found": true,
+        "user_manager_owner_is_peer": true,
+        "user_manager_owner_result": 0
+      },
+      "query": {
+        "exit_code": 0,
+        "status": "ok"
+      },
+      "sessions": [
+        {
+          "active": true,
+          "direct_pid_session": false,
+          "discovery_candidate": true,
+          "graphical": true,
+          "kde_desktop": true,
+          "peer_uid": true,
+          "query": {
+            "exit_code": 0,
+            "status": "ok"
+          },
+          "remote": false,
+          "seat": "seat-1",
+          "session": "session-1",
+          "user_class": true
+        },
+        {
+          "active": true,
+          "direct_pid_session": false,
+          "discovery_candidate": false,
+          "graphical": false,
+          "kde_desktop": false,
+          "peer_uid": true,
+          "query": {
+            "exit_code": 0,
+            "status": "ok"
+          },
+          "remote": false,
+          "seat": null,
+          "session": "session-2",
+          "user_class": false
+        },
+        {
+          "active": true,
+          "direct_pid_session": false,
+          "discovery_candidate": false,
+          "graphical": false,
+          "kde_desktop": false,
+          "peer_uid": false,
+          "query": {
+            "exit_code": 0,
+            "status": "ok"
+          },
+          "remote": true,
+          "seat": null,
+          "session": "session-3",
+          "user_class": true
+        },
+        {
+          "active": true,
+          "direct_pid_session": false,
+          "discovery_candidate": false,
+          "graphical": false,
+          "kde_desktop": false,
+          "peer_uid": false,
+          "query": {
+            "exit_code": 0,
+            "status": "ok"
+          },
+          "remote": false,
+          "seat": null,
+          "session": "session-4",
+          "user_class": false
+        }
+      ]
+    }
+  },
+  "pam": {
+    "complete": true,
+    "edges": [
+      {
+        "from": "kde",
+        "kind": "substack",
+        "line": 1,
+        "phase": "auth",
+        "to": "password-auth"
+      },
+      {
+        "from": "kde",
+        "kind": "include",
+        "line": 2,
+        "phase": "auth",
+        "to": "postlogin"
+      },
+      {
+        "from": "kde",
+        "kind": "include",
+        "line": 5,
+        "phase": "account",
+        "to": "password-auth"
+      },
+      {
+        "from": "kde",
+        "kind": "include",
+        "line": 7,
+        "phase": "password",
+        "to": "password-auth"
+      },
+      {
+        "from": "kde",
+        "kind": "include",
+        "line": 14,
+        "phase": "session",
+        "to": "password-auth"
+      },
+      {
+        "from": "kde",
+        "kind": "include",
+        "line": 15,
+        "phase": "session",
+        "to": "postlogin"
+      }
+    ],
+    "errors": [],
+    "files": [
+      {
+        "bytes": 508,
+        "modules": [
+          {
+            "control_form": "simple",
+            "line": 4,
+            "module": "pam_nologin.so",
+            "phase": "account"
+          },
+          {
+            "control_form": "simple",
+            "line": 9,
+            "module": "pam_selinux.so",
+            "phase": "session"
+          },
+          {
+            "control_form": "simple",
+            "line": 10,
+            "module": "pam_loginuid.so",
+            "phase": "session"
+          },
+          {
+            "control_form": "simple",
+            "line": 11,
+            "module": "pam_selinux.so",
+            "phase": "session"
+          },
+          {
+            "control_form": "simple",
+            "line": 12,
+            "module": "pam_keyinit.so",
+            "phase": "session"
+          },
+          {
+            "control_form": "simple",
+            "line": 13,
+            "module": "pam_namespace.so",
+            "phase": "session"
+          }
+        ],
+        "phases": {
+          "account": 2,
+          "auth": 2,
+          "password": 1,
+          "session": 7
+        },
+        "service": "kde",
+        "sha256": "7d91b3ad73a998e8b10f9edccd74ba04179a778c4a5e61d9176872f43c7bbac3",
+        "status": "read",
+        "symlink": false
+      },
+      {
+        "bytes": 1272,
+        "modules": [
+          {
+            "control_form": "simple",
+            "line": 6,
+            "module": "pam_env.so",
+            "phase": "auth"
+          },
+          {
+            "control_form": "simple",
+            "line": 7,
+            "module": "pam_faildelay.so",
+            "phase": "auth"
+          },
+          {
+            "control_form": "simple",
+            "line": 8,
+            "module": "pam_unix.so",
+            "phase": "auth"
+          },
+          {
+            "control_form": "simple",
+            "line": 9,
+            "module": "pam_deny.so",
+            "phase": "auth"
+          },
+          {
+            "control_form": "simple",
+            "line": 11,
+            "module": "pam_unix.so",
+            "phase": "account"
+          },
+          {
+            "control_form": "simple",
+            "line": 13,
+            "module": "pam_pwquality.so",
+            "phase": "password"
+          },
+          {
+            "control_form": "simple",
+            "line": 14,
+            "module": "pam_unix.so",
+            "phase": "password"
+          },
+          {
+            "control_form": "simple",
+            "line": 15,
+            "module": "pam_deny.so",
+            "phase": "password"
+          },
+          {
+            "control_form": "simple",
+            "line": 17,
+            "module": "pam_keyinit.so",
+            "phase": "session"
+          },
+          {
+            "control_form": "simple",
+            "line": 18,
+            "module": "pam_limits.so",
+            "phase": "session"
+          },
+          {
+            "control_form": "simple",
+            "line": 19,
+            "module": "pam_systemd.so",
+            "phase": "session"
+          },
+          {
+            "control_form": "extended",
+            "line": 20,
+            "module": "pam_succeed_if.so",
+            "phase": "session"
+          },
+          {
+            "control_form": "simple",
+            "line": 21,
+            "module": "pam_unix.so",
+            "phase": "session"
+          }
+        ],
+        "phases": {
+          "account": 1,
+          "auth": 4,
+          "password": 3,
+          "session": 5
+        },
+        "service": "password-auth",
+        "sha256": "2e53f704372b6c7fb69cdc4dfd6c27456d642c83feff8b1588fa1f9cb1126cd0",
+        "status": "read",
+        "symlink": true
+      },
+      {
+        "bytes": 534,
+        "modules": [
+          {
+            "control_form": "simple",
+            "line": 8,
+            "module": "pam_umask.so",
+            "phase": "session"
+          },
+          {
+            "control_form": "extended",
+            "line": 9,
+            "module": "pam_succeed_if.so",
+            "phase": "session"
+          },
+          {
+            "control_form": "extended",
+            "line": 10,
+            "module": "pam_lastlog2.so",
+            "phase": "session"
+          },
+          {
+            "control_form": "simple",
+            "line": 11,
+            "module": "pam_lastlog2.so",
+            "phase": "session"
+          }
+        ],
+        "phases": {
+          "session": 4
+        },
+        "service": "postlogin",
+        "sha256": "c1ecd4d1a5b5de7d26e3336cd33551d1d65e13751b5f46405183472895838a9d",
+        "status": "read",
+        "symlink": true
+      }
+    ],
+    "root_service_candidate": "kde",
+    "service_identity_verified": false,
+    "warning": "Inventory only; hashes and parsed structure do not authorize PAM edits."
+  },
+  "schema_version": 1
+}

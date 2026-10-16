@@ -1,0 +1,92 @@
+{
+  "authorization_proven": false,
+  "cleanup_completed": true,
+  "fixture": "root-declared logind registration metadata only",
+  "multiple_seats_tested": false,
+  "real_remote_login_tested": false,
+  "results": [
+    {
+      "active_desktop_unchanged": true,
+      "actual_candidate_count": 1,
+      "ambiguous_metadata": false,
+      "case": "tty",
+      "discovery_candidate": false,
+      "graphical": false,
+      "has_seat": false,
+      "registered_by_pam_systemd": true,
+      "remote": false,
+      "root_uid_own_request_candidate": null,
+      "scope_runtime_seconds": 45,
+      "sd_login_direct_mapping": true,
+      "user_class": true
+    },
+    {
+      "active_desktop_unchanged": true,
+      "actual_candidate_count": 1,
+      "ambiguous_metadata": false,
+      "case": "remote-metadata",
+      "discovery_candidate": false,
+      "graphical": true,
+      "has_seat": true,
+      "registered_by_pam_systemd": true,
+      "remote": true,
+      "root_uid_own_request_candidate": null,
+      "scope_runtime_seconds": 45,
+      "sd_login_direct_mapping": true,
+      "user_class": true
+    },
+    {
+      "active_desktop_unchanged": true,
+      "actual_candidate_count": 1,
+      "ambiguous_metadata": false,
+      "case": "greeter-metadata",
+      "discovery_candidate": false,
+      "graphical": true,
+      "has_seat": true,
+      "registered_by_pam_systemd": true,
+      "remote": false,
+      "root_uid_own_request_candidate": null,
+      "scope_runtime_seconds": 45,
+      "sd_login_direct_mapping": true,
+      "user_class": false
+    },
+    {
+      "active_desktop_unchanged": true,
+      "actual_candidate_count": 1,
+      "ambiguous_metadata": false,
+      "case": "root-metadata",
+      "discovery_candidate": false,
+      "graphical": true,
+      "has_seat": true,
+      "registered_by_pam_systemd": true,
+      "remote": false,
+      "root_uid_own_request_candidate": false,
+      "scope_runtime_seconds": 45,
+      "sd_login_direct_mapping": true,
+      "user_class": true
+    },
+    {
+      "active_desktop_unchanged": true,
+      "actual_candidate_count": 2,
+      "ambiguous_metadata": true,
+      "case": "graphical-metadata",
+      "discovery_candidate": true,
+      "graphical": true,
+      "has_seat": true,
+      "registered_by_pam_systemd": true,
+      "remote": false,
+      "root_uid_own_request_candidate": null,
+      "scope_runtime_seconds": 45,
+      "sd_login_direct_mapping": true,
+      "user_class": true
+    }
+  ],
+  "schema": 1,
+  "second_real_desktop_tested": false,
+  "selinux": "Enforcing",
+  "versions": [
+    "systemd-259.9-1.fc44.x86_64",
+    "pam-1.7.2-2.fc44.x86_64",
+    "selinux-policy-targeted-44.11-1.fc44.noarch"
+  ]
+}

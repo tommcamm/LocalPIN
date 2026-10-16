@@ -1,0 +1,25 @@
+{
+  "active_foreign_management_session_excluded_for_test_uid": true,
+  "both_desktops_have_live_plasmashell_and_kwin_wayland": true,
+  "fixture": "two genuine different-UID stock KDE desktops on one seat",
+  "inactive_original_test_session_is_candidate": true,
+  "management_uid_candidate_count": 1,
+  "multiple_seats_tested": false,
+  "observed_test_locker": {
+    "direct_session_result": -61,
+    "owner_matches_test_uid": true,
+    "real_effective_uid_match_test": true,
+    "selinux_type": "unconfined_t",
+    "user_manager_owner_result": 0
+  },
+  "original_test_session_retained": true,
+  "production_broker_authorization_tested": false,
+  "real_graphical_desktop_count": 2,
+  "same_uid_two_real_desktops_tested": false,
+  "schema_version": 1,
+  "selinux": "Enforcing",
+  "test_desktop_locked_hint": true,
+  "test_uid_candidate_count": 1,
+  "user_confirmed_management_desktop_login": true,
+  "whole_vm_snapshot_restored": false
+}
