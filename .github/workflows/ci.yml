@@ -93,3 +93,25 @@ jobs:
         run: cargo build --workspace --all-features --release --locked --target x86_64-unknown-linux-gnu
       - name: Run tests on Fedora
         run: cargo test --workspace --all-features --locked --target x86_64-unknown-linux-gnu
+
+  feasibility:
+    name: Isolated M1 experiments (Fedora 44)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container:
+      image: fedora:44
+    steps:
+      - name: Install experiment tools in the disposable container
+        run: dnf install -y gcc git python3 pam-devel swtpm tpm2-tools libargon2
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test sanitized PAM graph and session discovery
+        run: python3 -m unittest discover -s experiments/m1/platform -p 'test_*.py' -v
+      - name: Run isolated PAM baselines and candidate tests
+        run: experiments/m1/pam/run.sh
+      - name: Test native worker deadlines and bounds
+        run: python3 experiments/m1/worker/test_supervisor.py
+      - name: Run disposable TPM simulator assertions
+        run: python3 experiments/m1/tpm/run.py

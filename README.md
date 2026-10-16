@@ -6,10 +6,11 @@ It is intended to become useful, reviewable open-source software.
 
 Repository: [tommcamm/LocalPIN](https://github.com/tommcamm/LocalPIN).
 
-**Development status: repository foundation (M0).** This repository contains the
-specification, implementation roadmap, and an initial Rust workspace. It does not
-yet provide a PIN verifier, broker, PAM module, CLI, or installable package. There
-is no supported production release.
+**Development status: M1 feasibility experiments.** This repository contains the
+specification, implementation roadmap, initial Rust workspace, and isolated
+PAM/TPM/platform experiments. M1's enforcing Fedora KDE VM gate remains open.
+It does not yet provide a production PIN verifier, broker, PAM module, CLI, or
+installable package. There is no supported production release.
 
 ## Intended scope
 
@@ -17,7 +18,7 @@ The first target is Fedora KDE on x86_64, for local, non-root accounts. The plan
 design uses a small PAM adapter, a local broker with durable attempt limits, and
 either a TPM 2.0 credential or an explicitly selected software backend. Password
 fallback, opt-in activation, enforcing SELinux support, and tested recovery are
-release requirements; they have not yet been demonstrated.
+release requirements; they have not yet been demonstrated end to end.
 
 Initial login, sudo, SSH, polkit, and disk encryption are outside the initial
 scope. Six-digit PINs have limited entropy. The
@@ -50,7 +51,10 @@ evidence gates, [CONTRIBUTING.md](CONTRIBUTING.md) for the Git and validation
 workflow, and [SECURITY.md](SECURITY.md) for private security reporting guidance.
 The [build-input inventory](docs/development/dependencies.md) records the initial
 toolchain and dependency policy, and the [M0 report](docs/development/m0-foundation.md)
-records validation actually performed. Changes are tracked in [CHANGELOG.md](CHANGELOG.md).
+records foundation validation. The [M1 evidence report](docs/development/m1-feasibility.md)
+links the runnable experiments and architecture decisions, with
+[VM setup steps](docs/development/m1-vm-setup.md) for the remaining desktop tests.
+Changes are tracked in [CHANGELOG.md](CHANGELOG.md).
 
 The existing [pam_pinlock project](https://github.com/saltnpepper97/pam_pinlock)
 provides migration context. LocalPIN begins as an independent implementation;

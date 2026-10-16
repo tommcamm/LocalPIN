@@ -1,8 +1,8 @@
 # LocalPIN implementation plan
 
 - Date: 2026-10-16
-- Status: Accepted roadmap; M0 implemented locally, initial hosted CI validation pending.
-- Source of requirements: [product-specification.md](product-specification.md), version 1.0.
+- Status: Accepted roadmap; M0 implemented locally; M1 isolated experiments delivered, enforcing-VM exit gate pending. Hosted M1 CI execution remains unverified.
+- Source of requirements: [product-specification.md](product-specification.md), version 1.1. M1 clarifies six-digit password/PIN failure accounting in section 11 and ADR 0001.
 
 This plan turns the specification into independently reviewable changes and evidence gates. The specification remains authoritative. An unresolved design question below must be resolved in an architecture decision record (ADR), with a specification amendment if necessary, rather than silently changing the requirements.
 
@@ -81,6 +81,11 @@ TPM experiment:
 - Inventory real TPM capabilities read-only only when needed. Do not run wrong-PIN budgets, clear operations, or global-policy changes on production hardware.
 
 Exit gate: checked-in experiment results and ADRs resolve the early platform/design questions below and assign explicit tests to decisions completed in later milestones. If same-entry fallback or a secure TPM construction cannot be demonstrated, revise the design/specification visibly before building the full product around it. Experimental test adapters are not installable release artifacts.
+
+The [M1 evidence report](development/m1-feasibility.md) records the isolated PAM,
+TPM, platform and native-worker experiments. Its desktop, account-policy,
+session/seat and enforcing-SELinux gates remain open. Follow the
+[VM setup instructions](development/m1-vm-setup.md) to collect that evidence.
 
 ### M2 — Implement policy models and stable contracts
 
@@ -235,7 +240,12 @@ Each milestone records three things: delivered changes, evidence actually collec
 
 Use deterministic unit/property tests for policy; fault-injected filesystem tests for persistence; socket tests for IPC; simulator tests for TPM; permit/deny-baselined PAM harnesses for the adapter; enforcing Fedora VMs for packaging/desktop flows; and physical hardware for the final usability/performance matrix. Add regression tests when a discovered failure threatens authentication, persistence or recovery.
 
-With M0 implemented locally, the next implementation batch is the M1 PAM/session feasibility harness and TPM simulator experiment. It should resolve the early architecture risks in isolated environments, while the current everyday authentication setup remains available throughout development.
+M1's isolated feasibility harnesses and initial ADRs are delivered. The next
+batch is the enforcing Fedora KDE VM evidence in the M1 report, including real
+desktop fallback, account/failure-counter behavior, sessions/seats and the
+broker/password-worker SELinux boundary. The everyday authentication setup
+remains separate throughout development. Do not mark M1 complete or present M2
+contracts as settled while those platform dependencies remain unproved.
 
 No calendar estimate is committed before the feasibility work. Subsequent estimates should use measured test infrastructure effort and availability of independent review/hardware, with review and recovery work included in the schedule.
 

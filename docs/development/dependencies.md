@@ -60,6 +60,40 @@ cargo deny --locked check advisories licenses bans sources
 development tool; its implementation dependencies are not LocalPIN runtime
 dependencies and are outside LocalPIN's `Cargo.lock`.
 
+## M1 experiment inputs
+
+The isolated experiments add no Rust dependencies and are not release artifacts.
+Their original C/Python source remains `MIT OR Apache-2.0`; system tools and
+libraries retain their distribution licensing. No third-party headers, native
+binaries, upstream KDE source or simulator state are checked in. Runtime crate
+and native production dependency selection remains M4/M7 work.
+
+| Input | Observed Fedora package | Use |
+| --- | --- | --- |
+| Linux-PAM runtime and development headers | `1.7.2-2.fc44` | Isolated PAM C API, known baseline modules and optional packaged `pam_unix` |
+| GCC | `16.2.1-2.fc44` | Compile the experimental module/harness with warnings denied |
+| Python | `3.14.8-1.fc44` | Standard-library test orchestration, metadata collector and native-call probe |
+| bubblewrap (optional) | `0.12.0-1.fc44` | User/mount/PID/network namespaces with synthetic passwd/shadow files |
+| swtpm / libtpms | `0.10.2-1.fc44` / `0.10.2-3.fc44` | Disposable TPM instances only |
+| tpm2-tools / TPM2-TSS | `5.7-5.fc44` / `4.1.3-9.fc44` | Exercise the TPM construction and blocking native transport |
+| libargon2 | `20190702-10.fc44` | Test-only ctypes Argon2id derivation; production uses reviewed RustCrypto code |
+| libsystemd | systemd `259.9-1.fc44` | Read-only direct-session versus user-manager ownership observations |
+
+The PAM report records the matching extracted pam-devel RPM SHA-256 and the
+kscreenlocker source RPM/installed binary digests. Headers were extracted under
+ignored `.local/` without installing packages on the development host. The TPM
+report records actual simulator/native versions and exact public-object template.
+Distribution license tags include BSD for PAM/TPM tools and LGPL for bubblewrap;
+review actual component terms when packaging rather than treating Cargo's
+MIT/Apache license allowlist as a native-tool license inventory.
+
+The Fedora M1 CI container installs distribution tools and runs isolated suites
+without host credentials, a real TPM, privileged mode or a desktop session. It
+does not enable the optional bubblewrap suite, because unprivileged namespaces
+depend on the runner's container restrictions. Local optional-suite results and
+enforcing-VM results must be recorded separately. M1 CI execution has not yet
+been verified on GitHub.
+
 ## CI limits
 
 CI runs formatting, Clippy with warnings denied, tests and doctests, and release

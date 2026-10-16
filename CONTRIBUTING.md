@@ -1,6 +1,7 @@
 # Contributing to LocalPIN
 
-LocalPIN is at the repository-foundation milestone. Read the
+LocalPIN has isolated M1 feasibility experiments; desktop/SELinux gates remain
+open. Read the
 [product specification](docs/product-specification.md) and
 [implementation plan](docs/implementation-plan.md) before proposing implementation
 changes. Authentication behavior needs evidence appropriate to its risk, including
@@ -38,8 +39,10 @@ cargo deny --locked check advisories bans licenses sources
 Install the `cargo-deny` version pinned by CI before the last command. Advisory
 checks need access to the configured advisory database. Report unavailable checks
 honestly, including environmental failures. The initial core library has no
-dependencies or authentication behavior, so passing these checks establishes only
-the repository foundation.
+dependencies or authentication behavior, so passing the Rust checks establishes
+only the repository foundation. Run the separate
+[M1 harnesses](experiments/m1/README.md) when changing feasibility code; do not
+report their container results as real KDE or SELinux evidence.
 
 New dependencies need a documented purpose, maintenance and advisory review,
 license review, MSRV compatibility, and any native-library requirements. Keep the
