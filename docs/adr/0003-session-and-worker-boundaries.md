@@ -2,7 +2,7 @@
 
 Date: 2026-10-16.
 
-Status: Accepted constraints for subsequent implementation; session, account
+Original M1 status: Accepted constraints for subsequent implementation; session, account
 lifecycle and SELinux integration remain experimental and block activation.
 
 ## Context
@@ -162,3 +162,25 @@ sessions when its caller is owned by the shared user manager. The password route
 remains available. Later broader support requires an explicit, tested decision;
 it cannot rely on caller-supplied seat names. No production policy, service
 installation or host authentication edit is introduced by this ADR.
+
+## M6.1 implementation note — 2026-10-17
+
+The constraints above remain binding; the implementation chronology is retained
+as M1 history. M5 implemented the socket-bound peer/process and stable native
+logind routing contract in [ADR 0010](0010-bounded-broker-and-live-peers.md).
+M6.1 now composes that routing with the production lifecycle and password-free
+policy authorities of [ADR 0012](0012-immutable-appliance-account-authority.md).
+Real component requests originate from a dedicated account's actual KDE user
+manager in the disposable enforcing guest; the
+[M6.1 report](../development/m6.1-account-authorities.md) records their evidence
+and final acceptance. No client-provided identity or test authority substitutes
+for those decisions.
+
+Account support is restricted to the sealed Fedora 44 x86_64 Btrfs appliance
+domain. Its lifecycle lease serializes administration with the retained storage
+guard through publication and delivery. Unknown account/policy state remains
+unavailable, including missing volatile faillock state after reboot. The separate
+password-free child retains bounded capacity, deadline and cancellation handling;
+it does not challenge for a password or alter password accounting. Same-UID caller
+impersonation remains a threat-model limit. M7 unlock integration, M8 installed
+SELinux/systemd/packaging and M9 human/specialist and hardware review remain open.

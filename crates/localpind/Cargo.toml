@@ -21,8 +21,8 @@ libc = "=0.2.191"
 getrandom = "=0.4.3"
 sha2 = { version = "=0.11.1", default-features = false }
 
-# One documented SO_PEERPIDFD acquisition function is the sole local exception.
-# `forbid` cannot be narrowed at that function; all other code retains `deny`.
+# Documented socket-pidfd and kernel-file-lease ABI exceptions are function-scoped.
+# `forbid` cannot be narrowed there; all other production code retains `deny`.
 [lints.rust]
 unsafe_code = "deny"
 missing_docs = "warn"

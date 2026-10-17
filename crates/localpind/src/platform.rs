@@ -39,6 +39,7 @@ pub struct Peer {
     pid: u32,
     pidfd: OwnedFd,
     start_time: u64,
+    monitor: UnixStream,
 }
 
 impl Peer {
@@ -56,6 +57,7 @@ impl Peer {
             pid,
             pidfd,
             start_time: 0,
+            monitor: socket.try_clone()?,
         };
         peer.check_pidfd()?;
         let start_time = peer.process_identity()?;
@@ -86,6 +88,12 @@ impl Peer {
             return Err(identity_error());
         }
         self.check_pidfd()
+    }
+
+    /// Detect disconnect or unexpected queued input between protocol frames.
+    /// Used while a password-free policy child is running, without consuming it.
+    pub fn cancelled(&self) -> bool {
+        self.ensure_live().is_err() || crate::broker::pending(&self.monitor)
     }
 
     fn check_pidfd(&self) -> io::Result<()> {
@@ -119,7 +127,7 @@ impl Peer {
     }
 }
 
-/// The sole local unsafe boundary: acquire the socket's actual peer pidfd.
+/// Socket identity's narrow unsafe boundary: acquire the actual peer pidfd.
 ///
 /// The kernel retains the socket peer's `struct pid`, so this cannot silently
 /// switch to a recycled numeric PID. Kernels without this option fail closed.
@@ -742,6 +750,22 @@ mod tests {
         let peer = Peer::from_socket(&server).unwrap();
         assert_eq!(peer.pid(), std::process::id());
         peer.ensure_live().unwrap();
+    }
+
+    #[test]
+    fn peer_monitor_detects_pending_cancellation_without_consuming_input() {
+        let (server, mut client) = UnixStream::pair().unwrap();
+        let peer = Peer::from_socket(&server).unwrap();
+        assert!(!peer.cancelled());
+        client.write_all(&[1]).unwrap();
+        assert!(peer.cancelled());
+        let mut byte = [0];
+        (&server).read_exact(&mut byte).unwrap();
+        assert_eq!(byte, [1]);
+        assert!(!peer.cancelled());
+        client.shutdown(std::net::Shutdown::Both).unwrap();
+        drop(client);
+        assert!(peer.cancelled());
     }
 
     #[test]

@@ -20,6 +20,7 @@ use localpin_core::{
         VerificationCompletion, VerificationJob,
     },
 };
+use std::os::unix::fs::PermissionsExt;
 use std::{
     fs::{DirBuilder, OpenOptions},
     io::Write,
@@ -133,6 +134,199 @@ impl LifecycleAuthority for Authority {
 }
 
 struct FixedClock(TimePoint);
+
+#[test]
+fn missing_or_unsafe_lock_cannot_be_repaired_by_an_existing_user() {
+    for damage in 0..3 {
+        let mut fixture = Fixture::new();
+        let original = account(1000);
+        fixture.enrolled(original);
+        let directory = fixture.path.join("users/1000");
+        let lock = directory.join("lock");
+        std::fs::remove_file(&lock).unwrap();
+        match damage {
+            0 => {}
+            1 => std::os::unix::fs::symlink("active", &lock).unwrap(),
+            _ => std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o755))
+                .unwrap(),
+        }
+        let mut authority = Authority(original.incarnation);
+        assert!(fixture.storage.user(original.uid, &mut authority).is_err());
+        if damage != 1 {
+            assert!(std::fs::symlink_metadata(&lock).is_err());
+        }
+        let fresh = AccountId {
+            uid: original.uid,
+            incarnation: Incarnation::new([97; 16]).unwrap(),
+        };
+        fixture
+            .storage
+            .reprovision(fresh, time(10), &mut Authority(fresh.incarnation))
+            .unwrap();
+        let mut authority = Authority(fresh.incarnation);
+        let state = fixture
+            .storage
+            .user(fresh.uid, &mut authority)
+            .unwrap()
+            .committed_state()
+            .unwrap();
+        assert_eq!(state.account(), fresh);
+        assert_eq!(state.backend(), None);
+    }
+}
+
+#[test]
+fn privileged_reprovision_refuses_an_outstanding_user_guard() {
+    let mut fixture = Fixture::new();
+    let original = account(1000);
+    fixture.enrolled(original);
+    let mut authority = Authority(original.incarnation);
+    let guard = fixture.storage.user(original.uid, &mut authority).unwrap();
+    let fresh = AccountId {
+        uid: original.uid,
+        incarnation: Incarnation::new([98; 16]).unwrap(),
+    };
+    assert_eq!(
+        fixture
+            .storage
+            .reprovision(fresh, time(10), &mut Authority(fresh.incarnation)),
+        Err(Error::Busy)
+    );
+    assert_eq!(guard.committed_state().unwrap().account(), original);
+}
+
+#[test]
+fn privileged_reprovision_quarantines_old_and_interrupted_state() {
+    let mut fixture = Fixture::new();
+    let original = account(1000);
+    fixture.enrolled(original);
+    let old_pointer = std::fs::read(fixture.path.join("users/1000/active")).unwrap();
+    let replacement = AccountId {
+        uid: original.uid,
+        incarnation: Incarnation::new([91; 16]).unwrap(),
+    };
+    fixture
+        .storage
+        .reprovision(
+            replacement,
+            time(200),
+            &mut Authority(replacement.incarnation),
+        )
+        .unwrap();
+    let name: String = replacement
+        .incarnation
+        .get()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    assert_eq!(
+        std::fs::read(fixture.path.join("retired/1000").join(name).join("active")).unwrap(),
+        old_pointer
+    );
+    let mut authority = Authority(replacement.incarnation);
+    let state = fixture
+        .storage
+        .user(original.uid, &mut authority)
+        .unwrap()
+        .committed_state()
+        .unwrap();
+    assert_eq!(state.account(), replacement);
+    assert_eq!(state.backend(), None);
+    assert_eq!(state.generation().get(), 1);
+    // Missing/corrupt active state cannot be repaired by ordinary initialize.
+    std::fs::write(
+        fixture.path.join("users/1000/active"),
+        b"interrupted fixture",
+    )
+    .unwrap();
+    assert_eq!(
+        fixture
+            .storage
+            .initialize(replacement, time(201), &mut authority),
+        Err(Error::Conflict)
+    );
+    let recovered = AccountId {
+        uid: original.uid,
+        incarnation: Incarnation::new([92; 16]).unwrap(),
+    };
+    fixture
+        .storage
+        .reprovision(recovered, time(202), &mut Authority(recovered.incarnation))
+        .unwrap();
+    let mut authority = Authority(recovered.incarnation);
+    assert_eq!(
+        fixture
+            .storage
+            .user(original.uid, &mut authority)
+            .unwrap()
+            .committed_state()
+            .unwrap()
+            .account(),
+        recovered
+    );
+    // Reusing a provisioning incarnation cannot replace an old quarantine.
+    assert!(
+        fixture
+            .storage
+            .reprovision(recovered, time(203), &mut authority)
+            .is_err()
+    );
+}
+
+#[test]
+fn interrupted_privileged_reprovision_requires_another_fresh_incarnation() {
+    for (boundary, occurrence) in [
+        (Boundary::Renamed, 1),
+        (Boundary::DirectorySynced, 1),
+        (Boundary::DirectorySynced, 2),
+        (Boundary::UidCreated, 1),
+        (Boundary::GenerationCreated, 1),
+        (Boundary::TempCreated, 1),
+        (Boundary::Written, 1),
+        (Boundary::FileSynced, 1),
+        (Boundary::Renamed, 2),
+        (Boundary::DirectorySynced, 3),
+        (Boundary::TempCreated, 2),
+        (Boundary::Written, 2),
+        (Boundary::FileSynced, 2),
+        (Boundary::Renamed, 3),
+        (Boundary::DirectorySynced, 4),
+    ] {
+        let mut fixture = Fixture::new();
+        let original = account(1000);
+        fixture.enrolled(original);
+        let interrupted = AccountId {
+            uid: original.uid,
+            incarnation: Incarnation::new([93; 16]).unwrap(),
+        };
+        let mut authority = Authority(interrupted.incarnation);
+        assert_eq!(
+            fixture.storage.reprovision_with_faults(
+                interrupted,
+                time(200),
+                &mut authority,
+                FailAt::boxed(boundary, occurrence)
+            ),
+            Err(Error::Injected)
+        );
+        // A privileged retry rotates again; no incomplete identity or old
+        // credential is adopted as continuity after a failed operation.
+        let recovered = AccountId {
+            uid: original.uid,
+            incarnation: Incarnation::new([94; 16]).unwrap(),
+        };
+        let mut authority = Authority(recovered.incarnation);
+        fixture
+            .storage
+            .reprovision(recovered, time(201), &mut authority)
+            .unwrap();
+        let store = fixture.storage.user(original.uid, &mut authority).unwrap();
+        let state = store.committed_state().unwrap();
+        assert_eq!(state.account(), recovered);
+        assert_eq!(state.backend(), None);
+        assert!(store.read_throttle(state).is_ok());
+    }
+}
 
 impl Clock for FixedClock {
     fn now(&mut self) -> std::result::Result<TimePoint, Unavailable> {

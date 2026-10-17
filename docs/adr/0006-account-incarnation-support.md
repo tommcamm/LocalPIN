@@ -1,6 +1,7 @@
 # ADR 0006: Require authoritative account lifecycle support
 
-Date: 2026-10-17. Status: accepted fail-closed M2 support restriction; production
+Date: 2026-10-17. Status: accepted fail-closed support restriction.
+Original M2 implementation status: production
 account lifecycle adapter remains unimplemented.
 
 ## Problem
@@ -49,3 +50,30 @@ restart and crash between revocation and account mutation; bypass through every
 supported account administration path; UID reuse across reboot. If all mutation
 paths cannot be controlled or observed before authorization, support must remain
 restricted. The model cannot establish those platform guarantees.
+
+## M6.1 implementation note — 2026-10-17
+
+The lifecycle requirements above are unchanged. The earlier implementation
+status records M2's lack of a production authority; M6.1 now implements one for
+the explicitly provisioned Fedora 44 x86_64 Btrfs appliance domain in
+[ADR 0012](0012-immutable-appliance-account-authority.md). The
+[M6.1 report](../development/m6.1-account-authorities.md) records its actual
+component evidence and final acceptance. This is not a general lifting of the
+restriction, and ordinary unmanaged Fedora accounts remain unsupported.
+
+Active incarnations require kernel-protected account/policy inputs and a
+writer-drain proof before sealing, including pre-existing writable descriptors
+and shared writable mappings. Root administration takes the exclusive lifecycle
+lease and durably revokes all incarnations before unfreezing those inputs.
+Broker readers retain the shared lease through the storage guard and actual
+response delivery. Every reseal, including identical UID/name/home recreation
+or rename, uses fresh opaque incarnations and privileged disabled baselines;
+there is no inferred continuity. Missing/corrupt state, old experimental registry
+versions and unknown policy remain unavailable. Own-user enrollment cannot
+provision or recover them, even after password authentication.
+
+Only the domain covered by the evidence may use permanent account records.
+The required evidence list above remains the milestone's exit contract; a model
+or scheduling fixture alone cannot satisfy it. M7's unlock adapter, M8's
+installed confinement/packaging and M9's human/specialist review and physical
+hardware validation retain their separate gates.

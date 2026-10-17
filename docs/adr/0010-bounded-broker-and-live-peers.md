@@ -38,12 +38,16 @@ are bound to a live connection, with no durable token or success cache.
 The broker additionally captures a socket-bound `SO_PEERPIDFD` reference. Opening
 a pidfd by numeric PID after `SO_PEERCRED` could attach to a replacement process;
 there is no such fallback. This raises the Linux runtime requirement to 6.5 with
-support for this socket option; missing support fails closed. The single local
+support for this socket option; missing support fails closed. M5's local
 unsafe function is `platform::socket_peer_pidfd`: one `getsockopt` and ownership
 transfer of its fresh descriptor, with output length and descriptor validation.
 `localpind` uses `deny(unsafe_code)` with a function-scoped exception; the other
 crates retain `forbid`, and the worker independently forbids unsafe code. The
 libc, rustix, listenfd, D-Bus and TPM libraries remain native/unsafe review inputs.
+
+M6.1 adds the separately reviewed, function-scoped integer `fcntl` ABI for the
+kernel writer-drain lease in [ADR 0012](0012-immutable-appliance-account-authority.md).
+It is required during privileged sealing; it runs no account policy in the broker.
 
 Live session routing uses native logind D-Bus calls at the fixed system-bus
 address, never a shell or inherited bus-address environment. A direct session

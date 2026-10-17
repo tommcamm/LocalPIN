@@ -1,6 +1,6 @@
 # ADR 0001: PAM candidate reuse and explicit PIN eligibility
 
-Date: 2026-10-16. Status: accepted experimental candidate contract and bounded
+Date: 2026-10-16. Original M1 status: accepted experimental candidate contract and bounded
 eligibility path, supported by Enforcing-VM evidence. Production eligibility
 implementation and activation remain release blockers.
 
@@ -124,3 +124,25 @@ The original stack may delay password fallback independently. Mock timeout
 results demonstrate mapping only; elapsed deadline guarantees need blocked-native
 worker tests and end-to-end measurements. Existing fingerprint/smartcard services
 and unrelated PAM services remain outside the LocalPIN activation target.
+
+## M6.1 implementation note — 2026-10-17
+
+The M1 evidence and limitations above are historical. Production password-free
+eligibility is now implemented only for the explicit Fedora 44 x86_64 Btrfs
+appliance domain in [ADR 0012](0012-immutable-appliance-account-authority.md).
+It validates the exact reviewed PAM/authselect graph and native binaries,
+files-only NSS, supported local identity, strict SHA512-crypt/default yescrypt
+formats, lock/aging/forced-change state and applicable nologin/faillock policy.
+Unknown restrictions, unreadable or noncanonical state and requested PAM
+conversations make PIN unavailable. The worker receives no password and must
+leave tally contents and metadata unchanged; own-user enrollment cannot repair
+missing state. Native checks run in a bounded supervised child and retain the
+original request deadline, with time reserved to deliver unavailable.
+
+The [M6.1 report](../development/m6.1-account-authorities.md) records actual
+production-authority component flows and the remaining acceptance evidence.
+This supersedes the M1 fixture's SHA512-only implementation limit solely within
+the measured domain. It does not validate every Fedora policy or broaden account
+support. M7 still owns the stock KDE PIN/fallback matrix; M8 owns installed
+worker confinement and packaging; M9 owns independent human/specialist review
+and physical hardware validation. None is established by the earlier fixture.

@@ -152,7 +152,7 @@ impl Storage {
         lifecycle: &'a mut dyn LifecycleAuthority,
     ) -> Result<UserStore<'a>> {
         let dir = self.broker.users.child(&uid.get().to_string())?;
-        let mut guard = self.guard(dir, uid, lifecycle)?;
+        let mut guard = self.guard(dir, uid, lifecycle, false)?;
         guard.reconcile()?;
         Ok(guard)
     }
@@ -162,8 +162,13 @@ impl Storage {
         dir: Dir,
         uid: Uid,
         lifecycle: &'a mut dyn LifecycleAuthority,
+        create: bool,
     ) -> Result<UserStore<'a>> {
-        let lock = dir.lock("lock")?;
+        let lock = if create {
+            dir.lock("lock")?
+        } else {
+            dir.existing_lock("lock")?
+        };
         Ok(UserStore {
             dir,
             uid,
@@ -189,6 +194,61 @@ impl Storage {
         self.initialize_with_faults(account, now, lifecycle, Box::new(NoFaults))
     }
 
+    /// Privileged offline re-provisioning after durable lifecycle revocation.
+    ///
+    /// The caller must hold the lifecycle authority's exclusive mutation lease.
+    /// Opening `Storage` also requires that the broker is stopped. Old state is
+    /// quarantined under its new incarnation rather than reused or repaired.
+    /// A bounded quarantine refuses further provisioning after sixteen retained
+    /// incarnations for a UID; only an explicit administrator may remove them.
+    /// Own-user enrollment must never call this operation.
+    pub fn reprovision(
+        &mut self,
+        account: AccountId,
+        now: TimePoint,
+        lifecycle: &mut dyn LifecycleAuthority,
+    ) -> Result<()> {
+        self.reprovision_with_faults(account, now, lifecycle, Box::new(NoFaults))
+    }
+
+    /// Privileged re-provisioning with deterministic crash-boundary injection.
+    pub fn reprovision_with_faults(
+        &mut self,
+        account: AccountId,
+        now: TimePoint,
+        lifecycle: &mut dyn LifecycleAuthority,
+        mut faults: Box<dyn FaultInjector>,
+    ) -> Result<()> {
+        check_lifecycle(lifecycle, account)?;
+        let retired = self.broker._root.create_child("retired")?;
+        let uid = account.uid.get().to_string();
+        let retired_uid = retired.create_child(&uid)?;
+        if retired_uid.names()?.len() >= 16 {
+            return Err(Error::Oversized);
+        }
+        if Arc::strong_count(&self.broker) != 1 {
+            return Err(Error::Busy);
+        }
+        if self.broker.users.entry_exists(&uid)? {
+            let destination: String = account
+                .incarnation
+                .get()
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect();
+            // RENAME_NOREPLACE prevents a retried or colliding incarnation
+            // from overwriting already quarantined evidence.
+            fs::quarantine(
+                &self.broker.users,
+                &uid,
+                &retired_uid,
+                &destination,
+                &mut faults,
+            )?;
+        }
+        self.initialize_with_faults(account, now, lifecycle, faults)
+    }
+
     /// Provision with a deterministic persistence test hook.
     pub fn initialize_with_faults(
         &self,
@@ -202,7 +262,7 @@ impl Storage {
             .broker
             .users
             .create_child_new(&account.uid.get().to_string())?;
-        let mut guard = self.guard(dir, account.uid, lifecycle)?;
+        let mut guard = self.guard(dir, account.uid, lifecycle, true)?;
         guard.faults = faults;
         guard.faults.check(Boundary::UidCreated)?;
         let generation = Generation::new(1).map_err(|_| Error::Corrupt)?;

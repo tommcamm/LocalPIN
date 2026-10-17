@@ -276,10 +276,41 @@ impl Dir {
 
     /// Open the permanent lock inode and take an exclusive, nonblocking lock.
     pub(crate) fn lock(&self, name: &str) -> Result<File> {
+        self.lock_mode(name, true)
+    }
+
+    /// Existing account operations must never recreate a missing stable inode.
+    pub(crate) fn existing_lock(&self, name: &str) -> Result<File> {
+        self.lock_mode(name, false)
+    }
+
+    pub(crate) fn entry_exists(&self, name: &str) -> Result<bool> {
+        check_name(name)?;
+        self.validate_self()?;
+        match rustix::fs::statat(&self.file, name, AtFlags::SYMLINK_NOFOLLOW) {
+            Ok(_) => Ok(true),
+            Err(Errno::NOENT) => Ok(false),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    fn lock_mode(&self, name: &str, create: bool) -> Result<File> {
+        if !create {
+            self.inspect_regular(name)?;
+        }
         let file = match self.open_at(
             name,
-            OFlags::RDWR | OFlags::CREATE | OFlags::EXCL,
-            Mode::from_raw_mode(FILE_MODE),
+            OFlags::RDWR
+                | if create {
+                    OFlags::CREATE | OFlags::EXCL
+                } else {
+                    OFlags::empty()
+                },
+            if create {
+                Mode::from_raw_mode(FILE_MODE)
+            } else {
+                Mode::empty()
+            },
         ) {
             Ok(file) => file,
             Err(Error::Io(std::io::ErrorKind::AlreadyExists)) => {
@@ -309,6 +340,32 @@ impl Dir {
 
 fn same_inode(left: &Metadata, right: &Metadata) -> bool {
     left.dev() == right.dev() && left.ino() == right.ino()
+}
+
+pub(crate) fn quarantine(
+    source: &Dir,
+    name: &str,
+    target: &Dir,
+    destination: &str,
+    fault: &mut impl FaultInjector,
+) -> Result<()> {
+    check_name(name)?;
+    check_name(destination)?;
+    source.validate_self()?;
+    target.validate_self()?;
+    rustix::fs::renameat_with(
+        &source.file,
+        name,
+        &target.file,
+        destination,
+        rustix::fs::RenameFlags::NOREPLACE,
+    )
+    .map_err(path_error)?;
+    fault.check(Boundary::Renamed)?;
+    source.sync()?;
+    fault.check(Boundary::DirectorySynced)?;
+    target.sync()?;
+    fault.check(Boundary::DirectorySynced)
 }
 
 fn check_name(name: &str) -> Result<()> {

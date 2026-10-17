@@ -1,8 +1,8 @@
 # LocalPIN implementation plan
 
 - Date: 2026-10-17
-- Status: Accepted roadmap; M0 implemented locally; M1 feasibility complete; M2 policy/protocol contracts, M3 protected storage, M4 credential primitives, M5 bounded broker and M6 enrollment worker/CLI implemented locally. M6.1 production account lifecycle and eligibility is the next implementation milestone and a prerequisite for M7's real-account completion gate. Installed password policy/sandbox, physical resource-manager and later review gates remain open. Hosted CI execution remains unverified. Permanent account records remain gated on production lifecycle support.
-- Source of requirements: [product-specification.md](product-specification.md), version 1.2. M1 clarifies password/PIN accounting; M2 settles time boundaries and narrows lifecycle support explicitly.
+- Status: Accepted roadmap; M0 implemented locally; M1 feasibility complete; M2–M6 implemented locally. M6.1 is complete only for ADR 0012's restricted appliance domain, with production-authority component evidence recorded in its report. M7 has not started. M8 installed policy/sandbox/packaging and M9 human/specialist review and hardware gates remain open. Hosted CI execution remains unverified; unmanaged accounts remain unsupported.
+- Source of requirements: [product-specification.md](product-specification.md), version 1.3. M1 clarifies password/PIN accounting; M2 settles time boundaries and restricts lifecycle support; M6.1 defines the narrow implemented account domain.
 
 This plan turns the specification into independently reviewable changes and evidence gates. The specification remains authoritative. An unresolved design question below must be resolved in an architecture decision record (ADR), with a specification amendment if necessary, rather than silently changing the requirements.
 
@@ -206,12 +206,24 @@ explicit M8 gate, and enrollment does not activate desktop integration.
 
 ### M6.1 — Implement production account lifecycle and eligibility
 
-Status: planned; required next before M7's real-account integration and acceptance
-work. M6 completed its test-broker gate using synthetic authorities. The installed
-broker still uses `UnmanagedUnixAccounts`, and `SystemEligibility` returns
-unavailable after live-session routing. This milestone owns both missing
-production adapters; session metadata or successful enrollment-password PAM
-authentication cannot stand in for either authority.
+Status, 2026-10-17: complete only for the explicitly provisioned Fedora 44
+x86_64 Btrfs appliance domain in
+[ADR 0012](adr/0012-immutable-appliance-account-authority.md). Dedicated real
+accounts have exercised component enrollment/change/disable/recovery and broker
+PIN verification in a disposable enforcing KDE VM. The
+[M6.1 report](development/m6.1-account-authorities.md) and
+[sanitized results](../experiments/m61/results/2026-10-17-account-authorities.json)
+record lifecycle mutation/bypass, missing/corrupt state, crash/reboot, policy and
+unchanged accounting, plus all four staging/publication/success/delivery
+concurrency points using actual authorities. M7 has not started;
+ordinary unmanaged accounts remain unavailable.
+
+Planning baseline: M6 completed its test-broker gate using synthetic authorities.
+At that point the installed broker used `UnmanagedUnixAccounts`, and
+`SystemEligibility` returned unavailable after live-session routing. M6.1 owns
+both adapters; session metadata or successful enrollment-password PAM
+authentication cannot stand in for either authority. The requirements below
+remain the acceptance contract.
 
 Design and implementation:
 
@@ -281,7 +293,8 @@ Required evidence:
   not pass this gate. Keep the everyday host's PAM, accounts, enrolled state and
   TPM guess budget untouched.
 
-Exit gate: at least one explicitly defined real local-account domain has an
+Exit gate (satisfied only for the domain above): at least one explicitly defined
+real local-account domain has an
 enforcing lifecycle authority and complete supported eligibility policy, with
 the deletion/reuse, crash, concurrency and real-account evidence above. Permanent
 records are permitted only inside that proven domain; other accounts remain
@@ -346,12 +359,12 @@ Exit gate: all specification completion gates have evidence and no unresolved se
 | Decision | Resolution required | When |
 |---|---|---|
 | PAM token reuse and UI | Does the actual Fedora stack consume the candidate without a second password prompt? If not, prove an explicit password-selection conversation or refuse activation. | M1, before M7 |
-| Account eligibility | M1 supplies feasibility evidence; M6.1 must implement and demonstrate password-free production lock/expiry/restriction checks before M7's real-account gate. No permissive substitute for failed checks. | M1 feasibility; M6.1 implementation, before M7 |
+| Account eligibility | ADR 0012 implements the exact reviewed Fedora policy for the restricted appliance domain; M6.1 records the production-authority component evidence. Unknown policy/state remains unavailable. | M1 feasibility; M6.1 acceptance before M7 |
 | Failure accounting | A six-digit account password is indistinguishable from a PIN candidate until tested. Document potential PIN-budget consumption, wrong-PIN effects on password lockout counters, supported authselect features, and the exact fifth-attempt boundary. Reconcile ambiguous wording in specification section 11 without bypassing existing lockout policy. | M1/M2 |
 | TPM authorization and parent | Fix the reviewed object template, parent recreation, object identity checks, salted sessions, DA-budget inspection and behavior under unavailable hierarchy authorization. | M1/M4 |
 | Blocking backends | Prove how hard LocalPIN deadlines survive a blocked native call, discard late authorization, and clean up workers/handles/reservations without unbounded spawning. Measure total fallback latency separately, including delays in the original password stack. | M1/M5 |
 | Reboot throttling | Define conservative behavior for recent attempts even if no cooldown was active; a boot-ID change must not allow reboot-assisted unlimited guesses. | M2/M3 |
-| UID reuse | ADR 0006 restricts support; M6.1 must choose and demonstrate an enforcing lifecycle/identity mechanism for a defined real-account domain. Ordinary UID/name/home equality cannot establish continuity. | M1/M2 restriction; M6.1 implementation, before M7 |
+| UID reuse | ADR 0006 remains binding. ADR 0012 implements immutable inputs, a writer-drain barrier and durable revocation for a defined appliance domain; M6.1 records its evidence. Ordinary UID/name/home equality cannot establish continuity. | M1/M2 restriction; M6.1 acceptance before M7 |
 | Local-session identity | Define eligible logind sessions/seats and the user-manager lookup policy; do not equate a claimed service name with a genuine locker. | M1/M5 |
 | Integration authority | Decide the narrow root/admin path for PAM changes and recovery, separate from fresh own-user password enrollment. | M1/M6 |
 | Revocation races | Define the durable commit point for disable/rotation versus a verification already in flight; fence later results by generation while acknowledging that previously delivered authorization can finish. | M2/M3 |
@@ -388,7 +401,10 @@ metadata and synthetic controls. Production caller, lifecycle, persistence and
 integration requirements retain their later milestone gates. The everyday
 authentication setup remains separate throughout development. M2 contracts are
 tested in the pure Rust suites and documented in ADRs 0005–0007; actual
-persistence and platform lifecycle evidence remain later gates.
+persistence and platform lifecycle evidence belong to their later milestone
+reports. The [M6.1 report](development/m6.1-account-authorities.md) now records
+the restricted production account implementation and component validation;
+M7/M8/M9 retain unlock integration, installed confinement and release gates.
 
 No calendar estimate is committed before the feasibility work. Subsequent estimates should use measured test infrastructure effort and availability of independent review/hardware, with review and recovery work included in the schedule.
 

@@ -2,10 +2,14 @@
 
 LocalPIN has completed isolated and guarded enforcing-VM M1 feasibility experiments
 and locally implements M2 pure policy/protocol models, M3 protected Linux
-storage, M4 credential primitives, the M5 bounded broker and M6 trusted enrollment
-worker/CLI. PAM unlock integration,
-installed sandbox validation and account lifecycle gates remain
-open. Read the
+storage, M4 credential primitives, the M5 bounded broker, M6 trusted enrollment
+worker/CLI. M6.1's account-authority component gate is complete for the restricted
+Fedora appliance domain in [ADR 0012](docs/adr/0012-immutable-appliance-account-authority.md).
+The [M6.1 report](docs/development/m6.1-account-authorities.md) and
+[sanitized results](experiments/m61/results/2026-10-17-account-authorities.json)
+record the real-account evidence. Ordinary unmanaged accounts remain unsupported.
+M7 PAM unlock integration has not started; M8 installed sandbox/packaging and
+M9 human/specialist review and hardware validation remain open. Read the
 [product specification](docs/product-specification.md) and
 [implementation plan](docs/implementation-plan.md) before proposing implementation
 changes. Authentication behavior needs evidence appropriate to its risk, including
@@ -34,9 +38,9 @@ in `Cargo.toml`. Commit `Cargo.lock` when dependencies change and review its dif
 
 ```sh
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked
-cargo build --workspace --locked
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo test --workspace --all-features --locked
+cargo build --workspace --all-features --release --locked
 cargo deny --locked check advisories bans licenses sources
 ```
 
@@ -81,6 +85,19 @@ isolated enrollment and password-PAM suites when modifying those boundaries:
 python3 crates/localpind/tests/run_enrollment_broker.py
 python3 crates/localpin-auth/tests/isolated_pam.py
 ```
+
+Changes to production account support also require
+[ADR 0012](docs/adr/0012-immutable-appliance-account-authority.md), the
+[account administration contract](docs/account-administration.md) and the
+[M6.1 evidence report](docs/development/m6.1-account-authorities.md). The supported
+domain uses immutable account/policy inputs plus a kernel writer-drain barrier;
+root administration durably revokes all incarnations before changing them.
+Do not substitute UID/name/home equality, a synthetic authority or successful
+password authentication for this proof. Own-user operations must not create or
+repair required state. Repeat the guarded real-account matrix in an independent
+disposable Fedora KDE VM with SELinux enforcing; ordinary workspace tests cannot
+establish those guarantees. Lifecycle provisioning changes global VM account
+administration and is never a host-side test setup step.
 
 ## Authentication experiments
 

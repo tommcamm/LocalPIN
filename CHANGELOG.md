@@ -6,6 +6,18 @@ Changes will be recorded here before versioned releases. There are no releases y
 
 ### Added
 
+- M6.1 production account lifecycle authority for the explicitly provisioned
+  Fedora 44 x86_64 Btrfs appliance domain: durable opaque incarnations,
+  revocation before account mutation, kernel immutable flags and writer-drain
+  leases, privileged disabled-baseline provisioning and crash recovery.
+- Password-free eligibility for the exact reviewed Fedora policy, strict
+  SHA512-crypt/default yescrypt support, unchanged password failure accounting,
+  and actionable lifecycle/eligibility status. M6.1's component gate is complete
+  for this domain, including real-account flows, policy/accounting, lifecycle
+  mutation/bypass, crash/reboot and four exact-point concurrency tests. See the
+  [M6.1 report](docs/development/m6.1-account-authorities.md),
+  [sanitized results](experiments/m61/results/2026-10-17-account-authorities.json) and
+  [ADR 0012](docs/adr/0012-immutable-appliance-account-authority.md).
 - M6 `localpin-auth` disposable password-only PAM worker and bounded supervisor,
   plus `localpinctl` terminal enrollment, change, disable, explicit migration,
   root recovery and versioned nonsecret doctor/status output.
@@ -65,6 +77,9 @@ Changes will be recorded here before versioned releases. There are no releases y
 
 ### Changed
 
+- Specification 1.3 records M6.1's narrow account domain and administrative
+  restrictions. Ordinary unmanaged accounts remain unsupported; no KDE unlock
+  adapter, package activation or production-readiness claim is introduced.
 - Roadmap adds M6.1 for enforcing production account lifecycle and password-free
   eligibility, with real-account evidence required before M7's completion gate;
   installed password-worker/SELinux/RPM validation remains assigned to M8.
@@ -91,6 +106,8 @@ Changes will be recorded here before versioned releases. There are no releases y
 - Specification 1.1 clarifies that six-digit account passwords can consume a PIN
   attempt before fallback and that forwarded failures retain password accounting.
 
-Production account lifecycle/policy enforcement, PAM unlock integration,
-packaging and activation remain unimplemented. Installed broker/password-worker sandbox
-and physical TPM validation remain open.
+M6.1 account lifecycle/policy acceptance is complete only for the defined
+appliance domain. M7 has not started. PAM unlock integration, packaging and
+activation remain
+unimplemented. Installed broker/password-worker sandbox, physical TPM validation
+and M9 human/specialist review remain open.

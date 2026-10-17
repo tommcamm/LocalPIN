@@ -405,3 +405,24 @@ See [ADR 0011](../adr/0011-trusted-enrollment-and-cli.md) and the
 
 The final M6 locked audit passed all four policy categories with cargo-deny
 0.20.2. No dependency-policy exception or external crate version was added.
+
+## M6.1 authority review inputs
+
+M6.1 adds no external crate versions. `localpin-auth` reuses the already locked
+RustCrypto `sha2 0.11.1` without default features for policy/native-binary input
+digests. Credential KDFs and the lockfile's external version graph are unchanged.
+The locked cargo-deny 0.20.2 audit passes advisories, bans, licenses and sources.
+
+The lifecycle manager uses rustix's safe immutable-inode, descriptor-relative,
+POSIX lock and unnamed temporary-file APIs. A new function-scoped unsafe
+`fcntl(F_SETLEASE/F_GETLEASE)` exception accepts only a live borrowed read-only
+file and fixed integer commands. It supplies the kernel writer-drain proof;
+there are no pointer arguments or caller-selected operations. Its descriptor
+ownership, kernel lease semantics and publication lifetime received separate
+review and real Btrfs VM tests. Test-only writable-mapping fixtures isolate their
+own documented mmap/munmap ABI. See [ADR 0012](../adr/0012-immutable-appliance-account-authority.md).
+
+The password-free worker retains PAM's narrow ABI and pins the measured Fedora
+PAM library/modules by SHA256. Policy or native-module updates outside that exact
+set become unavailable and require new compatibility evidence. M8 confinement
+and M9 specialist/native dependency review remain separate release gates.

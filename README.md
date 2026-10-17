@@ -6,7 +6,7 @@ It is intended to become useful, reviewable open-source software.
 
 Repository: [tommcamm/LocalPIN](https://github.com/tommcamm/LocalPIN).
 
-**Development status: M6 enrollment worker and CLI, M5 bounded broker, M4 credential primitives, M3 storage and M2 policy/protocol models implemented locally.**
+**Development status: M6.1 complete for the restricted account domain below; M2–M6 implemented locally. M7 has not started.**
 This repository contains the specification, implementation roadmap, pure Rust
 state machines, bounded IPC parsers, protected Linux filesystem storage,
 isolated PAM/TPM/platform experiments and guarded Fedora KDE VM tests under
@@ -22,6 +22,18 @@ account authority still refuses unmanaged accounts. See the
 [M5 report](docs/development/m5-bounded-broker.md) for evidence and limits.
 It now includes a password-only enrollment worker, terminal CLI and protected
 credential transactions. See the [M6 report](docs/development/m6-enrollment-cli.md).
+M6.1 adds production lifecycle and password-free eligibility authorities for an
+explicitly provisioned Fedora 44 x86_64 Btrfs appliance domain. Dedicated real
+accounts have exercised enrollment, rotation, disable, recovery and broker PIN
+verification in a disposable KDE VM with SELinux enforcing. M6.1's component
+gate is complete for this domain. The
+[M6.1 report](docs/development/m6.1-account-authorities.md) and
+[sanitized results](experiments/m61/results/2026-10-17-account-authorities.json)
+record the lifecycle, policy, crash/reboot and concurrency evidence;
+[ADR 0012](docs/adr/0012-immutable-appliance-account-authority.md)
+defines the exact policy and lifecycle restrictions. Ordinary unmanaged accounts
+remain unavailable. M7 unlock integration, M8 packaging/confinement and M9
+human/specialist review and hardware validation remain open.
 It does not yet provide a PAM unlock module or installable package.
 There is no supported production release.
 
@@ -59,9 +71,10 @@ with `SO_PEERPIDFD`, procfs, and a system bus/logind. Dependencies are reviewed 
 
 ```sh
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked
-cargo build --workspace --locked
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo test --workspace --all-features --locked
+cargo build --workspace --all-features --release --locked
+cargo deny --locked check advisories bans licenses sources
 ```
 
 These workspace checks cover policy, protocol, storage, backends and broker.
@@ -90,7 +103,7 @@ activation commands at this stage.
 The CLI command grammar is available with `cargo run -p localpinctl -- --help`.
 Status and doctor are read-only. Enrollment requires a trusted supported account
 baseline, fresh password-only PAM authentication and a foreground terminal;
-ordinary production accounts remain unavailable. The isolated password-PAM
+ordinary unmanaged accounts remain unavailable. The isolated password-PAM
 test uses namespace-private accounts and policy:
 
 ```sh
@@ -99,11 +112,16 @@ python3 crates/localpin-auth/tests/isolated_pam.py
 
 See the [M2 report](docs/development/m2-policy-contracts.md) for exact time and
 failure boundaries. Production account support requires a tested lifecycle
-authority that detects UID reuse; no production authority exists yet. The
-current models and storage adapter deliberately refuse unsupported lifecycle
-evidence. Account lifecycle and account-policy enforcement remain required
-before permanent account enrollment. Broker systemd units are development
-contracts; installed SELinux/sandbox validation remains part of packaging.
+authority that prevents an old incarnation surviving UID reuse. M6.1 implements
+that authority only within the [sealed appliance domain](docs/account-administration.md).
+It freezes global account/policy inputs, drains pre-existing writers before
+sealing, and requires durable global revocation before administration. Resealing
+creates fresh disabled incarnations and requires enrollment again. Own-user
+enrollment never provisions or repairs lifecycle state. Missing volatile faillock
+state after reboot also makes PIN unavailable pending privileged recovery.
+Broker systemd units remain development contracts; installed SELinux/sandbox
+validation remains part of M8. Do not apply the appliance setup to an everyday
+machine as a development test.
 
 ## Development
 

@@ -6,10 +6,12 @@
 //! deadline and a single password prompt. No password is an argument or an
 //! environment variable. Installation and account lifecycle remain broker policy.
 
+mod eligibility;
 mod ipc;
 mod pam;
 mod supervisor;
 
+pub use eligibility::{EligibilitySupervisor, serve_eligibility_worker};
 pub use supervisor::{BoundPasswordWorker, PasswordSupervisor};
 
 use localpin_core::{enrollment::PasswordWorkerError, secret::SecretBytes};

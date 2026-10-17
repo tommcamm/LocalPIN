@@ -36,7 +36,7 @@ fn run() -> Result<(), ()> {
     let engine = Arc::new(
         ProtectedEngine::new(
             storage,
-            Arc::new(SystemAuthorities),
+            Arc::new(SystemAuthorities::new().map_err(|_| ())?),
             workers,
             budget.clone(),
         )

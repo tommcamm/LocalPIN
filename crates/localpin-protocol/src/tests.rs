@@ -62,7 +62,7 @@ fn requests() -> Vec<RequestEnvelope> {
 }
 
 fn responses() -> Vec<ResponseEnvelope> {
-    vec![
+    let mut responses = vec![
         Response::Hello,
         Response::Status(Status {
             configured: BackendPreference::Auto,
@@ -102,13 +102,22 @@ fn responses() -> Vec<ResponseEnvelope> {
         Response::Completed(Completion::RecoveryDisabled),
         Response::Cancelled,
         Response::Error(ErrorCode::PasswordRejected),
-    ]
-    .into_iter()
-    .map(|response| ResponseEnvelope {
-        connection: id(1),
-        response,
-    })
-    .collect()
+    ];
+    responses.extend(
+        [
+            Reason::AccountUnsupported,
+            Reason::LifecycleUnavailable,
+            Reason::EligibilityUnavailable,
+        ]
+        .map(|reason| Response::Verification(VerificationOutcome::Unavailable(reason))),
+    );
+    responses
+        .into_iter()
+        .map(|response| ResponseEnvelope {
+            connection: id(1),
+            response,
+        })
+        .collect()
 }
 
 #[test]

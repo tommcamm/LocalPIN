@@ -151,7 +151,9 @@ enrolled TPM protection are independent status values. Booleans are exactly `0`
 or `1`. Availability: available `0`, not enrolled `1`, disabled `2`, cooldown `3`,
 ineligible `4`, unavailable `5`. Integration: inactive `0`, active `1`, needs
 attention `2`. Reasons: none `0`, account `1`, session `2`, storage `3`, backend
-`4`, policy `5`, busy `6`, protocol `7`. Prompt styles: echo-off `1`, echo-on `2`,
+`4`, policy `5`, busy `6`, protocol `7`, unsupported account `8`, unavailable
+lifecycle `9`, unavailable account eligibility `10`. These appended M6.1 values
+fail closed in older clients. Prompt styles: echo-off `1`, echo-on `2`,
 information `3`, error `4`.
 
 Verification result: granted `1` and mismatch `2` have no suffix; cooldown `3`

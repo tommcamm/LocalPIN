@@ -144,6 +144,12 @@ pub enum Reason {
     Busy = 6,
     /// Invalid client protocol.
     Protocol = 7,
+    /// The account is outside the enforced lifecycle domain.
+    AccountUnsupported = 8,
+    /// Lifecycle state is missing, revoked, corrupt or currently leased for mutation.
+    LifecycleUnavailable = 9,
+    /// The supported password-free policy could not be established.
+    EligibilityUnavailable = 10,
 }
 
 /// Current nonsecret credential availability.

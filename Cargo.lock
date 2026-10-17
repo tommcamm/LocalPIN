@@ -284,6 +284,7 @@ dependencies = [
  "localpin-core",
  "localpin-protocol",
  "rustix",
+ "sha2",
  "zeroize",
 ]
 

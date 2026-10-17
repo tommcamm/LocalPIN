@@ -122,7 +122,10 @@ pub fn text(status: Option<Status>, doctor: bool) -> String {
         output.push_str("\nPassword recovery and desktop unlock tests: not recorded; verify both before activation");
         output.push_str(match status.reason {
             Reason::None => "\nThe broker reports no current availability failure.",
-            Reason::Account => "\nAccount eligibility or a supported account lifecycle authority is unavailable. Production Unix-account lifecycle support is not implemented; enrollment remains unavailable until the supported authority is provisioned and tested.",
+            Reason::Account => "\nAccount policy denies PIN use. Ask the administrator to inspect locks, expiry, required password changes and applicable restrictions; use the existing password recovery route.",
+            Reason::AccountUnsupported => "\nAccount unsupported: only explicitly provisioned accounts in the sealed Fedora account domain are supported. The administrator must establish a disabled baseline; enrollment cannot create lifecycle state.",
+            Reason::LifecycleUnavailable => "\nLifecycle unavailable: the domain is revoked, busy, unsealed, or its required state is missing or corrupt. Ask the administrator to recover and reseal the domain; this requires fresh enrollment.",
+            Reason::EligibilityUnavailable => "\nAccount eligibility unavailable: the reviewed Fedora policy, password format or authoritative restriction state could not be established. Ask the administrator to inspect the supported policy and faillock state.",
             Reason::Session => "\nUse the account's supported local graphical session.",
             Reason::Storage => {
                 "\nAsk the administrator to inspect protected state ownership and permissions."
@@ -180,6 +183,9 @@ fn failure(value: Reason) -> &'static str {
         Reason::Policy => "policy",
         Reason::Busy => "busy",
         Reason::Protocol => "protocol",
+        Reason::AccountUnsupported => "account-unsupported",
+        Reason::LifecycleUnavailable => "lifecycle-unavailable",
+        Reason::EligibilityUnavailable => "eligibility-unavailable",
     }
 }
 
@@ -246,7 +252,7 @@ mod tests {
         assert!(report.contains("Enrolled: unknown"));
         assert!(report.contains("Active: unknown"));
         assert!(report.contains("usable: not-established"));
-        assert!(report.contains("Production Unix-account lifecycle support is not implemented"));
+        assert!(report.contains("Account policy denies PIN use"));
     }
     #[test]
     fn unavailable_backend_preserves_an_authoritatively_known_enrollment() {
@@ -258,6 +264,34 @@ mod tests {
         assert!(report.contains("\"enrolled_backend\":\"tpm2\""));
         assert!(report.contains("\"active\":null"));
         assert!(text(Some(status), false).contains("Enrolled: tpm2"));
+    }
+    #[test]
+    fn account_authority_failures_have_distinct_actionable_diagnostics() {
+        for (reason, code, guidance) in [
+            (
+                Reason::AccountUnsupported,
+                "account-unsupported",
+                "disabled baseline",
+            ),
+            (
+                Reason::LifecycleUnavailable,
+                "lifecycle-unavailable",
+                "fresh enrollment",
+            ),
+            (
+                Reason::EligibilityUnavailable,
+                "eligibility-unavailable",
+                "faillock state",
+            ),
+        ] {
+            let mut status = enrolled();
+            status.enrolled = None;
+            status.availability = Availability::Unavailable;
+            status.reason = reason;
+            assert!(json(Some(status), true).contains(code));
+            assert!(text(Some(status), true).contains(guidance));
+            assert!(json(Some(status), true).contains("\"enrolled\":null"));
+        }
     }
     #[test]
     fn status_reports_only_closed_nonsecret_fields() {

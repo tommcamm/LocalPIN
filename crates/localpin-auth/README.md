@@ -46,13 +46,26 @@ Installed systemd/SELinux and production policy compatibility remain packaging
 and VM integration gates. No host PAM/account modifications are test prerequisites.
 
 The project-owned native ABI is isolated in `src/pam.rs`, using fixed Linux-PAM
-symbols loaded from `libpam.so.0` so development headers/linker symlinks are not
+symbols loaded from `/usr/lib64/libpam.so.0` so development headers/linker symlinks are not
 required. No installed PAM wrapper was available; existing pinned libc supplies
 the allocator and dynamic loader. Its unsafe invariants cover native pointer
 validity, repr(C) layouts, exact function signatures, callback panic containment,
 and libc ownership of successful response arrays/strings. Rust-owned secret
 copies are erased. PAM owns its successful C copies until its normal cleanup;
 short-lived workers avoid retaining handles/tokens between authentications.
+
+M6.1 additionally supplies a separate `localpin-eligibility-worker` and shared
+`EligibilitySupervisor`. Its fixed password-free service never accepts a
+candidate or a conversation. It pins the measured Fedora graph and native
+modules, validates local identity, locks, aging, default yescrypt/SHA512 hashes,
+nologin and canonical faillock state, and refuses unknown policy. It checks
+unchanged accounting around preauth/account PAM without authfail/authsucc or
+the resetting faillock account hook. Missing tallies are unavailable; this
+worker cannot create them. Its four-slot process pool retains cancelled groups
+until reaping and obeys the caller's original absolute deadline. See
+[ADR 0012](../../docs/adr/0012-immutable-appliance-account-authority.md) and the
+[M6.1 report](../../docs/development/m6.1-account-authorities.md) for the enforced
+account domain and actual VM evidence. It does not establish M8 confinement.
 
 Validation:
 

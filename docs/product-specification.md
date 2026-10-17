@@ -1,10 +1,10 @@
 # LocalPIN product specification
 
-**Specification version:** 1.2
+**Specification version:** 1.3
 
 **Date:** 2026-10-17
 
-**Status:** Implementation specification; M2–M5 policy, storage, credential and broker code implemented locally, with production account adapters and installation still pending.
+**Status:** Implementation specification; M2–M6 code implemented locally and M6.1 component gate complete only for the restricted domain below. M7 has not started; unlock integration, M8 packaging/confinement and M9 release review/hardware gates remain open.
 **Initial deployment:** Fedora Linux, KDE Plasma, local user accounts.  
 **Working component names:** `pam_localpin.so`, `localpind`, `localpinctl`.
 
@@ -26,9 +26,26 @@ The initial supported platform is Fedora KDE with local, non-root users and a ve
 
 Account support additionally requires an enforcing, tested lifecycle authority
 that distinguishes account incarnations and revokes enrollment before UID reuse.
-No such production adapter is delivered yet; ordinary unmanaged Unix accounts
-remain unsupported for production activation. UID/name/home equality is
-insufficient. See [ADR 0006](adr/0006-account-incarnation-support.md).
+Ordinary unmanaged Unix accounts remain unsupported for production activation.
+UID/name/home equality is insufficient. See
+[ADR 0006](adr/0006-account-incarnation-support.md).
+
+Implementation note, 2026-10-17: M6.1 supplies production authorities only for
+the explicitly provisioned Fedora 44 x86_64 Btrfs appliance domain in
+[ADR 0012](adr/0012-immutable-appliance-account-authority.md). It requires local
+files-only NSS, the exact reviewed PAM graph/binaries and supported local-account
+and password-hash forms. Kernel immutable inputs and a writer-drain barrier
+protect active incarnations. Administrative account, password and policy changes
+must durably revoke the whole domain first; every reseal provisions fresh
+disabled incarnations and requires enrollment again. Own-user enrollment cannot
+establish or repair continuity. Missing authoritative state, including a lost
+volatile faillock tally after reboot, makes PIN unavailable. This restriction
+does not describe general-purpose Fedora account support or authorize deployment.
+M6.1's component gate is complete for this domain. See the
+[component evidence](development/m6.1-account-authorities.md),
+[sanitized results](../experiments/m61/results/2026-10-17-account-authorities.json) and
+[administration contract](account-administration.md); the separate M7/M8/M9
+integration, confinement and release gates still apply.
 
 The current Linux broker requires `openat2`, procfs and Linux 6.5+
 `SO_PEERPIDFD` support, with a system bus and logind for live session routing.
@@ -231,6 +248,13 @@ unavailable/unsupported evidence refuses PIN. The M2 envelope is a development
 contract, not a frozen permanent identity schema. Permanent account records and
 production activation remain blocked until the authority's deletion/recreation,
 crash and concurrency guarantees have evidence.
+
+Implementation note, 2026-10-17: the M6.1 `LPACCT02` lifecycle registry records
+the sealed-domain proof defined by ADR 0012. Earlier experimental registry state
+is refused and privileged recovery creates fresh identities; it never adopts
+development incarnations. Permanent records are limited to the domain covered
+by the M6.1 evidence report. This does not lift the lifecycle requirement for
+other accounts or the separate production activation gates.
 
 Open relative to trusted directory descriptors using no-follow/beneath restrictions where available. Reject symlinks, unsafe ownership/modes, unexpected file types, and oversized records. Do not rely on an `lstat` followed by an unrestricted `open`. Credential records are bounded to 64 KiB; configuration to 64 KiB; throttle records to 16 KiB. Unknown versions fail the PIN route safely.
 

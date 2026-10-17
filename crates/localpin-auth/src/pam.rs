@@ -19,7 +19,7 @@ use std::{
 
 // No includes, cached auth, PIN, fingerprint or success-without-password paths.
 // The installed administrator must independently review distro lockout policy.
-const SUPPORTED_POLICY: &str = "auth requisite pam_faillock.so preauth\nauth [success=1 default=bad] pam_unix.so\nauth [default=die] pam_faillock.so authfail\nauth required pam_faillock.so authsucc\naccount required pam_unix.so\n";
+pub(crate) const SUPPORTED_POLICY: &str = "auth requisite pam_faillock.so preauth\nauth [success=1 default=bad] pam_unix.so\nauth [default=die] pam_faillock.so authfail\nauth required pam_faillock.so authsucc\naccount required pam_unix.so\n";
 const POLICY_PATH: &str = "/etc/pam.d/localpin-enroll";
 
 fn validate_policy_text(text: &str) -> bool {
@@ -114,7 +114,10 @@ impl Api {
         // SAFETY: fixed NUL-terminated library/symbol names. RTLD_NOW resolves
         // symbols before use; each cast exactly matches Linux-PAM's public ABI.
         unsafe {
-            let library = libc::dlopen(c"libpam.so.0".as_ptr(), libc::RTLD_NOW | libc::RTLD_LOCAL);
+            let library = libc::dlopen(
+                c"/usr/lib64/libpam.so.0".as_ptr(),
+                libc::RTLD_NOW | libc::RTLD_LOCAL,
+            );
             if library.is_null() {
                 return None;
             }
@@ -151,7 +154,7 @@ impl Drop for Api {
     }
 }
 
-fn username(uid: u32) -> Option<CString> {
+pub(crate) fn username(uid: u32) -> Option<CString> {
     let mut buffer = vec![0u8; 64 * 1024];
     let mut entry = std::mem::MaybeUninit::<libc::passwd>::uninit();
     let mut result = ptr::null_mut();
@@ -179,6 +182,71 @@ fn username(uid: u32) -> Option<CString> {
             return None;
         }
         Some(name.to_owned())
+    }
+}
+
+/// This callback rejects every conversation request: neither a password nor an
+/// alternate factor can enter the eligibility route. Even informational calls
+/// make that invocation unsupported rather than relaying module text.
+unsafe extern "C" fn no_conversation(
+    _count: c_int,
+    _messages: *const *const Message,
+    responses: *mut *mut Response,
+    data: *mut c_void,
+) -> c_int {
+    if !responses.is_null() && !data.is_null() {
+        // SAFETY: our PAM invocation provides a live bool appdata for the whole
+        // handle lifetime; PAM supplies its response-pointer output location.
+        unsafe {
+            *responses = ptr::null_mut();
+            *data.cast::<bool>() = true;
+        }
+    }
+    19 // PAM_CONV_ERR
+}
+
+pub(crate) fn password_free(
+    user: &CStr,
+) -> Result<(), localpin_core::eligibility::EligibilityError> {
+    use localpin_core::eligibility::EligibilityError;
+    let api = Api::load().ok_or(EligibilityError::Unavailable)?;
+    let mut conversed = false;
+    let conversation = PamConversation {
+        callback: no_conversation,
+        data: (&mut conversed as *mut bool).cast(),
+    };
+    let mut handle = ptr::null_mut();
+    // SAFETY: fixed service and borrowed user/conversation remain valid through
+    // pam_end. No PAM_AUTHTOK is provided. Only this fresh handle is operated on.
+    let (status, correct_user, ended) = unsafe {
+        let started = (api.start)(
+            c"localpin-eligibility".as_ptr(),
+            user.as_ptr(),
+            &conversation,
+            &mut handle,
+        );
+        if started != 0 || handle.is_null() {
+            return Err(EligibilityError::Unavailable);
+        }
+        let mut status = (api.authenticate)(handle, 0x8000); // PAM_SILENT
+        if status == 0 {
+            status = (api.account)(handle, 0x8000);
+        }
+        let mut actual_user = ptr::null();
+        let correct_user = (api.get_item)(handle, 2, &mut actual_user) == 0
+            && !actual_user.is_null()
+            && CStr::from_ptr(actual_user.cast()) == user;
+        let ended = (api.end)(handle, status);
+        (status, correct_user, ended)
+    };
+    if conversed || !correct_user || ended != 0 {
+        return Err(EligibilityError::Unavailable);
+    }
+    match status {
+        0 => Ok(()),
+        // Explicit policy denials/expiry are distinguished from infrastructure.
+        6 | 7 | 12 | 13 | 16 => Err(EligibilityError::AccountRestricted),
+        _ => Err(EligibilityError::Unavailable),
     }
 }
 

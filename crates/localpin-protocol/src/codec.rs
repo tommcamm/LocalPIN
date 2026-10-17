@@ -322,7 +322,8 @@ fn reason(r: &mut Reader<'_>) -> Result<Reason, ProtocolError> {
     Ok(
         read_enum!(r, 0 => Reason::None, 1 => Reason::Account, 2 => Reason::Session,
         3 => Reason::Storage, 4 => Reason::Backend, 5 => Reason::Policy, 6 => Reason::Busy,
-        7 => Reason::Protocol),
+        7 => Reason::Protocol, 8 => Reason::AccountUnsupported,
+        9 => Reason::LifecycleUnavailable, 10 => Reason::EligibilityUnavailable),
     )
 }
 

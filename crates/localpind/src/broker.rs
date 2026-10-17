@@ -2,15 +2,14 @@
 
 use crate::{
     BootClock,
+    accounts::SystemLifecycle,
     enrollment::{EnrollmentIo, PasswordAuthority},
     platform::{Peer, ResolvedSession, SessionResolver},
     worker::WorkerSupervisor,
 };
 use localpin_core::{
     eligibility::{EligibilityAuthority, EligibilityError, EligibilitySnapshot},
-    enrollment::{
-        Administrator, EnrollmentMachine, LifecycleAuthority, LifecycleError, UnmanagedUnixAccounts,
-    },
+    enrollment::{Administrator, EnrollmentMachine, LifecycleAuthority, LifecycleError},
     limits::{ResourceBudget, WorkKind},
     secret::Pin,
     throttle::{AttemptResponse, ReserveError},
@@ -70,11 +69,34 @@ pub trait Authorities: Send + Sync {
 }
 
 /// Production defaults keep unsupported account lifecycle/policy unavailable.
-pub struct SystemAuthorities;
+pub struct SystemAuthorities {
+    policy: localpin_auth::EligibilitySupervisor,
+}
+
+impl SystemAuthorities {
+    /// Construct the one bounded policy-worker pool for this broker.
+    pub fn new() -> io::Result<Self> {
+        Ok(Self {
+            policy: localpin_auth::EligibilitySupervisor::new(
+                "/usr/libexec/localpin/localpin-eligibility-worker",
+            )?,
+        })
+    }
+}
+
+struct FailedLifecycle(LifecycleError);
+impl LifecycleAuthority for FailedLifecycle {
+    fn current_incarnation(&mut self, _: Uid) -> Result<Incarnation, LifecycleError> {
+        Err(self.0)
+    }
+}
 
 impl Authorities for SystemAuthorities {
     fn lifecycle(&self) -> Box<dyn LifecycleAuthority> {
-        Box::new(UnmanagedUnixAccounts)
+        match SystemLifecycle::open() {
+            Ok(authority) => Box::new(authority),
+            Err(error) => Box::new(FailedLifecycle(error)),
+        }
     }
     fn eligibility(&self, peer: Arc<Peer>, deadline: Instant) -> Box<dyn EligibilityAuthority> {
         Box::new(SystemEligibility {
@@ -82,6 +104,7 @@ impl Authorities for SystemAuthorities {
             deadline,
             resolver: SessionResolver::new(),
             session: None,
+            policy: self.policy.clone(),
         })
     }
 }
@@ -91,6 +114,7 @@ struct SystemEligibility {
     deadline: Instant,
     resolver: SessionResolver,
     session: Option<ResolvedSession>,
+    policy: localpin_auth::EligibilitySupervisor,
 }
 
 impl EligibilityAuthority for SystemEligibility {
@@ -104,10 +128,33 @@ impl EligibilityAuthority for SystemEligibility {
         } else {
             self.session = Some(self.resolver.resolve(&self.peer, self.deadline)?);
         }
-        // Live logind metadata does not establish account lock/expiry/PAM policy.
-        // An enforcing lifecycle and supported account-policy adapter is still
-        // required; do not turn successful session routing into authorization.
-        Err(EligibilityError::Unavailable)
+        // Leave time to deliver unavailable after killing a delayed native PAM
+        // check. The original password stack retains its own failure delay.
+        let now = Instant::now();
+        let remaining = self
+            .deadline
+            .checked_duration_since(now)
+            .and_then(|left| left.checked_sub(Duration::from_millis(100)))
+            .ok_or(EligibilityError::Unavailable)?;
+        let policy_deadline = now
+            .checked_add(remaining)
+            .ok_or(EligibilityError::Unavailable)?;
+        self.policy
+            .check_password_free(account.uid.get(), policy_deadline, &mut || {
+                self.peer.cancelled()
+            })?;
+        self.peer
+            .ensure_live()
+            .map_err(|_| EligibilityError::Unavailable)?;
+        // The reference remains bound to this exact logind incarnation. Both
+        // account policy and session are repeated at the existing final fences.
+        let session = self.session.as_ref().ok_or(EligibilityError::Unavailable)?;
+        self.resolver
+            .revalidate(&self.peer, session, self.deadline)?;
+        Ok(EligibilitySnapshot::from_trusted_check(
+            account,
+            session.reference(),
+        ))
     }
 }
 
@@ -219,6 +266,29 @@ fn unavailable_status(reason: Reason) -> Status {
     }
 }
 
+fn lifecycle_reason(error: LifecycleError) -> Reason {
+    match error {
+        LifecycleError::Unsupported => Reason::AccountUnsupported,
+        LifecycleError::Unavailable | LifecycleError::AccountMissing => {
+            Reason::LifecycleUnavailable
+        }
+    }
+}
+
+fn eligibility_reason(error: EligibilityError) -> Reason {
+    match error {
+        EligibilityError::AccountRestricted
+        | EligibilityError::AccountChanged
+        | EligibilityError::WrongAccount => Reason::Account,
+        EligibilityError::UnknownProperties | EligibilityError::Unavailable => {
+            Reason::EligibilityUnavailable
+        }
+        EligibilityError::IneligibleSession
+        | EligibilityError::NoSession
+        | EligibilityError::AmbiguousSession => Reason::Session,
+    }
+}
+
 impl Engine for ProtectedEngine {
     fn enroll(
         &self,
@@ -236,13 +306,13 @@ impl Engine for ProtectedEngine {
             .authorities
             .lifecycle()
             .current_incarnation(uid)
-            .map_err(|_| Reason::Account)?;
+            .map_err(lifecycle_reason)?;
         let account = AccountId { uid, incarnation };
         let snapshot = self
             .authorities
             .eligibility(peer, deadline)
             .check(account)
-            .map_err(|_| Reason::Session)?;
+            .map_err(eligibility_reason)?;
         if snapshot.account() != account {
             return Err(Reason::Account);
         }

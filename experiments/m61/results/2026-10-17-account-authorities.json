@@ -1,0 +1,553 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-17",
+  "domain": "Fedora 44 KDE x86_64 Btrfs sealed account appliance",
+  "authority_mode": "actual production SystemAuthorities and installed native helpers",
+  "matrix": {
+    "flows": {
+      "disabled_baseline": true,
+      "enrollment": true,
+      "production_pin_success": true,
+      "rotation_old_pin_rejected": true,
+      "own_disable": true,
+      "root_recovery": true,
+      "password_free_healthy": true,
+      "final_status": {
+        "schema_version": 1,
+        "command": "doctor",
+        "installed": "client-present",
+        "broker_available": true,
+        "enrolled": false,
+        "tested": "not-recorded",
+        "active": false,
+        "configured_backend": "auto",
+        "enrolled_backend": null,
+        "availability": "disabled",
+        "cooldown_ms": 0,
+        "integration": "inactive",
+        "tpm_detected": false,
+        "tpm_usable": null,
+        "tpm_usability": "not-established",
+        "reason": "none"
+      }
+    },
+    "install": {
+      "production_worker": 0,
+      "status": {
+        "schema_version": 1,
+        "command": "doctor",
+        "installed": "client-present",
+        "broker_available": true,
+        "enrolled": false,
+        "tested": "not-recorded",
+        "active": false,
+        "configured_backend": "auto",
+        "enrolled_backend": null,
+        "availability": "disabled",
+        "cooldown_ms": 0,
+        "integration": "inactive",
+        "tpm_detected": false,
+        "tpm_usable": null,
+        "tpm_usability": "not-established",
+        "reason": "none"
+      },
+      "filesystem": "btrfs",
+      "selinux": "Enforcing"
+    },
+    "eligibility": {
+      "cases": [
+        {
+          "case": "fedora-default-yescrypt",
+          "worker_outcome": 0,
+          "broker_reason": "none",
+          "counter_bytes_and_metadata_unchanged": true,
+          "elapsed_ms": 4.9
+        },
+        {
+          "case": "locked",
+          "worker_outcome": 1,
+          "broker_reason": "account",
+          "counter_bytes_and_metadata_unchanged": true,
+          "elapsed_ms": 1.21
+        },
+        {
+          "case": "expired-account",
+          "worker_outcome": 1,
+          "broker_reason": "account",
+          "counter_bytes_and_metadata_unchanged": true,
+          "elapsed_ms": 1.17
+        },
+        {
+          "case": "expired-password",
+          "worker_outcome": 1,
+          "broker_reason": "account",
+          "counter_bytes_and_metadata_unchanged": true,
+          "elapsed_ms": 1.14
+        },
+        {
+          "case": "forced-password-change",
+          "worker_outcome": 1,
+          "broker_reason": "account",
+          "counter_bytes_and_metadata_unchanged": true,
+          "elapsed_ms": 1.21
+        },
+        {
+          "case": "empty-password",
+          "worker_outcome": 1,
+          "broker_reason": "account",
+          "counter_bytes_and_metadata_unchanged": true,
+          "elapsed_ms": 1.11
+        },
+        {
+          "case": "restricted-shell",
+          "worker_outcome": 1,
+          "broker_reason": "account",
+          "counter_bytes_and_metadata_unchanged": true,
+          "elapsed_ms": 1.09
+        },
+        {
+          "case": "unknown-required-policy",
+          "worker_outcome": 2,
+          "broker_reason": "eligibility-unavailable",
+          "counter_bytes_and_metadata_unchanged": true,
+          "elapsed_ms": 0.97
+        },
+        {
+          "case": "sha512-crypt-real-account",
+          "worker_outcome": 0,
+          "broker_reason": "none",
+          "counter_bytes_and_metadata_unchanged": true,
+          "elapsed_ms": 5.97
+        },
+        {
+          "case": "malformed-unsupported-hash",
+          "worker_outcome": 2,
+          "broker_reason": "eligibility-unavailable",
+          "counter_bytes_and_metadata_unchanged": true,
+          "elapsed_ms": 1.13
+        },
+        {
+          "case": "restored-default-yescrypt",
+          "worker_outcome": 0,
+          "broker_reason": "none",
+          "counter_bytes_and_metadata_unchanged": true,
+          "elapsed_ms": 6.04
+        },
+        {
+          "case": "global-nologin",
+          "worker_outcome": 1,
+          "broker_reason": "account",
+          "counter_bytes_and_metadata_unchanged": true,
+          "elapsed_ms": 1.49
+        },
+        {
+          "case": "nologin-removed",
+          "worker_outcome": 0,
+          "broker_reason": "none",
+          "counter_bytes_and_metadata_unchanged": true,
+          "elapsed_ms": 5.78
+        },
+        {
+          "case": "with-faillock-healthy",
+          "worker_outcome": 0,
+          "broker_reason": "none",
+          "counter_bytes_and_metadata_unchanged": true,
+          "elapsed_ms": 4.74
+        },
+        {
+          "case": "active-faillock",
+          "worker_outcome": 1,
+          "broker_reason": "account",
+          "counter_bytes_and_metadata_unchanged": true,
+          "elapsed_ms": 1684.26
+        },
+        {
+          "case": "explicit-admin-faillock-reset",
+          "worker_outcome": 0,
+          "broker_reason": "none",
+          "counter_bytes_and_metadata_unchanged": true,
+          "elapsed_ms": 6.03
+        }
+      ],
+      "original_password_recovery": true,
+      "sha512_password_recovery": true,
+      "with_faillock_password_recovery": true,
+      "original_correct_password_denied_during_lockout": true,
+      "eligibility_counter_mutations": 0,
+      "actual_production_worker_and_broker": true,
+      "selinux": "Enforcing"
+    },
+    "lifecycle-bypass": {
+      "useradd": {
+        "rejected": true,
+        "account_policy_unchanged": true
+      },
+      "usermod": {
+        "rejected": true,
+        "account_policy_unchanged": true
+      },
+      "userdel": {
+        "rejected": true,
+        "account_policy_unchanged": true
+      },
+      "chpasswd": {
+        "rejected": true,
+        "account_policy_unchanged": true
+      },
+      "chage": {
+        "rejected": true,
+        "account_policy_unchanged": true
+      },
+      "accountsservice_gui_backend": {
+        "rejected": true,
+        "account_policy_unchanged": true
+      },
+      "preopened_writable_descriptor": {
+        "safe_seal_refusal": true,
+        "write_rejected_after_seal": false
+      },
+      "preexisting_shared_writable_mapping": {
+        "seal_refused_after_fd_close": true,
+        "remained_revoked": true
+      },
+      "in_progress_shadow_utils_lock": {
+        "seal_rejected": true,
+        "remained_revoked": true
+      }
+    },
+    "lifecycle-leases": {
+      "enrollment_grant_serializes_revocation": true,
+      "stale_challenge_crossing_revocation_denied": true,
+      "fresh_recovery_disabled": true
+    },
+    "lifecycle-mutations": {
+      "identical_uid_name_home_inode_recreation": true,
+      "new_incarnation": true,
+      "old_pin_denied": true,
+      "fresh_password_enrollment": true,
+      "rename_restore_fresh_incarnation": true,
+      "uid_change_restore_fresh_incarnation": true
+    },
+    "lifecycle-state": {
+      "missing_registry": {
+        "denied": true,
+        "exit_nonzero": true,
+        "broker_restart_still_unavailable": true,
+        "privileged_fresh_disabled_recovery": true
+      },
+      "corrupt_registry": {
+        "denied": true,
+        "exit_nonzero": true,
+        "broker_restart_still_unavailable": true,
+        "privileged_fresh_disabled_recovery": true
+      },
+      "missing_registry_lock": {
+        "denied": true,
+        "exit_nonzero": true,
+        "broker_restart_still_unavailable": true,
+        "privileged_fresh_disabled_recovery": true
+      },
+      "unsafe_registry_lock": {
+        "denied": true,
+        "exit_nonzero": true,
+        "broker_restart_still_unavailable": true,
+        "privileged_fresh_disabled_recovery": true
+      },
+      "corrupt_storage_active": {
+        "denied": true,
+        "exit_nonzero": true,
+        "broker_restart_still_unavailable": true,
+        "privileged_fresh_disabled_recovery": true
+      },
+      "missing_storage_active": {
+        "denied": true,
+        "exit_nonzero": true,
+        "broker_restart_still_unavailable": true,
+        "privileged_fresh_disabled_recovery": true
+      },
+      "missing_storage_lock": {
+        "denied": true,
+        "exit_nonzero": true,
+        "broker_restart_still_unavailable": true,
+        "privileged_fresh_disabled_recovery": true
+      },
+      "unsafe_storage_lock": {
+        "denied": true,
+        "exit_nonzero": true,
+        "broker_restart_still_unavailable": true,
+        "privileged_fresh_disabled_recovery": true
+      }
+    },
+    "lifecycle-crashes": {
+      "revocation_before_file_sync": {
+        "kernel_boundary_triggered": true,
+        "postcrash": "available",
+        "fresh_disabled_recovery": true
+      },
+      "revocation_after_file_sync": {
+        "kernel_boundary_triggered": true,
+        "postcrash": "available",
+        "fresh_disabled_recovery": true
+      },
+      "revocation_after_rename": {
+        "kernel_boundary_triggered": true,
+        "postcrash": "unavailable",
+        "fresh_disabled_recovery": true
+      },
+      "revocation_after_directory_sync": {
+        "kernel_boundary_triggered": true,
+        "postcrash": "unavailable",
+        "fresh_disabled_recovery": true
+      },
+      "thaw_after_first_flag": {
+        "kernel_boundary_triggered": true,
+        "postcrash": "unavailable",
+        "fresh_disabled_recovery": true
+      },
+      "seal_after_first_freeze": {
+        "kernel_boundary_triggered": true,
+        "postcrash": "unavailable",
+        "fresh_disabled_recovery": true
+      },
+      "seal_before_state_sync": {
+        "kernel_boundary_triggered": true,
+        "postcrash": "unavailable",
+        "fresh_disabled_recovery": true
+      },
+      "seal_after_state_sync": {
+        "kernel_boundary_triggered": true,
+        "postcrash": "unavailable",
+        "fresh_disabled_recovery": true
+      },
+      "seal_before_active_registry_sync": {
+        "kernel_boundary_triggered": true,
+        "postcrash": "unavailable",
+        "fresh_disabled_recovery": true
+      },
+      "seal_after_active_registry_rename": {
+        "kernel_boundary_triggered": true,
+        "postcrash": "disabled",
+        "fresh_disabled_recovery": true
+      },
+      "seal_after_active_registry_directory_sync": {
+        "kernel_boundary_triggered": true,
+        "postcrash": "disabled",
+        "fresh_disabled_recovery": true
+      },
+      "tally_after_anonymous_create": {
+        "kernel_boundary_triggered": true,
+        "postcrash": "unavailable",
+        "fresh_disabled_recovery": true,
+        "tally_missing_or_fully_canonical": true
+      },
+      "tally_after_owner_assignment": {
+        "kernel_boundary_triggered": true,
+        "postcrash": "unavailable",
+        "fresh_disabled_recovery": true,
+        "tally_missing_or_fully_canonical": true
+      },
+      "tally_after_canonical_mode": {
+        "kernel_boundary_triggered": true,
+        "postcrash": "unavailable",
+        "fresh_disabled_recovery": true,
+        "tally_missing_or_fully_canonical": true
+      },
+      "tally_after_file_sync": {
+        "kernel_boundary_triggered": true,
+        "postcrash": "unavailable",
+        "fresh_disabled_recovery": true,
+        "tally_missing_or_fully_canonical": true
+      },
+      "tally_after_publication": {
+        "kernel_boundary_triggered": true,
+        "postcrash": "unavailable",
+        "fresh_disabled_recovery": true,
+        "tally_missing_or_fully_canonical": true
+      },
+      "tally_after_directory_sync": {
+        "kernel_boundary_triggered": true,
+        "postcrash": "unavailable",
+        "fresh_disabled_recovery": true,
+        "tally_missing_or_fully_canonical": true
+      }
+    },
+    "lifecycle-reboot-prepare": {
+      "revoked_before_reboot": true,
+      "reboot_required": true
+    },
+    "lifecycle-reboot-verify": {
+      "actual_kernel_boot_id_changed": true,
+      "revocation_survived_reboot": true,
+      "own_enrollment_cannot_repair": true,
+      "privileged_fresh_disabled_recovery": true
+    },
+    "lifecycle-reboot-active-prepare": {
+      "active_credential_before_reboot": true,
+      "reboot_required": true
+    },
+    "lifecycle-reboot-active-verify": {
+      "actual_second_kernel_boot_id_changed": true,
+      "active_incarnation_durable": true,
+      "missing_volatile_tally_unavailable": true,
+      "old_pin_denied": true,
+      "own_enrollment_cannot_repair": true,
+      "privileged_recovery_fresh_disabled_incarnation": true
+    },
+    "cli": {
+      "installed_cli_pty_flows": [
+        {
+          "operation": "enroll",
+          "exit_success": true,
+          "real_controlling_terminal": true,
+          "private_prompt_count": 4,
+          "secret_echo_absent": true
+        },
+        {
+          "operation": "change",
+          "exit_success": true,
+          "real_controlling_terminal": true,
+          "private_prompt_count": 4,
+          "secret_echo_absent": true
+        },
+        {
+          "operation": "disable",
+          "exit_success": true,
+          "real_controlling_terminal": true,
+          "private_prompt_count": 2,
+          "secret_echo_absent": true
+        },
+        {
+          "operation": "enroll",
+          "exit_success": true,
+          "real_controlling_terminal": true,
+          "private_prompt_count": 4,
+          "secret_echo_absent": true
+        },
+        {
+          "operation": "recover",
+          "exit_success": true,
+          "real_controlling_terminal": true,
+          "private_prompt_count": 1,
+          "secret_echo_absent": true
+        }
+      ],
+      "actual_broker_verification": true,
+      "old_pin_after_change_refused": true,
+      "original_password_recovery": true,
+      "final_availability": "disabled",
+      "selinux": "Enforcing"
+    },
+    "concurrent-production-fences": {
+      "stage": {
+        "fresh_state_precondition": true,
+        "actual_production_authorities": true,
+        "concurrent_revocation_busy": true,
+        "busy_response_ms": 0.843,
+        "incarnation_unchanged_while_leased": true,
+        "actual_result_completed": true,
+        "pause_under_500ms": true,
+        "revocation_after_release": true,
+        "old_pin_denied": true
+      },
+      "publish": {
+        "fresh_state_precondition": true,
+        "actual_production_authorities": true,
+        "concurrent_revocation_busy": true,
+        "busy_response_ms": 0.645,
+        "incarnation_unchanged_while_leased": true,
+        "actual_result_completed": true,
+        "pause_under_500ms": true,
+        "revocation_after_release": true,
+        "old_pin_denied": true
+      },
+      "success": {
+        "fresh_state_precondition": true,
+        "actual_production_authorities": true,
+        "concurrent_revocation_busy": true,
+        "busy_response_ms": 1.929,
+        "incarnation_unchanged_while_leased": true,
+        "actual_result_completed": true,
+        "pause_under_500ms": true,
+        "revocation_after_release": true,
+        "old_pin_denied": true
+      },
+      "delivery": {
+        "fresh_state_precondition": true,
+        "actual_production_authorities": true,
+        "concurrent_revocation_busy": true,
+        "busy_response_ms": 0.612,
+        "incarnation_unchanged_while_leased": true,
+        "actual_result_completed": true,
+        "pause_under_500ms": true,
+        "revocation_after_release": true,
+        "old_pin_denied": true
+      }
+    }
+  },
+  "facts": {
+    "kernel": {
+      "exit": 0,
+      "output": "7.2.10-200.fc44.x86_64\n",
+      "error": ""
+    },
+    "versions": {
+      "exit": 0,
+      "output": "pam-1.7.2-2.fc44.x86_64\nauthselect-1.7.1-1.fc44.x86_64\nlibxcrypt-4.5.2-3.fc44.x86_64\nsystemd-259.9-1.fc44.x86_64\nplasma-workspace-6.7.5-1.fc44.x86_64\nkscreenlocker-6.7.5-1.fc44.x86_64\nselinux-policy-targeted-44.11-1.fc44.noarch\n",
+      "error": ""
+    },
+    "selinux": {
+      "exit": 0,
+      "output": "Enforcing\n",
+      "error": ""
+    },
+    "filesystem": {
+      "exit": 0,
+      "output": "btrfs\n",
+      "error": ""
+    },
+    "session": {
+      "exit": 0,
+      "output": " 2 21061 lp61test seat0 941  user          tty1 no -\n34     0 root     -     4664 user          -    no -\n35     0 root     -     4669 manager-early -    no -\n 4 21061 lp61test -     956  manager       -    no -\n",
+      "error": ""
+    },
+    "process_domains": {
+      "exit": 0,
+      "output": "unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023 1315 ? 00:00:00 kwin_wayland_wr\nunconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023 1321 ? 00:00:06 kwin_wayland\nunconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023 1470 ? 00:00:03 plasmashell\nsystem_u:system_r:unconfined_service_t:s0 4421 ? 00:00:00 localpind",
+      "error": ""
+    },
+    "audit": {
+      "exit": 0,
+      "output": "enabled 1\nfailure 1\npid 615\nrate_limit 0\nbacklog_limit 64\nlost 0\nbacklog 0\nbacklog_wait_time 60000\nbacklog_wait_time_actual 0\nloginuid_immutable 0 unlocked\n",
+      "error": ""
+    },
+    "binaries_sha256": {
+      "localpind": "085c1f3cdb29ea7575a1de33471a6a98db8b2569c5457e73ae70f7b857839fa1",
+      "localpin-account": "e437ddd51ab362cf157781968ec0b7063b46ba6ed3ac1eb37bdc65382f611a31",
+      "localpin-worker": "83800c6926c1893cc2efd26bb3ed7aa347b4931eb53db8b123ccf724c83fb47b",
+      "localpin-auth-worker": "6093f97b6565897921216b9f8559408f2c43884ae85e979a2b4ab7d5d426fba8",
+      "localpin-eligibility-worker": "e25857a39fb9900f022fc95093917688dd144e02ae53ce9c0def7ed95eb3f560",
+      "localpinctl": "7685f73d3d594fd6654e5748786ba2fa659a9de9c7145281c5b3a33b99143f45",
+      "m61-client": "94f94ce7eaa9637ee95d64170e0d0e52ccab172ddd96bd649bdb84fc102cc13f"
+    },
+    "scheduling_fixture_sha256": "fe4b2f7a1a431d940f3ca9b6fbaf6a1bbb965ddd2bf5b02766aff7912953f985",
+    "no_tpm_devices": true,
+    "final_status": {
+      "schema_version": 1,
+      "command": "doctor",
+      "installed": "client-present",
+      "broker_available": true,
+      "enrolled": false,
+      "tested": "not-recorded",
+      "active": false,
+      "configured_backend": "auto",
+      "enrolled_backend": null,
+      "availability": "disabled",
+      "cooldown_ms": 0,
+      "integration": "inactive",
+      "tpm_detected": false,
+      "tpm_usable": null,
+      "tpm_usability": "not-established",
+      "reason": "none"
+    }
+  }
+}

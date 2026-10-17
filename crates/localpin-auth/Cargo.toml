@@ -14,6 +14,7 @@ rustix = { workspace = true, features = ["process", "time"] }
 zeroize.workspace = true
 libc = "=0.2.191"
 getrandom = "=0.4.3"
+sha2 = { version = "=0.11.1", default-features = false }
 
 # The Linux-PAM ABI and libc allocator boundary are isolated in pam.rs.
 [lints.rust]

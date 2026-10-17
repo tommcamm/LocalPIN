@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-17",
+  "rust_toolchain": "1.99.1",
+  "locked_dependency_graph": true,
+  "workspace_tests": {
+    "passed": 284,
+    "failed": 0,
+    "intentionally_ignored": 9,
+    "separate_pty_job_control_cases": 3
+  },
+  "checks": [
+    {
+      "check": "fmt",
+      "exit": 0,
+      "seconds": 0.23
+    },
+    {
+      "check": "clippy",
+      "exit": 0,
+      "seconds": 1.633
+    },
+    {
+      "check": "workspace-test",
+      "exit": 0,
+      "seconds": 55.821
+    },
+    {
+      "check": "release-build",
+      "exit": 0,
+      "seconds": 0.939
+    },
+    {
+      "check": "deny",
+      "exit": 0,
+      "seconds": 0.714
+    },
+    {
+      "check": "enrollment-broker",
+      "exit": 0,
+      "seconds": 19.652
+    },
+    {
+      "check": "protected-broker",
+      "exit": 0,
+      "seconds": 8.715
+    },
+    {
+      "check": "isolated-pam",
+      "exit": 0,
+      "seconds": 12.56
+    },
+    {
+      "check": "tpm-simulator",
+      "exit": 101,
+      "seconds": 12.364
+    },
+    {
+      "check": "tpm-simulator-rerun",
+      "exit": 0,
+      "seconds": 13.034
+    },
+    {
+      "check": "storage-tpm-simulator",
+      "exit": 0,
+      "seconds": 10.733
+    },
+    {
+      "check": "diff-check",
+      "exit": 0,
+      "seconds": 0.008
+    },
+    {
+      "check": "fences-fmt",
+      "exit": 0,
+      "seconds": 0.265
+    },
+    {
+      "check": "fences-clippy",
+      "exit": 0,
+      "seconds": 1.467
+    },
+    {
+      "check": "fences-release",
+      "exit": 0,
+      "seconds": 2.82
+    }
+  ],
+  "commands": [
+    "cargo fmt --all -- --check",
+    "cargo clippy --workspace --all-targets --all-features --locked -- -D warnings",
+    "cargo test --workspace --all-features --locked",
+    "cargo build --workspace --all-features --release --locked --offline --bins --examples",
+    "cargo deny --locked check advisories bans licenses sources",
+    "python3 crates/localpind/tests/run_enrollment_broker.py",
+    "python3 crates/localpind/tests/run_protected_broker.py",
+    "python3 crates/localpin-auth/tests/isolated_pam.py",
+    "python3 crates/localpin-tpm/tests/run_simulator.py",
+    "cargo test -p localpin-storage --features tpm-simulator-tests --locked --lib tests::tpm_backend::tpm_backend_obeys_durable_storage_and_revocation -- --ignored --exact",
+    "python3 -m py_compile experiments/m61/*.py",
+    "cc -std=c11 -O2 -Wall -Wextra -Werror experiments/m61/fault.c -o /tmp/localpin-m61-fault",
+    "git diff --check"
+  ],
+  "tpm_simulator_initial_failure": {
+    "tests_passed": 1,
+    "tests_failed": 1,
+    "assertion": "expected Err(Record), received Err(Unavailable)",
+    "location": "crates/localpin-tpm/src/simulator_tests.rs:704",
+    "transport_observation": "foreign swtpm endpoint connection refused",
+    "cause": "unconfirmed",
+    "unchanged_fresh_rerun": {
+      "passed": 2,
+      "failed": 0
+    },
+    "physical_tpm_used": false
+  },
+  "standardized_release_artifacts": {
+    "build_passed": true,
+    "all_eight_final_installed_or_test_artifact_hashes_match": true,
+    "source": "2026-10-17-account-authorities.json"
+  },
+  "independent_development_review": "../../../docs/development/m6.1-review.md",
+  "scope": "Local development checks and disposable enforcing Fedora component validation; M7/M8/M9 remain open."
+}

@@ -163,6 +163,122 @@ impl PasswordSupervisor {
             .unwrap_or(MAX_PASSWORD_WORKERS)
     }
 
+    pub(crate) fn run_eligibility(
+        &self,
+        uid: u32,
+        deadline: BootInstant,
+        cancelled: &mut dyn FnMut() -> bool,
+    ) -> Result<(), localpin_core::eligibility::EligibilityError> {
+        use localpin_core::eligibility::EligibilityError;
+        let deadline = deadline.min(BootInstant::now() + Duration::from_secs(2));
+        fn unavailable<T>(_: T) -> EligibilityError {
+            EligibilityError::Unavailable
+        }
+        if uid == 0 || uid == u32::MAX || BootInstant::now() >= deadline || cancelled() {
+            return Err(EligibilityError::Unavailable);
+        }
+        let mut token = [0; 16];
+        getrandom::fill(&mut token).map_err(unavailable)?;
+        if token == [0; 16] {
+            return Err(EligibilityError::Unavailable);
+        }
+        let index = self.reserve(uid).map_err(unavailable)?;
+        let mut stream = match self.spawn(index, uid) {
+            Ok(stream) => stream,
+            Err(_) => {
+                if let Ok(mut slots) = self.shared.slots.lock() {
+                    slots[index] = None;
+                }
+                return Err(EligibilityError::Unavailable);
+            }
+        };
+        let mut guard = Guard {
+            shared: self.shared.clone(),
+            index,
+            reaped: false,
+        };
+        let mut request = [0; 24];
+        request[..4].copy_from_slice(b"LPE1");
+        request[4..20].copy_from_slice(&token);
+        request[20..24].copy_from_slice(&uid.to_be_bytes());
+        let mut sent = 0;
+        let mut incoming = Vec::new();
+        let mut eof = false;
+        let mut status = None;
+        loop {
+            if BootInstant::now() >= deadline || cancelled() {
+                return Err(EligibilityError::Unavailable);
+            }
+            if sent < request.len() {
+                match stream.write(&request[sent..]) {
+                    Ok(0) => return Err(EligibilityError::Unavailable),
+                    Ok(n) => sent += n,
+                    Err(error)
+                        if matches!(
+                            error.kind(),
+                            io::ErrorKind::WouldBlock | io::ErrorKind::Interrupted
+                        ) => {}
+                    Err(_) => return Err(EligibilityError::Unavailable),
+                }
+            }
+            if !eof {
+                let mut buffer = [0; ipc::HEADER + 2];
+                match stream.read(&mut buffer) {
+                    Ok(0) => eof = true,
+                    Ok(n) => {
+                        if incoming.len() + n > ipc::HEADER + 1 {
+                            return Err(EligibilityError::Unavailable);
+                        }
+                        incoming.extend_from_slice(&buffer[..n]);
+                    }
+                    Err(error)
+                        if matches!(
+                            error.kind(),
+                            io::ErrorKind::WouldBlock | io::ErrorKind::Interrupted
+                        ) => {}
+                    Err(_) => return Err(EligibilityError::Unavailable),
+                }
+            }
+            if status.is_none() {
+                let mut slots = self.shared.slots.lock().map_err(unavailable)?;
+                let Some(Slot::Child(entry)) = &mut slots[index] else {
+                    return Err(EligibilityError::Unavailable);
+                };
+                status = entry.reap().map_err(unavailable)?;
+                if status.is_some() {
+                    slots[index] = None;
+                    guard.reaped = true;
+                }
+            }
+            if eof && let Some(status) = status {
+                if !status.success()
+                    || sent != request.len()
+                    || BootInstant::now() >= deadline
+                    || cancelled()
+                {
+                    return Err(EligibilityError::Unavailable);
+                }
+                let (frame, length) = ipc::decode(&incoming)
+                    .map_err(unavailable)?
+                    .ok_or(EligibilityError::Unavailable)?;
+                if length != incoming.len()
+                    || frame.kind != ipc::RESULT
+                    || frame.token != token
+                    || frame.sequence != 2
+                    || frame.payload.expose().len() != 1
+                {
+                    return Err(EligibilityError::Unavailable);
+                }
+                return match frame.payload.expose()[0] {
+                    0 => Ok(()),
+                    1 => Err(EligibilityError::AccountRestricted),
+                    _ => Err(EligibilityError::Unavailable),
+                };
+            }
+            thread::sleep(POLL.min(deadline.saturating_duration_since(BootInstant::now())));
+        }
+    }
+
     fn reserve(&self, uid: u32) -> Result<usize, PasswordWorkerError> {
         let mut slots = self
             .shared

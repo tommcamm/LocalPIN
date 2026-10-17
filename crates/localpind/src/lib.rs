@@ -3,6 +3,7 @@
 //! Ordinary Unix accounts remain unavailable until a supported lifecycle and
 //! account-policy authority exists. No PAM integration is activated by a build.
 
+pub mod accounts;
 pub mod broker;
 pub mod enrollment;
 pub mod platform;

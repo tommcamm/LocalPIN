@@ -1,0 +1,12 @@
+{
+  "date": "2026-10-17",
+  "temporary_guest_access_key_removed": true,
+  "temporary_local_keypair_removed": true,
+  "independent_clone_stopped_and_undefined": true,
+  "independent_clone_disk_and_nvram_removed": true,
+  "independent_clone_had_no_backing_store": true,
+  "original_clean_vm_remained_shut_off": true,
+  "clone_had_no_tpm_shares_or_host_passthrough": true,
+  "everyday_host_authentication_accounts_and_enrolled_state_untouched": true,
+  "physical_tpm_unused": true
+}

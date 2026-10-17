@@ -1,6 +1,6 @@
 # ADR 0011: Trusted enrollment and terminal input
 
-Date: 2026-10-17. Status: accepted development implementation; installed PAM,
+Date: 2026-10-17. Original M6 status: accepted development implementation; installed PAM,
 confinement and production account lifecycle gates remain open.
 
 ## Decision
@@ -67,7 +67,7 @@ nonsecret JSON and distinguish client presence, enrollment, recorded testing
 and activation. Reaching a broker or passing a credential trial is not proof
 of tested KDE integration or password recovery.
 
-## Remaining gates
+## Remaining gates recorded at M6
 
 ADR 0006 still refuses production unmanaged accounts. Lifecycle provisioning
 must establish a protected disabled baseline; a user enrollment request never
@@ -83,3 +83,29 @@ writes. M8 must establish the independent password-worker execution policy and
 enforcing SELinux/cgroup boundaries, including descendant escape prevention.
 Building these binaries neither installs the PAM service nor activates KDE.
 The isolated PAM tests cannot certify installed host authentication policy.
+
+## M6.1 implementation note — 2026-10-17
+
+M6's synthetic-authority flows above remain useful regressions. M6.1 now wires
+actual production lifecycle and password-free eligibility authorities into
+`SystemAuthorities`, solely for the sealed Fedora 44 x86_64 Btrfs appliance
+domain in [ADR 0012](0012-immutable-appliance-account-authority.md). The
+[M6.1 report](../development/m6.1-account-authorities.md) records real-account
+enrollment, change, disable, root recovery and broker PIN-verification component
+flows with the existing password-only worker in a disposable enforcing KDE VM,
+and tracks the remaining acceptance evidence. Those results do not adopt
+ordinary unmanaged accounts or synthetic development incarnations.
+
+Privileged lifecycle provisioning establishes the disabled baseline before any
+own-user transaction. Missing/corrupt lifecycle or required storage is never
+repaired by enrollment. The lifecycle authority's shared lease remains owned
+alongside the stable UID storage guard through staging, pointer publication
+and response delivery; root account administration must durably revoke before
+changing any protected input and fresh enrollment follows every reseal.
+The transaction/password-grant/cancellation rules in this ADR remain unchanged.
+
+The CLI's installed/enrolled/tested/active distinction still applies. Component
+enrollment or PIN verification does not activate KDE. M7 retains the unlock
+adapter and actual stock-locker matrix; M8 retains installed PAM/systemd/SELinux,
+RPM and recovery acceptance; M9 retains independent human/specialist review and
+hardware validation. No installed executable gains a fixture or simulator mode.
