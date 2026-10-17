@@ -132,7 +132,9 @@ jobs:
           sources = sorted((build / 'SOURCES').glob('*-native.tar.gz'))
           if len(packages) != 1 or len(sources) != 1:
               raise SystemExit('Expected exactly one native RPM and one build-input bundle')
-          source_commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          # Container steps can run under a different owner than checkout.
+          # Trust only this workspace for this read-only Git invocation.
+          source_commit = subprocess.check_output(['git', '-c', f'safe.directory={Path.cwd()}', 'rev-parse', 'HEAD'], text=True).strip()
           if source_commit != os.environ['GITHUB_SHA']:
               raise SystemExit('Checked-out source differs from the workflow commit')
           output = Path(os.environ['RUNNER_TEMP']) / 'localpin-artifact'
