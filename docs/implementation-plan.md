@@ -436,9 +436,13 @@ tracks section 18 acceptance and section 20 completion gates. The
 44 RPM/GitHub prereleases with source, SPDX inventory, checksums and mandatory
 verified OpenPGP signing in the protected release environment. Deterministic
 parser/state campaigns extend source checks.
-Independent review, physical acceptance, coverage-guided fuzzing/applicable
-native instrumentation and the remaining candidate-bound evidence are still
-open; release automation alone does not complete M9.
+The [development validation record](development/m9-review-validation.md) adds
+bounded coverage-guided record/IPC/PHC campaigns, selected Miri and native PAM
+ASan/UBSan checks, source/native reruns and scoped AI development review.
+Independent human review, physical acceptance, remaining instrumentation and
+installed candidate coverage, three documented implementation requirements and
+an intermittent simulator failure remain open; release automation alone does
+not complete M9.
 
 - Build a requirement-to-evidence checklist covering every acceptance category in specification section 18 and every completion gate in section 20. Link tests, VM reports, hardware observations, benchmarks and review findings.
 - Run parser fuzzing, state-machine property/model tests, and applicable FFI Miri/sanitizer checks. Explain where native library or platform constraints limit those tools.

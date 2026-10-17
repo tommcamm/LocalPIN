@@ -43,6 +43,11 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Check Clippy
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - name: Check the separate M9 test harnesses
+        run: |
+          cargo fmt --manifest-path fuzz/Cargo.toml -- --check
+          cargo clippy --manifest-path fuzz/Cargo.toml --all-targets --locked -- -D warnings
+          python3 -m py_compile fuzz/run.py experiments/m9/native_instrumentation.py
       # Native PAM tests use Fedora's reviewed runtime paths. The Fedora job
       # below runs the complete workspace test/doctest suite on the target OS.
       - name: Check activation transactions and disposable VM guards
@@ -69,7 +74,9 @@ jobs:
       - name: Install the pinned dependency checker
         run: cargo install cargo-deny --version 0.20.2 --locked
       - name: Check advisories, licenses, bans, and sources
-        run: cargo deny --locked check advisories licenses bans sources
+        run: |
+          cargo deny --locked check advisories licenses bans sources
+          cargo deny --manifest-path fuzz/Cargo.toml --config fuzz/deny.toml --locked check advisories licenses bans sources
 
   fedora:
     name: Fedora 44 x86_64

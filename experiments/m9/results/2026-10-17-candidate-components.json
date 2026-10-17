@@ -1,0 +1,1171 @@
+{
+  "schema": 1,
+  "date_utc": "2026-10-17",
+  "source_commit": "dddbce91b84beb7cf763945897bd3448df2a3678",
+  "operator_reviewers": "Codex implementation-assistance coordinating agent and two focused AI source-review agents; not independent human/specialist review",
+  "scope": "Source/component development evidence only. No installed/physical/release approval.",
+  "environment": {
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1",
+    "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)",
+    "kernel": "Linux 7.2.10-200.fc44.x86_64 x86_64 GNU/Linux",
+    "packages": "gcc-16.2.1-2.fc44.x86_64\nglibc-2.43-9.fc44.x86_64\nglibc-2.43-9.fc44.i686\ntpm2-tss-4.1.3-9.fc44.x86_64\ndbus-libs-1.16.2-1.fc44.x86_64\ndbus-libs-1.16.2-1.fc44.i686\nswtpm-0.10.2-1.fc44.x86_64\nlibtpms-0.10.2-3.fc44.x86_64\ntpm2-tools-5.7-5.fc44.x86_64\npam-1.7.2-2.fc44.x86_64\nsystemd-259.9-1.fc44.x86_64\nselinux-policy-targeted-44.11-1.fc44.noarch",
+    "selinux": "Disabled",
+    "dependency_tool": "cargo-deny 0.20.2",
+    "os_release": {
+      "ID": "fedora",
+      "VERSION_ID": "44",
+      "VARIANT_ID": "kde"
+    },
+    "cpu_model": "AMD Ryzen 9 7945HX with Radeon Graphics",
+    "development_headers": {
+      "pam": "extracted pam-devel-1.7.2-2.fc44.x86_64; build-only LOCALPIN_PAM_INCLUDE",
+      "tpm": "extracted tpm2-tss-devel-4.1.3-9.fc44.x86_64; build-only PKG_CONFIG_PATH"
+    },
+    "production_lock_sha256": "efe1c75ce84848c9ee19eb031fe4f26cb08c13dd5848ba53334ea8a939e18e38"
+  },
+  "rpm_identity": {
+    "source_commit": "dddbce91b84beb7cf763945897bd3448df2a3678",
+    "workflow_run_url": "https://github.com/tommcamm/LocalPIN/actions/runs/39049852941",
+    "rpm": "localpin-0.1.0-0.1.alpha1.ci.15.1.fc44.x86_64.rpm",
+    "nevra": "localpin-0.1.0-0.1.alpha1.ci.15.1.fc44.x86_64",
+    "sha256": "92d53a506dad3b7056c7437adef77ba0db0f84ee8755c01aa0b65060a0b06192",
+    "signed": false,
+    "installed_validation": false
+  },
+  "hosted_ci": {
+    "url": "https://github.com/tommcamm/LocalPIN/actions/runs/39049852941",
+    "conclusion": "success",
+    "jobs": [
+      "Rust lint and build (Ubuntu)",
+      "Dependency policy",
+      "Isolated M1 experiments (Fedora 44)",
+      "Fedora 44 x86_64"
+    ]
+  },
+  "raw_evidence_directory": "$EVIDENCE",
+  "batch": {
+    "schema": 1,
+    "source_commit": "dddbce91b84beb7cf763945897bd3448df2a3678",
+    "operator": "Codex implementation agent; development validation only",
+    "started_utc": "2026-10-17T16:35:59.826480+00:00",
+    "runner_sha256": "f95318a956491f51030926224ae8214aa7258a83a8fc16cb0ad174e67713f1eb",
+    "checks": [
+      {
+        "name": "fmt",
+        "command": [
+          "cargo",
+          "fmt",
+          "--all",
+          "--",
+          "--check"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.26,
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "clippy",
+        "command": [
+          "cargo",
+          "clippy",
+          "--workspace",
+          "--all-targets",
+          "--all-features",
+          "--locked",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 1.32,
+        "log_sha256": "e059441cb0d5907158aab8d9096b89a9b6cd22dabffea4e33a2bcaade26387b5"
+      },
+      {
+        "name": "workspace",
+        "command": [
+          "cargo",
+          "test",
+          "--workspace",
+          "--all-features",
+          "--locked"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 55.96,
+        "log_sha256": "e4ecb56f1f4340c06238aef3ae53b12b175af39171c54b44df42f1b730d2b28f"
+      },
+      {
+        "name": "release-build",
+        "command": [
+          "cargo",
+          "build",
+          "--workspace",
+          "--all-features",
+          "--release",
+          "--locked"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 1.62,
+        "log_sha256": "825f422f8db6af77dc232b21eac94f4e71fd5b35d4f4f163f1cee765024cba6d"
+      },
+      {
+        "name": "tpm-simulator",
+        "command": [
+          "python3",
+          "crates/localpin-tpm/tests/run_simulator.py"
+        ],
+        "exit_code": 101,
+        "elapsed_seconds": 12.03,
+        "log_sha256": "8e4f037f7800a5561fe1e6ee3312360cb3871f1f24ea2b4e98cfde733ab6cf74"
+      },
+      {
+        "name": "storage-tpm",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "localpin-storage",
+          "--features",
+          "tpm-simulator-tests",
+          "--locked",
+          "--",
+          "--ignored"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 10.08,
+        "log_sha256": "7d7c579b62cc00c268e1aa14c5d0180df948ec9c25d9ffdaef35a5562109115a"
+      },
+      {
+        "name": "pam-adapter",
+        "command": [
+          "python3",
+          "crates/localpin-pam/tests/isolated_pam.py"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 12.7,
+        "log_sha256": "2584a32d2e6493bc32b134bd2c579a9b79c11d74735cffa56f68fd74b0a58642"
+      },
+      {
+        "name": "pam-worker",
+        "command": [
+          "python3",
+          "crates/localpin-auth/tests/isolated_pam.py"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 18.68,
+        "log_sha256": "ed2d017c1cdabdee6557ff660bb20a0037822e1cb8ba3b01acc72e32c0e0e2b9"
+      },
+      {
+        "name": "kde-accounting",
+        "command": [
+          "python3",
+          "crates/localpin-auth/tests/kde_accounting.py"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.46,
+        "log_sha256": "04d3fdb10c6f1c133fda6802308fc0e22e2b5725bf120394a0fecc499ddc1451"
+      },
+      {
+        "name": "protected-broker",
+        "command": [
+          "python3",
+          "crates/localpind/tests/run_protected_broker.py"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 8.83,
+        "log_sha256": "45975257efb5eb453d73cf6b84072acb428e98c9c6f24f3c52672be90768cca9"
+      },
+      {
+        "name": "enrollment-broker",
+        "command": [
+          "python3",
+          "crates/localpind/tests/run_enrollment_broker.py"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 17.74,
+        "log_sha256": "e324bd7466f37c710f44f510b576149e5030f20b524845e7a12e66bc483db5b9"
+      },
+      {
+        "name": "terminal-job-control",
+        "command": [
+          "python3",
+          "crates/localpinctl/tests/terminal_job_control.py"
+        ],
+        "exit_code": 1,
+        "elapsed_seconds": 3.07,
+        "log_sha256": "4cc6c0c1303850da4aade1ae83f39233cf04b012a5a198f659a321b87b35f713"
+      },
+      {
+        "name": "integration",
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tools/tests",
+          "-p",
+          "test_*.py",
+          "-v"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.21,
+        "log_sha256": "8489aa726a5dee36f5d7a7dcc90c09db6fc231b27299898dad4e7bcd58684a83"
+      },
+      {
+        "name": "vm-guards",
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "experiments/m8",
+          "-p",
+          "test_*.py",
+          "-v"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.11,
+        "log_sha256": "4a025f36be9fba740773ff7df433ba08612c43879e6e98f4aa7908c26290402e"
+      },
+      {
+        "name": "release-policy",
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "packaging/fedora",
+          "-p",
+          "test_release*.py",
+          "-v"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.21,
+        "log_sha256": "6b9def23f567b84b7261bc6704751c6cd2a6315bf13dceb4cbb7ccde62ba142f"
+      },
+      {
+        "name": "packaging",
+        "command": [
+          "python3",
+          "packaging/fedora/test_packaging.py"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.97,
+        "log_sha256": "e511b92fb602662878a90e2df00250f23c4c1bd503566dcc3e88eabbc5317e0a"
+      }
+    ]
+  },
+  "workspace_test_totals": {
+    "passed": 324,
+    "failed": 0,
+    "ignored": 10
+  },
+  "python_test_totals": {
+    "integration": 72,
+    "vm_guards": 21,
+    "release_policy": 50
+  },
+  "supplemental": [
+    {
+      "name": "miri-enrollment",
+      "command": [
+        "cargo",
+        "+nightly",
+        "miri",
+        "test",
+        "-p",
+        "localpin-core",
+        "--locked",
+        "--lib",
+        "enrollment::tests"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 3.17,
+      "log_sha256": "b92ccee03c7ed286b39a068334518c3e488599022ab6453da61dcbdaa0969a19"
+    },
+    {
+      "name": "miri-protocol-late",
+      "command": [
+        "cargo",
+        "+nightly",
+        "miri",
+        "test",
+        "-p",
+        "localpin-protocol",
+        "--locked",
+        "--lib",
+        "tests::late_cancelled_or_ineligible_backend_results_cannot_authorize"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 3.07,
+      "log_sha256": "e7d667103fb9e93edab6b000a769d3fd8a3c41177a8f90714105168186df2ed0"
+    },
+    {
+      "name": "miri-protocol-bound",
+      "command": [
+        "cargo",
+        "+nightly",
+        "miri",
+        "test",
+        "-p",
+        "localpin-protocol",
+        "--locked",
+        "--lib",
+        "tests::verification_is_bound_one_use_eligible_and_strictly_expiring"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.92,
+      "log_sha256": "a44972a7bad27c514bf9028d14ecb131aa7ba9fd8d29ed5c3498729db1d8e8e4"
+    },
+    {
+      "name": "terminal-correct-entry",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "localpinctl",
+        "--test",
+        "job_control",
+        "--locked"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 9.28,
+      "log_sha256": "4522517cce51be00e57bffa308a2917878c6ab3691b321fe6029271da732d904"
+    }
+  ],
+  "abi_and_benchmark": [
+    {
+      "name": "abi-build",
+      "command": [
+        "gcc",
+        "-std=c11",
+        "-O2",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-isystem",
+        ".local/m1/pam-devel/usr/include",
+        "crates/localpin-pam/tests/abi_smoke.c",
+        "-ldl",
+        "-o",
+        "$EVIDENCE/pam-abi"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.06,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "abi",
+      "command": [
+        "$EVIDENCE/pam-abi",
+        "$REPOSITORY/target/release/liblocalpin_pam.so"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.0,
+      "log_sha256": "94bf3fe6f945edb49bcf5fc0bc279d0e4e3a47627f88e4aeef6cdd5024b21cc6"
+    },
+    {
+      "name": "software-benchmark",
+      "command": [
+        "cargo",
+        "run",
+        "--release",
+        "--locked",
+        "-p",
+        "localpin-credentials",
+        "--example",
+        "benchmark",
+        "--",
+        "100"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 9.89,
+      "log_sha256": "2b711b2860b63333c19f76e2b5fbf167df31b6ab55500bbac4377f8eb9651b4f"
+    }
+  ],
+  "standalone_checks": [
+    {
+      "name": "dependencies",
+      "command": [
+        "cargo",
+        "deny",
+        "--locked",
+        "check",
+        "advisories",
+        "licenses",
+        "bans",
+        "sources"
+      ],
+      "exit_code": 0,
+      "tool": "cargo-deny 0.20.2",
+      "log_sha256": "f1a0fca39d4280363937aabd77783990ea6480bd9ca257816de3b68fc8efa845"
+    },
+    {
+      "name": "miri-secrets",
+      "command": [
+        "cargo",
+        "+nightly",
+        "miri",
+        "test",
+        "-p",
+        "localpin-core",
+        "--locked",
+        "--lib",
+        "secret::tests"
+      ],
+      "exit_code": 0,
+      "passed": 2,
+      "log_sha256": "129cb4938f9d4781d51b5d14f0ca6b98ace68ed42a8ed9db080794c8c2ec2f1f"
+    },
+    {
+      "name": "terminal-pinned-toolchain",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "localpinctl",
+        "--test",
+        "job_control",
+        "--locked"
+      ],
+      "exit_code": 0,
+      "log_sha256": "63141e34daccbe2a2a9f3eccd1eabb289d391dedb32342c54b4bbff704fbfd15"
+    },
+    {
+      "name": "native-tally-access",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "localpin-auth",
+        "--locked",
+        "--lib",
+        "eligibility::tests::native_tally_requires_write_access_without_mutating_canonical_state",
+        "--",
+        "--ignored",
+        "--exact"
+      ],
+      "exit_code": 0,
+      "passed": 1,
+      "log_sha256": "31a12cac1a3da265cef436fb5bf12f0c59eb25551fcd9617eb869d7f8f82e914"
+    },
+    {
+      "name": "fuzz-dependencies",
+      "command": [
+        "cargo",
+        "deny",
+        "--manifest-path",
+        "fuzz/Cargo.toml",
+        "--config",
+        "fuzz/deny.toml",
+        "--locked",
+        "check",
+        "advisories",
+        "licenses",
+        "bans",
+        "sources"
+      ],
+      "exit_code": 0,
+      "tool": "cargo-deny 0.20.2",
+      "policy_sha256": "80a0c96eef0acc2b173cc672a6bf9fff902becc7f0ed856d12d89a08e286acb6",
+      "log_sha256": "f1a0fca39d4280363937aabd77783990ea6480bd9ca257816de3b68fc8efa845",
+      "scope": "Separate test-only graph; production policy unchanged. Declared NCSA and bundled LLVM notices reviewed for libfuzzer-sys 0.4.13."
+    }
+  ],
+  "retained_failures": [
+    {
+      "name": "workspace-preflight-native-headers",
+      "result": "unavailable before build-only extracted headers were selected",
+      "log_sha256": "eba0c0c62c91f8002c46ea852863c1e917fe1839468dd6878ffd1e6c0d8858da"
+    },
+    {
+      "name": "tpm-simulator-initial",
+      "result": "one failed, one passed; foreign simulator transport refused; exact cause unconfirmed",
+      "original_log_sha256": "8e4f037f7800a5561fe1e6ee3312360cb3871f1f24ea2b4e98cfde733ab6cf74",
+      "reruns": [
+        {
+          "name": "failed case alone",
+          "passed": 1,
+          "log_sha256": "fed441e6593d4fa996482c21c03998033b4175e180240a56e99c987c04e014a2"
+        },
+        {
+          "name": "two complete unchanged reruns",
+          "passed_per_run": 2,
+          "log_sha256": "fec5321c1296830284f90324158ae872acb6db685fc0f1c89ea71fb55889bbae"
+        }
+      ],
+      "disposition": "intermittent fixture/transport failure remains open; assertions unchanged"
+    },
+    {
+      "name": "terminal-helper-direct",
+      "result": "invalid invocation without required Rust test executable; no private prompt",
+      "original_log_sha256": "4cc6c0c1303850da4aade1ae83f39233cf04b012a5a198f659a321b87b35f713",
+      "disposition": "correct Cargo entry passed; not a product defect"
+    },
+    {
+      "name": "fuzz-initial-production-license-policy",
+      "result": "Production policy rejected libfuzzer-sys declared NCSA license; advisory/bans/source checks passed",
+      "original_log_sha256": "d77f2464b02d3de94618dca08ca5b9784bd72fb036df0a02e3673fa052f2c62f",
+      "disposition": "Reviewed testing-only dependency notices and added a separate version-scoped fuzz policy; final separate graph check passed. Production policy unchanged."
+    }
+  ],
+  "fuzz": {
+    "started_utc": "2026-10-17T16:46:44.891978+00:00",
+    "completed_utc": "2026-10-17T16:49:56.554879+00:00",
+    "source_commit": "dddbce91b84beb7cf763945897bd3448df2a3678",
+    "rustc": "rustc 1.101.0-nightly (5d8fec066 2026-10-16)\nbinary: rustc\ncommit-hash: 5d8fec0669a64607db9ccbf663e7c23125bf4748\ncommit-date: 2026-10-16\nhost: x86_64-unknown-linux-gnu\nrelease: 1.101.0-nightly\nLLVM version: 23.1.4",
+    "cargo_fuzz": "cargo-fuzz 0.13.2",
+    "harness_sha256": {
+      "fuzz/Cargo.lock": "040312b0f3afecad3c51e0c449ba841401f6c74060e0e028e3f16a6f553048ab",
+      "fuzz/Cargo.toml": "db04136e6b9ae0eccf0395a149dee1b8404191033e84f21413b56faab12cf788",
+      "fuzz/examples/seed_corpus.rs": "a2bae34c4f79db88ddf2330707f606c53474d907bed5c444dad241ec2b0fd60d",
+      "fuzz/fuzz_targets/phc.rs": "1b2889036477b035a1c67ef7e0b017f129b3bf42395ac7cd7d8e81ebcdb65533",
+      "fuzz/fuzz_targets/records.rs": "68488f7edc311640883b07be8574346b839fe6d6c9f995fde7481efc6e7da8a0",
+      "fuzz/fuzz_targets/streams.rs": "1f892f629713a9a9418e89c25cb352049cf39c7cfc2525528d046beeec0be5c8",
+      "fuzz/run.py": "e9edf352ddc19088dff6c100a16d501e9d7df1f36200f340f622e72f429acc28"
+    },
+    "checks": [
+      {
+        "name": "seeds",
+        "command": [
+          "cargo",
+          "+nightly",
+          "run",
+          "--locked",
+          "--manifest-path",
+          "fuzz/Cargo.toml",
+          "--target-dir",
+          "$EVIDENCE/final-campaign/seed-build",
+          "--example",
+          "seed_corpus",
+          "--",
+          "$EVIDENCE/final-campaign/corpus"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 2.77,
+        "log_sha256": "3f6e5c3d6ec90e8a71ac995bae5dd4b6b2267685320f59e83808383ce2a05a6b"
+      },
+      {
+        "name": "records",
+        "command": [
+          "cargo",
+          "+nightly",
+          "fuzz",
+          "run",
+          "records",
+          "$EVIDENCE/final-campaign/corpus/records",
+          "--target-dir",
+          "$EVIDENCE/final-campaign/build",
+          "--sanitizer",
+          "address",
+          "--",
+          "-seed=9",
+          "-max_total_time=60",
+          "-max_len=65537",
+          "-timeout=5",
+          "-rss_limit_mb=2048",
+          "-artifact_prefix=$EVIDENCE/final-campaign/artifacts/records/",
+          "-print_final_stats=1"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 66.03,
+        "log_sha256": "73b3f0a387ff79823b2e65ecf72db5c8fef24aea556994f9938b2da1f56c6e02",
+        "executed_units": 10337848,
+        "instrumented": true,
+        "artifacts": {},
+        "lockfile_unchanged": true
+      },
+      {
+        "name": "streams",
+        "command": [
+          "cargo",
+          "+nightly",
+          "fuzz",
+          "run",
+          "streams",
+          "$EVIDENCE/final-campaign/corpus/streams",
+          "--target-dir",
+          "$EVIDENCE/final-campaign/build",
+          "--sanitizer",
+          "address",
+          "--",
+          "-seed=9",
+          "-max_total_time=60",
+          "-max_len=8192",
+          "-timeout=5",
+          "-rss_limit_mb=2048",
+          "-artifact_prefix=$EVIDENCE/final-campaign/artifacts/streams/",
+          "-print_final_stats=1"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 61.37,
+        "log_sha256": "0826e1e4621766b402e72beb0a49e25ec183bd2a0a3a3ce0cdf3f6437de3f474",
+        "executed_units": 510902,
+        "instrumented": true,
+        "artifacts": {},
+        "lockfile_unchanged": true
+      },
+      {
+        "name": "phc",
+        "command": [
+          "cargo",
+          "+nightly",
+          "fuzz",
+          "run",
+          "phc",
+          "$EVIDENCE/final-campaign/corpus/phc",
+          "--target-dir",
+          "$EVIDENCE/final-campaign/build",
+          "--sanitizer",
+          "address",
+          "--",
+          "-seed=9",
+          "-max_total_time=60",
+          "-max_len=256",
+          "-timeout=5",
+          "-rss_limit_mb=2048",
+          "-artifact_prefix=$EVIDENCE/final-campaign/artifacts/phc/",
+          "-print_final_stats=1"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 61.46,
+        "log_sha256": "c877a14465a49493e823097e7a331bd50eee10c4fdb4683ee6f90141eba49785",
+        "executed_units": 12546052,
+        "instrumented": true,
+        "artifacts": {},
+        "lockfile_unchanged": true
+      }
+    ],
+    "scope": "pure record/config/PHC and IPC decoders; AddressSanitizer; no KDF, PAM, socket, account or TPM use",
+    "production_unchanged": true,
+    "production_manifest_sha256": "0c396d743ea147fea6a59a7fc84eb5e9c23d9af15e2f917caf89878f0b49387e",
+    "initial_corpus_sha256": {
+      "phc/canonical": "f1182b73279c508d02fbf95f713cde81c0b3141c7a25cae93da01dc00d1db033",
+      "phc/oversize": "d0621fdd5f0673d6e2b5f823b2791ada512682d2199eca78a5d56ae83f6df4da",
+      "records/config": "1da8f794ef9a6abfc1199cb82b46828431d1bb12b7e0e17915e1d8b93c49a5bf",
+      "records/credential": "4786ab271634b683389a82e1c28e8e854b57634bef2b98d73e0aa7c05e551dfa",
+      "records/throttle": "9976bfc5df847360319964bb008f0743198e37508af4c8410c87c55126d447f3",
+      "streams/coalesced": "544b3de467fab2acb093e82cde5fa0f36fe301c78edf381601e6023e956748aa",
+      "streams/request-0": "fa7b47192991eb1408c0ed1f9b1b130622a89ef4a238b2edb9c02373d85b6e7f",
+      "streams/request-1": "1080f5c6ef01c7f0816e115824a6c1e992b7ccd53ae49b78206aac665b9a9010",
+      "streams/request-2": "b20b53d76296464cfe94751ec5c73f900b208157c82cf8e335d2128ffa5c68c1",
+      "streams/request-3": "c9826fed4d18b8d3fc137749c2bbac6c142364d03e861c0a21434646cc9a11bc",
+      "streams/request-4": "a4d149b71dc84991b0e56b4fb8b85176d1cff09e48bc67751cf506706598c631",
+      "streams/request-5": "27f956fbd066ae8e2d66d122cebd1ba8c4a275c0dd840c3a0a0e5e34a45c5d7b",
+      "streams/request-6": "8ac0bbd27ce4587f83cf0e89cd2a8eaba37283d8bb2f7d76e65b1a389db43751",
+      "streams/request-7": "ba44f14aa5a12b4f6486ce42f0a56671c583bedd2280d258eb7841c372771ebf",
+      "streams/request-8": "aeed166dea366fe3c3cc8aee530b1ce6a3303aab41620831565be9cec9be7761",
+      "streams/response-0": "04a4e4b99ff9ecc97957cf8387a4d2a9f288345de7ecca611afce8f1895f7b49",
+      "streams/response-1": "18e78933276ce4c4273115532cba0a22900367225a57fc5edfef469212f9fc5a",
+      "streams/response-2": "f2d7a7c2c8cb49d94f9755fe49b3c1b20b8610cf3d4bbcf41a217be349843ff1",
+      "streams/response-3": "63080074650cbef2c8af1bf24db2e6b3a8f8fe0d70493fe9d68dc75c980e380c",
+      "streams/response-4": "bbf580f4617a4ae3172aeeb5f999e253e6d948a036f1e620e4868a75607193c3",
+      "streams/response-5": "f90ef3505a3a1cac563d5a9311b8e899ac76cbdff7ac3958ab274579b4e8f9cf",
+      "streams/response-6": "d4ae18a308ae0082de3d8ca62489612621d70c2cc24f0bed1541b85f3911ccad",
+      "streams/response-7": "0119b5bcb1239cc0c31faf423ab53889a6a7f33d3df6b403fab8859aeacb5be5",
+      "streams/response-8": "1023a0ab7280f5580f7aa22fbdbb8dbe95dceaff281ab20c389fa12d30f5072f",
+      "streams/response-9": "e2b794c6e405236ba33556b8f34264c3aa84fda838e579deea97adf865561380"
+    },
+    "final_corpus_manifest_sha256": "bca331a70c7c28de1fab1cc94df34bb25b6b28613dd0a469044737134de198c4",
+    "final_corpus_files": 359,
+    "summary_sha256": "0426bec0874367b5931ec0485f7dcb0048a58de62d00cc0c9908d9b10940c1f1",
+    "total_executed_units": 23394802,
+    "subsequent_change": "Evidence-only preflight rejects untracked production inputs; focused rejection check passed, no target change. Exact executed runner retained.",
+    "untracked_preflight_log_sha256": "be94c5fd4d22cf5fb9e426f36718bb4aed4171ee125e5b094e72e50988246f01",
+    "repository_runner_after_evidence_hardening_sha256": "1485fa5af47eda884e7369f818b8424d558f35cd451770c22fea6e142e2747d0"
+  },
+  "native_instrumentation": {
+    "result": {
+      "schema": 1,
+      "candidate": "dddbce91b84beb7cf763945897bd3448df2a3678",
+      "runner_sha256": "0f2c6342bf9702f2b67941e0d7d116a40f48dc6d720803ff235d87eb82809ced",
+      "date_utc": "2026-10-17T16:46:08Z",
+      "rustflags": "-Zsanitizer=address -Cforce-frame-pointers=yes",
+      "asan_options": "detect_leaks=0:halt_on_error=1:abort_on_error=1:detect_stack_use_after_return=1",
+      "ubsan_options": "halt_on_error=1:print_stacktrace=1",
+      "c_instrumentation": [
+        "-O1",
+        "-g",
+        "-fno-omit-frame-pointer",
+        "-fsanitize=address,undefined",
+        "-fno-sanitize-recover=all"
+      ],
+      "rust_std_rebuilt": true,
+      "native_libraries_instrumented": false,
+      "leak_detection": false,
+      "stages": [
+        {
+          "name": "inventory",
+          "status": "passed",
+          "elapsed_seconds": 0.015,
+          "log": "inventory.log",
+          "log_sha256": "4ee82cd57deadd62d18ef2d8ba57e3498e83eec840814a2188c7bbacba3ce09d"
+        },
+        {
+          "name": "build",
+          "status": "passed",
+          "elapsed_seconds": 0.114,
+          "log": "build.log",
+          "log_sha256": "64d0cbd4b7e4c6329fde55978dd3d261407b55f34c21add0feebf7e0575ee531"
+        },
+        {
+          "name": "abi-smoke",
+          "status": "passed",
+          "elapsed_seconds": 0.147,
+          "log": "abi-smoke.log",
+          "log_sha256": "94bf3fe6f945edb49bcf5fc0bc279d0e4e3a47627f88e4aeef6cdd5024b21cc6"
+        },
+        {
+          "name": "rust-ffi-unit",
+          "status": "passed",
+          "elapsed_seconds": 4.398,
+          "log": "rust-ffi-unit.log",
+          "log_sha256": "570f4db4f536a48f9d0eda77d0f55af707ff7508ade4734326f7b0bc159bb977"
+        },
+        {
+          "name": "adapter",
+          "status": "passed",
+          "elapsed_seconds": 13.699,
+          "log": "adapter.log",
+          "log_sha256": "2584a32d2e6493bc32b134bd2c579a9b79c11d74735cffa56f68fd74b0a58642"
+        },
+        {
+          "name": "password-worker",
+          "status": "passed",
+          "elapsed_seconds": 21.032,
+          "log": "password-worker.log",
+          "log_sha256": "83174ab6d8b3a5a6e893386baebd15e803bbec800514cf73af7f6cc8c8776622"
+        }
+      ],
+      "reused_runners": {
+        "crates/localpin-pam/tests/isolated_pam.py": "d981e4070962f33553ec39f4fc7d792d4d4b8be5f5b938f3d2a504c72ee522ab",
+        "crates/localpin-auth/tests/isolated_pam.py": "d567e043e58ae58463bd19e0c6bdc67f62514b5e24be4930bfda697ff61fce17"
+      },
+      "artifacts": {
+        "liblocalpin_pam.so": "05a0ba4df4c88a27af70759c3c64e7d7ad0588884fefd19b277cd725dd9447c3",
+        "localpin-auth-worker": "fabc88406188285a274f6c5b09921d7388d7975f79ab281473e609976e804876",
+        "librustc-nightly_rt.asan.a": "453521224b21a54ae3c4778a5ef8e68e5d343b3bf22b41cfaa34a76d695ec4ff",
+        "libubsan.so.1.0.0": "7a86e4af33a636ea89cc64295e04bb02fc067d8f2f929d87475d971f852b4f17"
+      }
+    },
+    "result_sha256": "65f832bd62f2e2962121969d41b441dac9e0b150170e3a6e8135f397a7461a41",
+    "postrun_provenance_sha256": "dd682a51af85461c38e06cb463574be62bd53960ca7b4da9b6cf879654c0fe9b",
+    "production_manifest_sha256": "0c396d743ea147fea6a59a7fc84eb5e9c23d9af15e2f917caf89878f0b49387e",
+    "build_commands": [
+      [
+        "cargo",
+        "+nightly",
+        "build",
+        "--locked",
+        "--release",
+        "--target",
+        "x86_64-unknown-linux-gnu",
+        "-Zbuild-std",
+        "-p",
+        "localpin-pam",
+        "-p",
+        "localpin-auth"
+      ],
+      [
+        "cargo",
+        "+nightly",
+        "test",
+        "--locked",
+        "--release",
+        "--target",
+        "x86_64-unknown-linux-gnu",
+        "-Zbuild-std",
+        "-p",
+        "localpin-pam",
+        "-p",
+        "localpin-auth",
+        "--lib",
+        "--no-run",
+        "--message-format=json"
+      ]
+    ],
+    "native_inputs": {
+      "/usr/bin/gcc": {
+        "resolved": "/usr/bin/gcc",
+        "sha256": "153e46b4657620f2baef1b4a70b4b4f275772faa5b0fb9e415697e87ebcb7fea"
+      },
+      "/usr/lib64/libpam.so.0": {
+        "resolved": "/usr/lib64/libpam.so.0.85.1",
+        "sha256": "e8a3e3aa67cc17d4c659892fe63b9695ae202b6f107170f1ef5bb345570a8760"
+      },
+      "/usr/lib64/libc.so.6": {
+        "resolved": "/usr/lib64/libc.so.6",
+        "sha256": "a5c5ad9d59d3c69eda93aa8f82930ba06cc4e893a113e66c85ad6e96243d53c8"
+      },
+      "/usr/lib64/libcrypt.so.2": {
+        "resolved": "/usr/lib64/libcrypt.so.2.0.0",
+        "sha256": "d599ca6de2ff06d1189c47945616fde24cd7816bcafb1c587ca1a51cb0c584e3"
+      },
+      "/usr/lib64/security/pam_env.so": {
+        "resolved": "/usr/lib64/security/pam_env.so",
+        "sha256": "5a54893c723005dc9b33b1f7da87fd30d9f8a0aefc333f7b0fd7585dd7dc848f"
+      },
+      "/usr/lib64/security/pam_faildelay.so": {
+        "resolved": "/usr/lib64/security/pam_faildelay.so",
+        "sha256": "c284c89bcc9163a15e533ef1c335c198da59735f6d86e40c364fa1ccc84954a3"
+      },
+      "/usr/lib64/security/pam_faillock.so": {
+        "resolved": "/usr/lib64/security/pam_faillock.so",
+        "sha256": "babb242bec2f6a080f64c294d8641582c8ffbeda0ffe43eae5b2a3d3c4eb034b"
+      },
+      "/usr/lib64/security/pam_unix.so": {
+        "resolved": "/usr/lib64/security/pam_unix.so",
+        "sha256": "1b14e350075868d3118959858fec47a2cfdbab31506e8482c31d0c550ab00222"
+      },
+      "/usr/lib64/security/pam_nologin.so": {
+        "resolved": "/usr/lib64/security/pam_nologin.so",
+        "sha256": "4a9f97b38509ce458d33d9563525dbde8243f1c472d260905899a7a7d80358fd"
+      },
+      "/usr/lib64/security/pam_permit.so": {
+        "resolved": "/usr/lib64/security/pam_permit.so",
+        "sha256": "da7b14d71cb62f5e56298244bc2832fa86678e5d6a99489ceca82992e4ed9720"
+      },
+      "/usr/lib64/security/pam_deny.so": {
+        "resolved": "/usr/lib64/security/pam_deny.so",
+        "sha256": "547de0e4137b5b138acfcc0613226bf5dad0bc68745f0d66ba3a92415e091dd8"
+      }
+    },
+    "pam_headers": {
+      "security/_pam_compat.h": "675a39fb8e51edceb66de0d6399f4a027a49ce0e47d2d14fad519019efdede0f",
+      "security/_pam_macros.h": "ff75b3cc7490c70298f06bd28b62b381f1b2c2b4cf8356e0db07e96edd02b4fe",
+      "security/_pam_types.h": "44600b6b087dd93b850c418a397c0b837573ceb863de127265fbf74a2a2b6e16",
+      "security/pam_appl.h": "b17abd539c885e10dea23145ebfbd98be60e1bc52cf16166cad00edb18d0d588",
+      "security/pam_client.h": "cd8be6369956fecb0a88dd9eac48e9fc8731d688ab046fd25c89e9b3a1decea8",
+      "security/pam_ext.h": "fd220739c25b9c5a073b2b063978a011ac853335a9475c5c1cd3cbe220d7efcb",
+      "security/pam_filter.h": "e5b7b59530633159c4531186d1a5e9faab54d520b56b5c18e75182b44c930451",
+      "security/pam_misc.h": "742d1527fadf2b80e2239e03152ebe100622142111bd8bbcaad2cc822ad894b5",
+      "security/pam_modules.h": "334b57da3eaff9db049ca35be88154bcc3052498650e3a1818fabe9298bd923b",
+      "security/pam_modutil.h": "adaded9ca971bd97a297d444b3e10c1ae9e675d3c5e47a7db7c04203471ec3e1"
+    },
+    "ubsan_rpm": "libubsan-16.2.1-2.fc44.x86_64",
+    "command": [
+      "python3",
+      "experiments/m9/native_instrumentation.py",
+      "--output-dir",
+      "$EVIDENCE/native-instrumentation-final",
+      "--target-dir",
+      "$EVIDENCE/native-instrumentation",
+      "--pam-include",
+      ".local/m1/pam-devel/usr/include",
+      "--ubsan-library",
+      "$EVIDENCE/sanitizer-runtime/usr/lib64/libubsan.so.1.0.0"
+    ],
+    "rustup_home": "$EVIDENCE/rustup",
+    "result_runner_sha256": "0f2c6342bf9702f2b67941e0d7d116a40f48dc6d720803ff235d87eb82809ced",
+    "repository_runner_after_evidence_hardening_sha256": "f9d18573208b3040e63af85f7d42c01cc4ba95ead88cd41831d190314e26b2b1",
+    "later_changes": "Output/source/provenance hardening and removal of inherited CARGO_ENCODED_RUSTFLAGS, checked by Python compilation, mocked preflight and injected-override assertion. Executed module ASan references independently verified. Completed native suites not rerun for these runner changes; exact earlier helper retained.",
+    "excluded": [
+      "Native Fedora PAM/modules/glibc/libcrypt/Python/TPM instrumentation",
+      "TPM execution",
+      "Rust UBSan coverage",
+      "Leak detection: ptrace mechanism unavailable in tested namespace/non-dumpable environment"
+    ],
+    "earlier_setup_results": [
+      {
+        "directory": "native-instrumentation-results",
+        "result_sha256": "bbfd671b34daf99c1bc4b5d1ffda3474214f312818ea1c56b9ad4e2bb4008fdb",
+        "stages": [
+          {
+            "name": "inventory",
+            "status": "passed",
+            "elapsed_seconds": 0.016,
+            "log": "inventory.log",
+            "log_sha256": "4ee82cd57deadd62d18ef2d8ba57e3498e83eec840814a2188c7bbacba3ce09d"
+          },
+          {
+            "name": "build",
+            "status": "passed",
+            "elapsed_seconds": 0.114,
+            "log": "build.log",
+            "log_sha256": "92434e198f27984c035c376ec77a7cf9e6ebdde782f8ccb1336ae3329b66ddb7"
+          },
+          {
+            "name": "abi-smoke",
+            "status": "failed",
+            "elapsed_seconds": 0.069,
+            "log": "abi-smoke.log",
+            "log_sha256": "8cecc0cd2153d6c53b080daec195954ca4026478fc4908745f963b9dba2e21dc"
+          },
+          {
+            "name": "adapter",
+            "status": "failed",
+            "elapsed_seconds": 0.126,
+            "log": "adapter.log",
+            "log_sha256": "902410621227f97707489455bf547ce0a4ecd58a0b73a6385b89ec2c50648c1d"
+          },
+          {
+            "name": "password-worker",
+            "status": "failed",
+            "elapsed_seconds": 2.431,
+            "log": "password-worker.log",
+            "log_sha256": "3cec0726b88904d6ddedf489e36233b599a8aa0b71ef5957c493d195ba8fddea"
+          }
+        ]
+      },
+      {
+        "directory": "native-instrumentation-results-2",
+        "result_sha256": "583c7ee35df01479859d6a95e6762ffdd45b0babfb4af3254562b8e1d5524a26",
+        "stages": [
+          {
+            "name": "inventory",
+            "status": "passed",
+            "elapsed_seconds": 0.013,
+            "log": "inventory.log",
+            "log_sha256": "4ee82cd57deadd62d18ef2d8ba57e3498e83eec840814a2188c7bbacba3ce09d"
+          },
+          {
+            "name": "build",
+            "status": "passed",
+            "elapsed_seconds": 0.064,
+            "log": "build.log",
+            "log_sha256": "90c8a1a69c0155761cff4bfe0e61bbee007961d2b96729d2127c2e0c291489dd"
+          },
+          {
+            "name": "abi-smoke",
+            "status": "passed",
+            "elapsed_seconds": 0.125,
+            "log": "abi-smoke.log",
+            "log_sha256": "94bf3fe6f945edb49bcf5fc0bc279d0e4e3a47627f88e4aeef6cdd5024b21cc6"
+          },
+          {
+            "name": "adapter",
+            "status": "failed",
+            "elapsed_seconds": 0.216,
+            "log": "adapter.log",
+            "log_sha256": "faa56c770550c991facb8959112270df52d5a55d046659fb58e829fe5ef9bd9c"
+          },
+          {
+            "name": "password-worker",
+            "status": "failed",
+            "elapsed_seconds": 1.975,
+            "log": "password-worker.log",
+            "log_sha256": "6562adf69ebbe66c03635115e90c49ffc187a43788f149ea04f6f7d7a9f7704d"
+          }
+        ]
+      },
+      {
+        "directory": "native-instrumentation-results-3",
+        "result_sha256": "6491d2e08c465bbaa4a45083c1e4bc4a4fa373ef4e3cf48f64cd487201b6c174",
+        "stages": [
+          {
+            "name": "inventory",
+            "status": "passed",
+            "elapsed_seconds": 0.012,
+            "log": "inventory.log",
+            "log_sha256": "4ee82cd57deadd62d18ef2d8ba57e3498e83eec840814a2188c7bbacba3ce09d"
+          },
+          {
+            "name": "build",
+            "status": "passed",
+            "elapsed_seconds": 0.064,
+            "log": "build.log",
+            "log_sha256": "92434e198f27984c035c376ec77a7cf9e6ebdde782f8ccb1336ae3329b66ddb7"
+          },
+          {
+            "name": "abi-smoke",
+            "status": "passed",
+            "elapsed_seconds": 0.113,
+            "log": "abi-smoke.log",
+            "log_sha256": "94bf3fe6f945edb49bcf5fc0bc279d0e4e3a47627f88e4aeef6cdd5024b21cc6"
+          },
+          {
+            "name": "adapter",
+            "status": "failed",
+            "elapsed_seconds": 0.256,
+            "log": "adapter.log",
+            "log_sha256": "399aa02139baca2f165891da7ee009f3b14e26aaad4d2ac4dd2275e58a12f6a8"
+          },
+          {
+            "name": "password-worker",
+            "status": "passed",
+            "elapsed_seconds": 19.048,
+            "log": "password-worker.log",
+            "log_sha256": "83174ab6d8b3a5a6e893386baebd15e803bbec800514cf73af7f6cc8c8776622"
+          }
+        ]
+      },
+      {
+        "directory": "native-instrumentation-results-4",
+        "result_sha256": "a1a4dacb472560d2b55bd4162612a0e130e34286b8ed2ae247bd451fb494dbad",
+        "stages": [
+          {
+            "name": "inventory",
+            "status": "passed",
+            "elapsed_seconds": 0.012,
+            "log": "inventory.log",
+            "log_sha256": "4ee82cd57deadd62d18ef2d8ba57e3498e83eec840814a2188c7bbacba3ce09d"
+          },
+          {
+            "name": "build",
+            "status": "passed",
+            "elapsed_seconds": 0.064,
+            "log": "build.log",
+            "log_sha256": "90c8a1a69c0155761cff4bfe0e61bbee007961d2b96729d2127c2e0c291489dd"
+          },
+          {
+            "name": "abi-smoke",
+            "status": "passed",
+            "elapsed_seconds": 0.116,
+            "log": "abi-smoke.log",
+            "log_sha256": "94bf3fe6f945edb49bcf5fc0bc279d0e4e3a47627f88e4aeef6cdd5024b21cc6"
+          },
+          {
+            "name": "adapter",
+            "status": "failed",
+            "elapsed_seconds": 0.258,
+            "log": "adapter.log",
+            "log_sha256": "11b0225f411f2e2e8cb5757c02e2bae82da4fd2e1f078c614c21b2babb7ddcc4"
+          },
+          {
+            "name": "password-worker",
+            "status": "passed",
+            "elapsed_seconds": 22.541,
+            "log": "password-worker.log",
+            "log_sha256": "83174ab6d8b3a5a6e893386baebd15e803bbec800514cf73af7f6cc8c8776622"
+          }
+        ]
+      },
+      {
+        "directory": "native-instrumentation-results-5",
+        "result_sha256": "312e5aa1f5ac2c73fcb9c857f0fc7eb3d123fe9c2e783653f24415a5bf52857b",
+        "stages": [
+          {
+            "name": "inventory",
+            "status": "passed",
+            "elapsed_seconds": 0.013,
+            "log": "inventory.log",
+            "log_sha256": "4ee82cd57deadd62d18ef2d8ba57e3498e83eec840814a2188c7bbacba3ce09d"
+          },
+          {
+            "name": "build",
+            "status": "passed",
+            "elapsed_seconds": 0.064,
+            "log": "build.log",
+            "log_sha256": "92434e198f27984c035c376ec77a7cf9e6ebdde782f8ccb1336ae3329b66ddb7"
+          },
+          {
+            "name": "abi-smoke",
+            "status": "passed",
+            "elapsed_seconds": 0.114,
+            "log": "abi-smoke.log",
+            "log_sha256": "94bf3fe6f945edb49bcf5fc0bc279d0e4e3a47627f88e4aeef6cdd5024b21cc6"
+          },
+          {
+            "name": "adapter",
+            "status": "failed",
+            "elapsed_seconds": 0.255,
+            "log": "adapter.log",
+            "log_sha256": "3726f37a4c0dd3dd25be4e29b71a3a0302988e3c13bdd04fab7ec808f87fa1ec"
+          },
+          {
+            "name": "password-worker",
+            "status": "passed",
+            "elapsed_seconds": 20.006,
+            "log": "password-worker.log",
+            "log_sha256": "83174ab6d8b3a5a6e893386baebd15e803bbec800514cf73af7f6cc8c8776622"
+          }
+        ]
+      },
+      {
+        "directory": "native-instrumentation-results-6",
+        "result_sha256": "c3773c697aea717bb1c3112f7da6017f4aa3bea05d516343cbfb556689d830d4",
+        "stages": [
+          {
+            "name": "inventory",
+            "status": "passed",
+            "elapsed_seconds": 0.013,
+            "log": "inventory.log",
+            "log_sha256": "4ee82cd57deadd62d18ef2d8ba57e3498e83eec840814a2188c7bbacba3ce09d"
+          },
+          {
+            "name": "build",
+            "status": "passed",
+            "elapsed_seconds": 0.064,
+            "log": "build.log",
+            "log_sha256": "90c8a1a69c0155761cff4bfe0e61bbee007961d2b96729d2127c2e0c291489dd"
+          },
+          {
+            "name": "abi-smoke",
+            "status": "passed",
+            "elapsed_seconds": 0.117,
+            "log": "abi-smoke.log",
+            "log_sha256": "94bf3fe6f945edb49bcf5fc0bc279d0e4e3a47627f88e4aeef6cdd5024b21cc6"
+          },
+          {
+            "name": "adapter",
+            "status": "passed",
+            "elapsed_seconds": 12.626,
+            "log": "adapter.log",
+            "log_sha256": "2584a32d2e6493bc32b134bd2c579a9b79c11d74735cffa56f68fd74b0a58642"
+          },
+          {
+            "name": "password-worker",
+            "status": "passed",
+            "elapsed_seconds": 19.303,
+            "log": "password-worker.log",
+            "log_sha256": "83174ab6d8b3a5a6e893386baebd15e803bbec800514cf73af7f6cc8c8776622"
+          }
+        ]
+      }
+    ],
+    "earlier_failure_disposition": "Missing UBSan runtime, sandbox subordinate mappings/baseline refusal, private runtime mount/access issues; preserved failed outcomes. Complete final native suites passed after fixture setup repair. No host package install.",
+    "compiler_override_preflight": {
+      "encoded_override_removed": true,
+      "explicit_asan_flags": true,
+      "executed_module_asan_report_references": 12,
+      "module_sha256": "05a0ba4df4c88a27af70759c3c64e7d7ad0588884fefd19b277cd725dd9447c3"
+    }
+  },
+  "benchmark": {
+    "backend": "software Argon2id component KDF only",
+    "samples": 100,
+    "memory_kib": 65536,
+    "passes": 3,
+    "lanes": 1,
+    "minimum_ms": 86.29,
+    "median_ms": 89.09,
+    "p95_ms": 91.77,
+    "maximum_ms": 93.69,
+    "limits": "Other tests active. Not end-to-end KDE/physical TPM latency. Below spec typical 100-500 ms target on tested CPU; no policy changes made."
+  },
+  "development_review": {
+    "scope": [
+      "PAM/FFI and account authority/install/update/recovery",
+      "TPM/software crypto, broker/worker/live-peer and durable storage/throttle/revocation"
+    ],
+    "review_note_sha256": {
+      "review-pam.md": "d4afeefe49bad0260f152ce15a901ef26c0c41e7b46c837c025cf773735ffb4a",
+      "review-tpm-broker.md": "1fc79e36430ef3cf225804ffe1db03dc2d14299e70349362dc59641b1b888760"
+    },
+    "no_confirmed_security_critical_finding_in_reviewed_scope": true,
+    "independent_review_gate_satisfied": false,
+    "open_requirement_gaps": [
+      "Best-effort secret-memory locking and honest limits (specification section 10)",
+      "Structured enrollment/backend/cooldown events and configurable success logging (section 16)",
+      "Configurable root TPM DA reserve; production currently conservatively fixed at two (section 9)"
+    ]
+  },
+  "unavailable_or_not_performed": [
+    "Independent human/specialist security review",
+    "Fresh guarded installed-candidate VM: original is shut off, test clone/access removed",
+    "Enforcing SELinux installation/confinement validation for this candidate",
+    "Complete actual KDE password fallback matrix, AccountsService GUI/DBus, old credential migration, candidate RPM install/update/remove/console recovery",
+    "Noncritical physical keyboards/dock/display/suspend/session/fingerprint/TPM acceptance and end-to-end latency",
+    "Remaining PAM/native-account/TPM/config parser fuzz targets and broader native instrumentation",
+    "Exact signed candidate installed release approval"
+  ],
+  "publication_limits": {
+    "host_authentication_mutated": false,
+    "physical_tpm_used": false,
+    "production_gate_closed": false,
+    "m9_complete": false,
+    "raw_authentication_material_exported": false
+  }
+}
