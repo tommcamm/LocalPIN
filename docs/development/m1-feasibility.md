@@ -108,6 +108,18 @@ peer/process races, grant binding and the full integration/fault matrix retain
 their M2–M8 implementation/release gates. The SHA512-only administrative-domain
 eligibility fixture is evidence for a direction, not a deployable worker.
 
+## Next work: M2 foundations
+
+Sequencing reviewed on 2026-10-17: the completed feasibility evidence supports
+starting pure M2 policy models, reservation/generation/clock state machines,
+resource bounds and bounded protocol tests using simulated dependencies. M1
+remains open and platform-facing contracts remain provisional. M2 must resolve
+the fifth-attempt boundary, reboot throttling, revocation fences and account
+lifecycle before the relevant contracts and persistent records are stabilized.
+UID/name/home equality does not solve account reuse. The
+[roadmap](../implementation-plan.md) records this overlap; no further VM input
+is needed from the maintainer for that initial M2 work.
+
 ## Recovery completed
 
 The [final cleanup record](../../experiments/m1/vm/results/2026-10-16-cleanup.json)

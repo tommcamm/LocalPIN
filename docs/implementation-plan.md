@@ -93,6 +93,18 @@ production integration matrix remains explicitly open. Follow the
 
 Implement `localpin-core` and `localpin-protocol`, with narrow interfaces for storage, clocks, randomness, session eligibility, and credential verification.
 
+Sequencing review, 2026-10-17: M2's pure policy/model and bounded-parser work may
+begin while M1's same-UID desktop and second-seat tests remain open. Use simulated
+eligibility, storage and backend inputs; keep platform-facing contracts provisional.
+This overlap does not close M1 or authorize production authentication/activation.
+Resolve fifth-attempt behavior, conservative reboot throttling, revocation fences
+and the UID-reuse lifecycle during M2. Do not stabilize a persisted account-identity
+schema around UID/name/home equality. M3/M4 work may follow once its relevant M2
+contracts are tested and settled; unresolved identity requirements still block
+permanent credential/account records. No VM interaction is needed for this initial
+M2 work. The current Rust workspace remains the foundation; M2 implementation is
+not yet delivered.
+
 - Define bounded UID/account identity, backend selection, credential generations, PIN format, typed outcomes, enrollment transactions, and versioned records.
 - Model the attempt lifecycle: eligible -> durably reserved -> backend outcome -> durably completed -> response. Represent unavailable, mismatch, cooldown, and success separately.
 - Specify five submitted PIN-format guesses per rolling minute and a five-minute cooldown, including exact boundary behavior, reservation recovery, success reset, reboot handling, and time anomalies.
@@ -248,7 +260,9 @@ from root-declared session metadata and synthetic controls. The remaining actual
 same-UID two-real-desktop/second-seat and complete integration matrix stays
 visible. The everyday authentication setup
 remains separate throughout development. Do not mark M1 complete or present M2
-contracts as settled while those platform dependencies remain unproved.
+contracts as settled while those platform dependencies remain unproved. The
+bounded M2 foundation work described above can proceed in parallel without
+waiving those gates.
 
 No calendar estimate is committed before the feasibility work. Subsequent estimates should use measured test infrastructure effort and availability of independent review/hardware, with review and recovery work included in the schedule.
 
