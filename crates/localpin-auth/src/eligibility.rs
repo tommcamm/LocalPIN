@@ -2,8 +2,10 @@
 //!
 //! Lifecycle ownership/serialization is a separate authority. This worker never
 //! provisions accounts, repairs state or verifies a password. Missing tallies
-//! refuse service, including after reboot; only explicit privileged provisioning
-//! may establish a disabled baseline. No account material leaves the child.
+//! refuse service; only explicit privileged provisioning may establish a disabled
+//! baseline. The reviewed persistent policy retains native accounting across
+//! ordinary reboot without recreating a missing tally. No account material
+//! leaves the child.
 
 use crate::{PasswordSupervisor, ipc, pam};
 use localpin_core::eligibility::EligibilityError;
@@ -24,6 +26,30 @@ const SERVICE: &str = "/etc/pam.d/localpin-eligibility";
 const POLICY: &str = "auth required pam_env.so\nauth required pam_faildelay.so delay=2000000\nauth requisite pam_faillock.so preauth silent\naccount required pam_unix.so\naccount required pam_nologin.so\n";
 const STOCK_KDE_DIGEST: &str = "7d91b3ad73a998e8b10f9edccd74ba04179a778c4a5e61d9176872f43c7bbac3";
 const LOCALPIN_KDE_POLICY: &[u8] = include_bytes!("../policy/kde-localpin.review-required");
+const VOLATILE_FAILLOCK_DIGEST: &str =
+    "662303cf89938c12d95a7fc59d92cbe76c398312527fa908894fb319809093b3";
+const PERSISTENT_FAILLOCK_DIGEST: &str =
+    "63ea06f1db780b94e59f1cdfa4d50981309d6b40c5f7bdb78853ea6038730249";
+
+/// Exact reviewed native configuration required by installed M8 activation.
+pub const PERSISTENT_FAILLOCK_CONFIG: &[u8] = b"dir = /var/lib/faillock\n";
+/// The sole persistent native password-accounting directory supported by M8.
+pub const PERSISTENT_FAILLOCK_DIRECTORY: &str = "/var/lib/faillock";
+
+/// Select one fixed accounting directory from an exact reviewed config digest.
+///
+/// The legacy volatile variant remains for earlier component evidence. Unknown
+/// configurations never select a path, and missing persistent state never falls
+/// back to volatile state. This function does not read or change any filesystem.
+pub fn reviewed_faillock_directory(configuration: &[u8]) -> Option<&'static str> {
+    if digest_is(configuration, PERSISTENT_FAILLOCK_DIGEST) {
+        Some(PERSISTENT_FAILLOCK_DIRECTORY)
+    } else if digest_is(configuration, VOLATILE_FAILLOCK_DIGEST) {
+        Some("/run/faillock")
+    } else {
+        None
+    }
+}
 
 /// Shared bounded supervisor for password-free account-policy children.
 ///
@@ -104,6 +130,7 @@ struct Snapshot {
     uid: u32,
     mode: Option<u32>,
     bound: usize,
+    native_tally_access: bool,
 }
 
 impl Snapshot {
@@ -113,9 +140,28 @@ impl Snapshot {
         mode: Option<u32>,
         bound: usize,
     ) -> Result<Self, EligibilityError> {
+        Self::read_access(path, uid, mode, bound, false)
+    }
+
+    fn read_tally(path: impl AsRef<Path>, uid: u32) -> Result<Self, EligibilityError> {
+        // Linux-PAM 1.7.2 opens an existing tally O_RDWR even for preauth,
+        // and check_tally treats EACCES/ENOENT as success. Prove that exact
+        // access before invoking PAM; a readable but unwritable tally cannot
+        // establish native lockout eligibility. Never create or write it.
+        Self::read_access(path, uid, Some(0o660), MAX_FILE, true)
+    }
+
+    fn read_access(
+        path: impl AsRef<Path>,
+        uid: u32,
+        mode: Option<u32>,
+        bound: usize,
+        native_tally_access: bool,
+    ) -> Result<Self, EligibilityError> {
         let path = path.as_ref();
         let file = OpenOptions::new()
             .read(true)
+            .write(native_tally_access)
             .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK)
             .open(path)
             .map_err(unavailable)?;
@@ -146,11 +192,18 @@ impl Snapshot {
             uid,
             mode,
             bound,
+            native_tally_access,
         })
     }
 
     fn unchanged(&self) -> Result<(), EligibilityError> {
-        let after = Self::read(&self.path, self.uid, self.mode, self.bound)?;
+        let after = Self::read_access(
+            &self.path,
+            self.uid,
+            self.mode,
+            self.bound,
+            self.native_tally_access,
+        )?;
         if !same_metadata(&self.metadata, &after.metadata) || *self.bytes != *after.bytes {
             return Err(EligibilityError::Unavailable);
         }
@@ -233,7 +286,7 @@ fn nss_policy(text: &str) -> bool {
     })
 }
 
-fn policy() -> Result<Vec<Snapshot>, EligibilityError> {
+fn policy() -> Result<(Vec<Snapshot>, &'static str), EligibilityError> {
     for path in [
         "/",
         "/etc",
@@ -246,16 +299,10 @@ fn policy() -> Result<Vec<Snapshot>, EligibilityError> {
     ] {
         directory(Path::new(path))?;
     }
-    let expected = [
-        (
-            "/etc/pam.d/postlogin",
-            "c1ecd4d1a5b5de7d26e3336cd33551d1d65e13751b5f46405183472895838a9d",
-        ),
-        (
-            "/etc/security/faillock.conf",
-            "662303cf89938c12d95a7fc59d92cbe76c398312527fa908894fb319809093b3",
-        ),
-    ];
+    let expected = [(
+        "/etc/pam.d/postlogin",
+        "c1ecd4d1a5b5de7d26e3336cd33551d1d65e13751b5f46405183472895838a9d",
+    )];
     let mut snapshots = Vec::new();
     // Exact native inputs measured in the enforcing Fedora 44 reference guest.
     // An upgrade makes the policy unavailable until explicitly reviewed again.
@@ -285,6 +332,10 @@ fn policy() -> Result<Vec<Snapshot>, EligibilityError> {
             "/usr/lib64/security/pam_nologin.so",
             "4a9f97b38509ce458d33d9563525dbde8243f1c472d260905899a7a7d80358fd",
         ),
+        (
+            "/usr/bin/unix_chkpwd",
+            "0cb285f3c1819e3ca92545b448fed4d0b6a41ce81899ad11d9512d80b18b7e79",
+        ),
     ] {
         let snapshot = Snapshot::read(path, 0, None, 4 * MAX_DATABASE)?;
         if !digest_is(&snapshot.bytes, digest) {
@@ -309,6 +360,10 @@ fn policy() -> Result<Vec<Snapshot>, EligibilityError> {
         }
         snapshots.push(snapshot);
     }
+    let faillock = Snapshot::read("/etc/security/faillock.conf", 0, None, MAX_FILE)?;
+    let tally_directory =
+        reviewed_faillock_directory(&faillock.bytes).ok_or(EligibilityError::Unavailable)?;
+    snapshots.push(faillock);
     let password = Snapshot::read(policy_path("/etc/pam.d/password-auth")?, 0, None, MAX_FILE)?;
     if ![
         "2e53f704372b6c7fb69cdc4dfd6c27456d642c83feff8b1588fa1f9cb1126cd0",
@@ -340,7 +395,7 @@ fn policy() -> Result<Vec<Snapshot>, EligibilityError> {
     for path in ["/etc/security/pam_env.conf", "/etc/environment"] {
         snapshots.push(Snapshot::read(path, 0, None, MAX_FILE)?);
     }
-    Ok(snapshots)
+    Ok((snapshots, tally_directory))
 }
 
 fn valid_name(name: &str) -> bool {
@@ -511,10 +566,18 @@ fn no_nologin() -> Result<(), EligibilityError> {
     Ok(())
 }
 
-fn tally(uid: u32, name: &str, now: u64) -> Result<Snapshot, EligibilityError> {
-    directory(Path::new("/run"))?;
-    directory(Path::new("/run/faillock"))?;
-    let tally = Snapshot::read(format!("/run/faillock/{name}"), uid, Some(0o660), MAX_FILE)?;
+fn tally(
+    uid: u32,
+    name: &str,
+    now: u64,
+    tally_directory: &'static str,
+) -> Result<Snapshot, EligibilityError> {
+    // Check every fixed ancestor; a persistent policy never probes the legacy
+    // volatile directory if its own directory or tally is missing.
+    for ancestor in Path::new(tally_directory).ancestors() {
+        directory(ancestor)?;
+    }
+    let tally = Snapshot::read_tally(format!("{tally_directory}/{name}"), uid)?;
     if tally.bytes.len() % 64 != 0 || tally.bytes.len() >= MAX_FILE {
         return Err(EligibilityError::Unavailable);
     }
@@ -537,7 +600,7 @@ fn check(uid: u32) -> Result<(), EligibilityError> {
     {
         return Err(EligibilityError::Unavailable);
     }
-    let policies = policy()?;
+    let (policies, tally_directory) = policy()?;
     let passwd = Snapshot::read("/etc/passwd", 0, None, MAX_DATABASE)?;
     let shadow = Snapshot::read("/etc/shadow", 0, None, MAX_DATABASE)?;
     let now = std::time::SystemTime::now()
@@ -549,7 +612,12 @@ fn check(uid: u32) -> Result<(), EligibilityError> {
         return Err(EligibilityError::Unavailable);
     }
     no_nologin()?;
-    let tally = tally(uid, user.to_str().map_err(unavailable)?, now)?;
+    let tally = tally(
+        uid,
+        user.to_str().map_err(unavailable)?,
+        now,
+        tally_directory,
+    )?;
     let result = pam::password_free(&user);
     // Recheck every input even after a PAM denial. Never interpret an inability
     // to prove unchanged state as a trustworthy account-policy result.
@@ -566,6 +634,7 @@ fn check(uid: u32) -> Result<(), EligibilityError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 
     const HASH: &str = "$6$fixture$......................................................................................";
 
@@ -732,6 +801,153 @@ if mode == 'duplicate': os.write(1,f)
             canonical(&format!("auth sufficient pam_permit.so\n{POLICY}")),
             POLICY
         );
+    }
+
+    #[test]
+    fn faillock_config_selects_only_exact_reviewed_directories() {
+        let stock = include_bytes!("../tests/fixtures/faillock-stock.conf");
+        assert!(digest_is(stock, VOLATILE_FAILLOCK_DIGEST));
+        assert_eq!(reviewed_faillock_directory(stock), Some("/run/faillock"));
+        assert!(digest_is(
+            PERSISTENT_FAILLOCK_CONFIG,
+            PERSISTENT_FAILLOCK_DIGEST
+        ));
+        assert_eq!(
+            reviewed_faillock_directory(PERSISTENT_FAILLOCK_CONFIG),
+            Some(PERSISTENT_FAILLOCK_DIRECTORY)
+        );
+        // Equivalent-looking syntax, extra policy and caller-selected paths
+        // are not alternate authorities. The byte-exact immutable input owns
+        // the selection, rather than a generic configuration parser.
+        for changed in [
+            b"dir=/var/lib/faillock\n".as_slice(),
+            b"dir = /var/lib/faillock",
+            b"dir = /var/lib/faillock\r\n",
+            b"dir = /var/lib/faillock\ndeny = 0\n",
+            b"dir = /run/faillock\n",
+            b"dir = /tmp/faillock\n",
+            b"# dir = /var/lib/faillock\n",
+            b"",
+        ] {
+            assert_eq!(reviewed_faillock_directory(changed), None);
+        }
+    }
+
+    #[test]
+    #[ignore = "requires unprivileged user/mount namespaces and bubblewrap; no host authentication"]
+    fn native_tally_requires_write_access_without_mutating_canonical_state() {
+        const CHILD: &str = "LOCALPIN_TALLY_ACCESS_CHILD";
+        const TEST: &str = "eligibility::tests::native_tally_requires_write_access_without_mutating_canonical_state";
+        if let Some(mode) = std::env::var_os(CHILD) {
+            assert_eq!(rustix::process::getuid().as_raw(), 0);
+            let path = Path::new("/fixture/tally");
+            // Both mounts expose the same canonical root:root 0660 record.
+            // An ordinary read succeeds on the read-only mount. The preflight
+            // must reject lost write access independently of PAM's mapping.
+            let ordinary = Snapshot::read(path, 0, Some(0o660), MAX_FILE).unwrap();
+            ordinary.unchanged().unwrap();
+            let before = std::fs::read(path).unwrap();
+            let metadata = std::fs::metadata(path).unwrap();
+            match mode.to_str().unwrap() {
+                "read-only" => {
+                    assert!(matches!(
+                        Snapshot::read_tally(path, 0),
+                        Err(EligibilityError::Unavailable)
+                    ));
+                    // Exercise the after-PAM reopen separately: unchanged
+                    // bytes are insufficient when native access is denied.
+                    let mut saved = ordinary;
+                    saved.native_tally_access = true;
+                    assert_eq!(saved.unchanged(), Err(EligibilityError::Unavailable));
+                }
+                "writable" => {
+                    let native = Snapshot::read_tally(path, 0).unwrap();
+                    assert!(native.native_tally_access);
+                    native.unchanged().unwrap();
+                }
+                _ => panic!("unsupported private tally test mode"),
+            }
+            assert_eq!(std::fs::read(path).unwrap(), before);
+            assert!(same_metadata(&metadata, &std::fs::metadata(path).unwrap()));
+            assert!(matches!(
+                Snapshot::read_tally("/fixture/missing", 0),
+                Err(EligibilityError::Unavailable)
+            ));
+            assert!(!Path::new("/fixture/missing").exists());
+            return;
+        }
+        assert_ne!(rustix::process::getuid().as_raw(), 0, "refusing host root");
+        let mut random = [0; 8];
+        getrandom::fill(&mut random).unwrap();
+        let fixture = std::env::temp_dir().join(format!(
+            "localpin-tally-access-{}-{}",
+            std::process::id(),
+            u64::from_be_bytes(random)
+        ));
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(&fixture)
+            .unwrap();
+        let path = fixture.join("tally");
+        std::fs::write(&path, [0; 64]).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o660)).unwrap();
+        for (mode, binding) in [("read-only", "--ro-bind"), ("writable", "--bind")] {
+            let output = std::process::Command::new("/usr/bin/unshare")
+                .args([
+                    "--user",
+                    "--map-root-user",
+                    "--net",
+                    "--",
+                    "/usr/bin/bwrap",
+                    "--unshare-all",
+                    "--share-net",
+                    "--die-with-parent",
+                    "--clearenv",
+                    "--uid",
+                    "0",
+                    "--gid",
+                    "0",
+                    "--ro-bind",
+                    "/usr",
+                    "/usr",
+                    "--symlink",
+                    "usr/lib64",
+                    "/lib64",
+                    "--symlink",
+                    "usr/lib",
+                    "/lib",
+                    "--proc",
+                    "/proc",
+                    "--dev",
+                    "/dev",
+                    "--ro-bind",
+                ])
+                .arg(std::env::current_exe().unwrap())
+                .args(["/test", binding])
+                .arg(&fixture)
+                .args([
+                    "/fixture",
+                    "--setenv",
+                    CHILD,
+                    mode,
+                    "--",
+                    "/test",
+                    "--ignored",
+                    "--exact",
+                    TEST,
+                    "--nocapture",
+                ])
+                .env_clear()
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{mode}: {}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        std::fs::remove_dir_all(fixture).unwrap();
     }
 
     #[test]

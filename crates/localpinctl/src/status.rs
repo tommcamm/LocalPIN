@@ -1,5 +1,6 @@
 //! Stable nonsecret presentation separate from the binary wire format.
 
+use localpin_protocol::integration::Gate;
 use localpin_protocol::{Availability, Backend, BackendPreference, Integration, Reason, Status};
 
 /// JSON status schema version, independent of the IPC version.
@@ -7,6 +8,10 @@ pub const STATUS_SCHEMA_VERSION: u32 = 1;
 
 /// Render status without serializing any secret-bearing protocol object.
 pub fn json(status: Option<Status>, doctor: bool) -> String {
+    json_with_gate(status, doctor, localpin_protocol::integration::gate())
+}
+
+fn json_with_gate(status: Option<Status>, doctor: bool, gate: Gate) -> String {
     let command = if doctor { "doctor" } else { "status" };
     let enrollment_unknown = status.is_none_or(enrollment_uninspected);
     let integration_unknown = status.is_none_or(|s| s.availability == Availability::Unavailable);
@@ -24,7 +29,7 @@ pub fn json(status: Option<Status>, doctor: bool) -> String {
                 if integration_unknown {
                     "unknown"
                 } else {
-                    integrated(s.integration)
+                    integrated(s.integration, gate)
                 },
                 s.tpm_detected,
                 s.tpm_usable,
@@ -52,7 +57,7 @@ pub fn json(status: Option<Status>, doctor: bool) -> String {
         "null".to_owned()
     } else {
         status
-            .is_some_and(|s| s.integration == Integration::Active)
+            .is_some_and(|s| s.integration == Integration::Active && gate == Gate::Active)
             .to_string()
     };
     let cooldown = if enrollment_unknown {
@@ -66,30 +71,41 @@ pub fn json(status: Option<Status>, doctor: bool) -> String {
     } else {
         "not-established"
     };
+    let tested = tested(status, gate);
     // All interpolated strings are closed enum mappings, not external input.
     format!(
-        "{{\"schema_version\":{STATUS_SCHEMA_VERSION},\"command\":\"{command}\",\"installed\":\"client-present\",\"broker_available\":{},\"enrolled\":{enrolled_state},\"tested\":\"not-recorded\",\"active\":{active},\"configured_backend\":\"{configured}\",\"enrolled_backend\":{enrolled_backend},\"availability\":\"{availability}\",\"cooldown_ms\":{cooldown},\"integration\":\"{integration}\",\"tpm_detected\":{detected},\"tpm_usable\":{usable},\"tpm_usability\":\"{usability}\",\"reason\":\"{reason}\"}}",
+        "{{\"schema_version\":{STATUS_SCHEMA_VERSION},\"command\":\"{command}\",\"installed\":\"client-present\",\"broker_available\":{},\"enrolled\":{enrolled_state},\"tested\":\"{tested}\",\"active\":{active},\"configured_backend\":\"{configured}\",\"enrolled_backend\":{enrolled_backend},\"availability\":\"{availability}\",\"cooldown_ms\":{cooldown},\"integration\":\"{integration}\",\"tpm_detected\":{detected},\"tpm_usable\":{usable},\"tpm_usability\":\"{usability}\",\"reason\":\"{reason}\"}}",
         status.is_some()
     )
 }
 
 /// Human-readable actionable status; reaching the broker is no integration test.
 pub fn text(status: Option<Status>, doctor: bool) -> String {
+    text_with_gate(status, doctor, localpin_protocol::integration::gate())
+}
+
+fn text_with_gate(status: Option<Status>, doctor: bool, gate: Gate) -> String {
     let Some(status) = status else {
         return "Installed: CLI present\nBroker: unavailable; ask the administrator to check the LocalPIN service\nEnrolled: unknown\nTested: not recorded\nActive: unknown; verify the existing password recovery route".to_owned();
     };
     let enrollment_unknown = enrollment_uninspected(status);
     let integration_unknown = status.availability == Availability::Unavailable;
+    let tested = tested(Some(status), gate);
     let mut output = format!(
-        "Installed: CLI present; broker reachable\nEnrolled: {}\nTested: not recorded\nActive: {}\nConfigured backend: {}\nAvailability: {}\nCooldown: {}\nIntegration: {}\nTPM detected: {}; usable: {}\nReason: {}",
+        "Installed: CLI present; broker reachable\nEnrolled: {}\nTested: {}\nActive: {}\nConfigured backend: {}\nAvailability: {}\nCooldown: {}\nIntegration: {}\nTPM detected: {}; usable: {}\nReason: {}",
         if enrollment_unknown {
             "unknown"
         } else {
             status.enrolled.map(backend).unwrap_or("none")
         },
+        if tested == "operator-attested" {
+            "administrator attested"
+        } else {
+            "not recorded"
+        },
         if integration_unknown {
             "unknown"
-        } else if status.integration == Integration::Active {
+        } else if status.integration == Integration::Active && gate == Gate::Active {
             "yes"
         } else {
             "no"
@@ -108,7 +124,7 @@ pub fn text(status: Option<Status>, doctor: bool) -> String {
         if integration_unknown {
             "unknown"
         } else {
-            integrated(status.integration)
+            integrated(status.integration, gate)
         },
         status.tpm_detected,
         if status.tpm_usable {
@@ -119,7 +135,11 @@ pub fn text(status: Option<Status>, doctor: bool) -> String {
         failure(status.reason)
     );
     if doctor {
-        output.push_str("\nPassword recovery and desktop unlock tests: not recorded; verify both before activation");
+        output.push_str(if tested == "operator-attested" {
+            "\nPassword recovery and desktop unlock tests: administrator attested at activation; this status check does not repeat those tests."
+        } else {
+            "\nPassword recovery and desktop unlock tests: not recorded; verify both before activation"
+        });
         output.push_str(match status.reason {
             Reason::None => "\nThe broker reports no current availability failure.",
             Reason::Account => "\nAccount policy denies PIN use. Ask the administrator to inspect locks, expiry, required password changes and applicable restrictions; use the existing password recovery route.",
@@ -137,6 +157,27 @@ pub fn text(status: Option<Status>, doctor: bool) -> String {
         });
     }
     output
+}
+
+/// Inspect only the sanitized, fixed root gate; no broker or enrollment needed.
+pub fn integration_text(gate: Gate) -> String {
+    match gate {
+        Gate::Disabled => "Desktop integration gate: disabled or unavailable\nActive: no\nTests: not established by the readable activation state\nAdministrator details: sudo /usr/libexec/localpin/localpin-integration status",
+        Gate::Trial => "Desktop integration gate: trial\nActive: no; a bounded current-boot test window permits PIN testing\nTests: not recorded as complete; final activation is separate\nAdministrator details: sudo /usr/libexec/localpin/localpin-integration status",
+        Gate::Active => "Desktop integration gate: active\nActive: yes\nTests: administrator attested at activation; this status check does not repeat them\nAdministrator details: sudo /usr/libexec/localpin/localpin-integration status",
+    }.to_owned()
+}
+
+fn tested(status: Option<Status>, gate: Gate) -> &'static str {
+    if gate == Gate::Active
+        && status.is_some_and(|s| {
+            s.availability != Availability::Unavailable && s.integration == Integration::Active
+        })
+    {
+        "operator-attested"
+    } else {
+        "not-recorded"
+    }
 }
 
 fn enrollment_uninspected(status: Status) -> bool {
@@ -166,10 +207,14 @@ fn available(value: Availability) -> &'static str {
         Availability::Unavailable => "unavailable",
     }
 }
-fn integrated(value: Integration) -> &'static str {
+fn integrated(value: Integration, gate: Gate) -> &'static str {
     match value {
         Integration::Inactive => "inactive",
-        Integration::Active => "active",
+        Integration::Active => match gate {
+            Gate::Active => "active",
+            Gate::Trial => "trial",
+            Gate::Disabled => "needs-attention",
+        },
         Integration::NeedsAttention => "needs-attention",
     }
 }
@@ -192,6 +237,14 @@ fn failure(value: Reason) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn json(status: Option<Status>, doctor: bool) -> String {
+        json_with_gate(status, doctor, Gate::Disabled)
+    }
+
+    fn text(status: Option<Status>, doctor: bool) -> String {
+        text_with_gate(status, doctor, Gate::Disabled)
+    }
     fn enrolled() -> Status {
         Status {
             configured: BackendPreference::Tpm,
@@ -217,6 +270,30 @@ mod tests {
         ] {
             assert!(report.contains(field), "{field}");
         }
+    }
+    #[test]
+    fn trial_is_distinct_from_administrator_attested_activation() {
+        let mut status = enrolled();
+        status.integration = Integration::Active;
+        let trial = json_with_gate(Some(status), false, Gate::Trial);
+        assert!(trial.contains("\"integration\":\"trial\""));
+        assert!(trial.contains("\"active\":false"));
+        assert!(trial.contains("\"tested\":\"not-recorded\""));
+        let active = json_with_gate(Some(status), false, Gate::Active);
+        assert!(active.contains("\"integration\":\"active\""));
+        assert!(active.contains("\"active\":true"));
+        assert!(active.contains("\"tested\":\"operator-attested\""));
+        let active_text = text_with_gate(Some(status), true, Gate::Active);
+        assert!(active_text.contains("Tested: administrator attested"));
+        assert!(active_text.contains("does not repeat those tests"));
+        assert!(
+            !text_with_gate(Some(status), true, Gate::Trial)
+                .contains("Tested: administrator attested")
+        );
+        let revoked = json_with_gate(Some(status), false, Gate::Disabled);
+        assert!(revoked.contains("\"active\":false"));
+        assert!(revoked.contains("\"tested\":\"not-recorded\""));
+        assert!(!integration_text(Gate::Trial).contains("Tests: administrator attested"));
     }
     #[test]
     fn unavailable_status_does_not_claim_non_enrollment_or_inactivity() {

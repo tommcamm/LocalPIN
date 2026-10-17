@@ -1,0 +1,196 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Purpose-written Fedora 44 policy. Compile with checkmodule, then link against
+# the guest's installed targeted policy. This is not generated audit2allow output.
+module localpin 0.1.0;
+
+require {
+    attribute domain;
+    attribute userdomain;
+    attribute file_type;
+    attribute exec_type;
+    attribute can_read_shadow_passwords;
+    role system_r;
+    type init_t, systemd_tmpfiles_t, root_t, usr_t, bin_t, lib_t, ld_so_t, ld_so_cache_t, locale_t, fs_t;
+    type var_t, var_lib_t, var_run_t, init_var_run_t;
+    type etc_t, etc_runtime_t, passwd_file_t, shadow_t, faillog_t, chkpwd_t, chkpwd_exec_t;
+    type proc_t, sysctl_t, sysctl_kernel_t, sysfs_t, device_t;
+    type null_device_t, zero_device_t, urandom_device_t, tpm_device_t;
+    type system_dbusd_t, system_dbusd_var_run_t, systemd_logind_t;
+    type devlog_t, syslogd_t;
+    class process { transition siginh rlimitinh noatsecure fork sigchld signal signull sigkill sigstop getattr getcap setrlimit setpgid getpgid };
+    class process2 nnp_transition;
+    class capability { dac_read_search audit_write };
+    class fd use;
+    class dir { search open read getattr ioctl lock write add_name remove_name create setattr rmdir mounton };
+    class file { open read getattr ioctl lock write append create setattr unlink rename execute execute_no_trans entrypoint map };
+    class lnk_file { read getattr };
+    class sock_file { write getattr create setattr unlink };
+    class fifo_file { read write open getattr ioctl lock };
+    class chr_file { open read write getattr ioctl map };
+    class unix_stream_socket { create ioctl read write getattr lock append bind connect listen accept getopt setopt shutdown connectto };
+    class unix_dgram_socket { create ioctl read write getattr lock append bind connect getopt setopt shutdown sendto };
+    class netlink_audit_socket { create ioctl read write getattr bind connect getopt setopt shutdown nlmsg_relay };
+    class dbus send_msg;
+    class filesystem getattr;
+}
+
+type localpin_broker_t, domain;
+type localpin_broker_exec_t, file_type, exec_type;
+type localpin_auth_t, domain;
+type localpin_auth_exec_t, file_type, exec_type;
+type localpin_eligibility_t, domain;
+type localpin_eligibility_exec_t, file_type, exec_type;
+type localpin_backend_t, domain;
+type localpin_backend_exec_t, file_type, exec_type;
+typeattribute localpin_broker_t can_read_shadow_passwords;
+typeattribute localpin_auth_t can_read_shadow_passwords;
+typeattribute localpin_eligibility_t can_read_shadow_passwords;
+role system_r types { localpin_broker_t localpin_auth_t localpin_eligibility_t localpin_backend_t };
+
+type localpin_state_t, file_type;
+type localpin_accounts_t, file_type;
+type localpin_integration_t, file_type;
+type localpin_gate_t, file_type;
+type localpin_backup_t, file_type;
+type localpin_runtime_t, file_type;
+type localpin_pam_conf_t, file_type;
+
+# Boot tmpfiles setup creates only the fixed empty roots and enforces their
+# ownership/mode. It receives no credential/registry/backup file permissions.
+allow systemd_tmpfiles_t { localpin_state_t localpin_accounts_t localpin_integration_t localpin_backup_t localpin_runtime_t }:dir { search open read getattr create setattr };
+allow systemd_tmpfiles_t localpin_integration_t:dir { write add_name };
+# The service manager mounts exactly these runtime/state paths into the strict
+# service namespace before exec. This grants mountpoint use, not broker mounts.
+allow init_t { localpin_runtime_t localpin_state_t localpin_accounts_t localpin_integration_t faillog_t }:dir mounton;
+
+# Fail-explicit SELinuxContext in the unit accompanies this direct init
+# transition. NNP is retained across each native helper exec.
+allow init_t localpin_broker_exec_t:file { open read getattr execute map };
+allow init_t localpin_broker_t:process { transition siginh rlimitinh noatsecure };
+allow init_t localpin_broker_t:process2 nnp_transition;
+type_transition init_t localpin_broker_exec_t:process localpin_broker_t;
+allow localpin_broker_t localpin_broker_exec_t:file { open read getattr execute entrypoint map };
+
+allow localpin_broker_t { localpin_auth_exec_t localpin_eligibility_exec_t localpin_backend_exec_t }:file { open read getattr execute map };
+allow localpin_broker_t { localpin_auth_t localpin_eligibility_t localpin_backend_t }:process { transition siginh rlimitinh noatsecure signal signull sigkill sigstop getpgid };
+allow localpin_broker_t { localpin_auth_t localpin_eligibility_t localpin_backend_t }:process2 nnp_transition;
+type_transition localpin_broker_t localpin_auth_exec_t:process localpin_auth_t;
+type_transition localpin_broker_t localpin_eligibility_exec_t:process localpin_eligibility_t;
+type_transition localpin_broker_t localpin_backend_exec_t:process localpin_backend_t;
+allow localpin_auth_t localpin_auth_exec_t:file { open read getattr execute entrypoint map };
+allow localpin_eligibility_t localpin_eligibility_exec_t:file { open read getattr execute entrypoint map };
+allow localpin_backend_t localpin_backend_exec_t:file { open read getattr execute entrypoint map };
+
+# Native pam_unix account expiry checks exec the distribution's unix_chkpwd
+# chkexpiry helper even for a root caller. Use its maintained helper domain,
+# never execute it in the PAM domain or grant a password-update transition.
+allow { localpin_auth_t localpin_eligibility_t } chkpwd_exec_t:file { open read getattr execute map };
+allow { localpin_auth_t localpin_eligibility_t } chkpwd_t:process { transition siginh rlimitinh noatsecure };
+allow { localpin_auth_t localpin_eligibility_t } chkpwd_t:process2 nnp_transition;
+type_transition localpin_auth_t chkpwd_exec_t:process chkpwd_t;
+type_transition localpin_eligibility_t chkpwd_exec_t:process chkpwd_t;
+allow chkpwd_t { localpin_auth_t localpin_eligibility_t }:fd use;
+allow chkpwd_t { localpin_auth_t localpin_eligibility_t }:fifo_file { open read write getattr ioctl lock };
+allow chkpwd_t { localpin_auth_t localpin_eligibility_t }:process sigchld;
+allow localpin_broker_t chkpwd_t:process { signal signull sigkill sigstop getpgid };
+
+allow { localpin_broker_t localpin_auth_t localpin_eligibility_t localpin_backend_t } self:process { fork sigchld signal getattr getcap setrlimit getpgid };
+allow localpin_broker_t self:process setpgid;
+allow { localpin_auth_t localpin_eligibility_t localpin_backend_t } localpin_broker_t:process sigchld;
+allow { localpin_auth_t localpin_eligibility_t localpin_backend_t } localpin_broker_t:fd use;
+allow { localpin_auth_t localpin_eligibility_t localpin_backend_t } localpin_broker_t:unix_stream_socket { ioctl read write getattr getopt setopt shutdown };
+allow { localpin_auth_t localpin_eligibility_t localpin_backend_t } localpin_broker_t:fifo_file { read write open getattr ioctl lock };
+allow localpin_broker_t { localpin_auth_t localpin_eligibility_t localpin_backend_t }:fd use;
+
+# Dynamic linker, native libraries and fixed system directories. There is no
+# shell execution, network NSS, password-update helper or generic PAM interface.
+allow { localpin_broker_t localpin_auth_t localpin_eligibility_t localpin_backend_t } { root_t usr_t bin_t lib_t locale_t var_t var_lib_t var_run_t init_var_run_t device_t }:dir { search open read getattr };
+allow { localpin_broker_t localpin_auth_t localpin_eligibility_t localpin_backend_t } { lib_t locale_t }:file { open read getattr execute map };
+allow { localpin_broker_t localpin_auth_t localpin_eligibility_t localpin_backend_t } ld_so_t:file { open read getattr execute map };
+allow { localpin_broker_t localpin_auth_t localpin_eligibility_t localpin_backend_t } ld_so_cache_t:file { open read getattr map };
+allow { localpin_broker_t localpin_auth_t localpin_eligibility_t localpin_backend_t } { lib_t bin_t usr_t var_run_t }:lnk_file { read getattr };
+allow { localpin_broker_t localpin_auth_t localpin_eligibility_t localpin_backend_t } null_device_t:chr_file { open read write getattr ioctl };
+allow { localpin_broker_t localpin_auth_t localpin_eligibility_t localpin_backend_t } zero_device_t:chr_file { open read write getattr map };
+allow { localpin_broker_t localpin_auth_t localpin_eligibility_t localpin_backend_t } urandom_device_t:chr_file { open read getattr };
+allow { localpin_broker_t localpin_auth_t localpin_eligibility_t localpin_backend_t } proc_t:dir { search open read getattr };
+allow { localpin_broker_t localpin_auth_t localpin_eligibility_t localpin_backend_t } proc_t:file { open read getattr };
+allow { localpin_broker_t localpin_auth_t localpin_eligibility_t localpin_backend_t } proc_t:lnk_file { read getattr };
+allow { localpin_broker_t localpin_auth_t localpin_eligibility_t localpin_backend_t } self:dir { search open read getattr };
+allow { localpin_broker_t localpin_auth_t localpin_eligibility_t localpin_backend_t } self:file { open read getattr };
+allow { localpin_broker_t localpin_auth_t localpin_eligibility_t localpin_backend_t } self:lnk_file { read getattr };
+# Trial validation reads the fixed boot ID even for a persistent active gate.
+allow localpin_broker_t { sysctl_t sysctl_kernel_t }:dir { search open read getattr };
+allow localpin_broker_t sysctl_kernel_t:file { open read getattr };
+# Lifecycle validation calls fstatfs on the pinned Btrfs protected inputs.
+allow localpin_broker_t fs_t:filesystem getattr;
+
+# The current immutable-account lifecycle hashes protected identity files in
+# the broker, so its read-only shadow access is explicit. It performs no PAM.
+allow { localpin_broker_t localpin_auth_t localpin_eligibility_t } { etc_t etc_runtime_t }:dir { search open read getattr ioctl };
+allow { localpin_broker_t localpin_auth_t localpin_eligibility_t } { etc_t etc_runtime_t passwd_file_t shadow_t localpin_pam_conf_t }:file { open read getattr ioctl lock map };
+allow { localpin_broker_t localpin_auth_t localpin_eligibility_t } { etc_t etc_runtime_t }:lnk_file { read getattr };
+allow { localpin_broker_t localpin_auth_t localpin_eligibility_t } self:capability dac_read_search;
+allow localpin_auth_t self:capability audit_write;
+allow localpin_eligibility_t self:capability audit_write;
+
+# Storage is in the broker process; it has its own object type, not an invented
+# storage daemon. Helpers receive only bounded record/candidate bytes over IPC.
+allow localpin_broker_t localpin_state_t:dir { search open read getattr ioctl lock write add_name remove_name create setattr rmdir };
+allow localpin_broker_t localpin_state_t:file { open read getattr ioctl lock write append create setattr unlink rename };
+type_transition localpin_broker_t localpin_state_t:dir localpin_state_t;
+type_transition localpin_broker_t localpin_state_t:file localpin_state_t;
+allow localpin_broker_t localpin_accounts_t:dir { search open read getattr ioctl lock };
+allow localpin_broker_t localpin_accounts_t:file { open read getattr ioctl lock };
+allow localpin_broker_t localpin_integration_t:dir { search open read getattr };
+allow localpin_broker_t localpin_integration_t:file { open read getattr };
+allow localpin_broker_t localpin_gate_t:file { open read getattr };
+
+# Persistent tally keeps the distribution's shared faillog_t label. Native
+# preauth opens an existing tally O_RDWR even without a write/reset hook. Both
+# workers therefore need an existing-file write descriptor; neither may create,
+# unlink, relabel or change ownership/mode of a missing or malformed tally.
+allow { localpin_auth_t localpin_eligibility_t } faillog_t:dir { search open read getattr };
+allow { localpin_auth_t localpin_eligibility_t } faillog_t:file { open read write getattr lock };
+allow { localpin_auth_t localpin_eligibility_t } self:netlink_audit_socket { create ioctl read write getattr bind connect getopt setopt shutdown nlmsg_relay };
+allow { localpin_auth_t localpin_eligibility_t } self:unix_dgram_socket { create ioctl read write getattr lock append bind connect getopt setopt shutdown };
+allow { localpin_auth_t localpin_eligibility_t } devlog_t:sock_file write;
+allow { localpin_auth_t localpin_eligibility_t } syslogd_t:unix_dgram_socket sendto;
+
+# Only the credential backend can open the TPM resource manager. There is no
+# raw /dev/tpm0 label change; systemd's device cgroup permits tpmrm0 exclusively.
+allow localpin_backend_t tpm_device_t:chr_file { open read write getattr ioctl };
+allow localpin_broker_t tpm_device_t:chr_file getattr;
+allow localpin_backend_t sysfs_t:dir { search open read getattr };
+allow localpin_backend_t sysfs_t:file { open read getattr };
+
+# Socket activation and desktop/CLI clients. Client rules grant socket contact
+# only, with no credential-state, account-registry, shadow or TPM permissions.
+allow init_t localpin_runtime_t:dir { search open read getattr write add_name remove_name create setattr rmdir };
+allow init_t localpin_runtime_t:sock_file { write getattr create setattr unlink };
+# systemd259 derives the socket's kernel SID from the service's exec context;
+# the pathname sock_file is separately labelled localpin_runtime_t by .fc.
+allow init_t localpin_broker_t:unix_stream_socket { create ioctl read write getattr lock append bind connect listen accept getopt setopt shutdown };
+allow localpin_broker_t init_t:fd use;
+allow localpin_broker_t init_t:unix_stream_socket { ioctl read write getattr getopt shutdown };
+allow localpin_broker_t localpin_runtime_t:dir { search open read getattr };
+allow localpin_broker_t localpin_runtime_t:sock_file { write getattr };
+allow localpin_broker_t self:unix_stream_socket { create ioctl read write getattr lock append bind connect listen accept getopt setopt shutdown };
+allow userdomain localpin_runtime_t:dir search;
+allow userdomain localpin_runtime_t:sock_file { write getattr };
+allow userdomain localpin_integration_t:dir { search open read getattr };
+allow userdomain localpin_gate_t:file { open read getattr };
+allow userdomain localpin_broker_t:unix_stream_socket connectto;
+allow localpin_broker_t userdomain:process getattr;
+# /proc/PID files inherit the peer's process SID. This permits bounded status/
+# stat identity reads, not access to a user's home file labels or process memory.
+allow localpin_broker_t userdomain:dir { search open read getattr };
+allow localpin_broker_t userdomain:file { open read getattr };
+allow localpin_broker_t userdomain:lnk_file { read getattr };
+
+# Fixed system-bus route to logind. No IP sockets, service ownership or arbitrary
+# caller-selected bus endpoint is allowed by the executable's protocol.
+allow localpin_broker_t system_dbusd_var_run_t:sock_file write;
+allow localpin_broker_t system_dbusd_var_run_t:dir { search getattr };
+allow localpin_broker_t system_dbusd_t:unix_stream_socket connectto;
+allow localpin_broker_t { system_dbusd_t systemd_logind_t }:dbus send_msg;
+allow { system_dbusd_t systemd_logind_t } localpin_broker_t:dbus send_msg;

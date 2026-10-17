@@ -42,8 +42,11 @@ It needs legitimate password/shadow helper, PAM module, SELinux, audit and
 faillock access. Core dumps and dumpability are disabled in the worker. The
 deployment must bound memory/PIDs and prevent descendants escaping the process
 group; blindly applying a broker filesystem/capability sandbox can break PAM.
-Installed systemd/SELinux and production policy compatibility remain packaging
-and VM integration gates. No host PAM/account modifications are test prerequisites.
+M8's recorded installed matrix passed systemd/SELinux and native password-worker
+checks on the restricted Fedora 44 x86_64 Btrfs appliance with SELinux enforcing.
+See the [M8 report](../../docs/development/m8-packaging-recovery.md) for its exact
+policy and artifact boundary; M9 review and physical TPM validation remain open.
+No host PAM/account modifications are test prerequisites.
 
 The project-owned native ABI is isolated in `src/pam.rs`, using fixed Linux-PAM
 symbols loaded from `/usr/lib64/libpam.so.0` so development headers/linker symlinks are not
@@ -65,7 +68,8 @@ worker cannot create them. Its four-slot process pool retains cancelled groups
 until reaping and obeys the caller's original absolute deadline. See
 [ADR 0012](../../docs/adr/0012-immutable-appliance-account-authority.md) and the
 [M6.1 report](../../docs/development/m6.1-account-authorities.md) for the enforced
-account domain and actual VM evidence. It does not establish M8 confinement.
+account domain and actual VM evidence. That historical component evidence is
+separate from M8's installed confinement matrix linked above.
 
 Validation:
 

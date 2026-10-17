@@ -500,17 +500,36 @@ pub fn validate_listener(
     listener: &UnixListener,
     expected_path: &Path,
 ) -> Result<(), TransportError> {
-    let trusted = TrustedSocketPath::new(expected_path)?;
-    if sockopt::socket_domain(listener)? != AddressFamily::UNIX
-        || sockopt::socket_type(listener)? != SocketType::STREAM
-        || !sockopt::socket_acceptconn(listener)?
-        || listener.local_addr()?.as_pathname() != Some(expected_path)
+    let trusted = listener_setup(TrustedSocketPath::new(expected_path), "path")?;
+    if listener_setup(sockopt::socket_domain(listener), "socket domain")? != AddressFamily::UNIX
+        || listener_setup(sockopt::socket_type(listener), "socket type")? != SocketType::STREAM
+        || !listener_setup(sockopt::socket_acceptconn(listener), "listen state")?
+        || listener_setup(listener.local_addr(), "local address")?.as_pathname()
+            != Some(expected_path)
     {
         return Err(TransportError::Activation);
     }
-    fcntl_setfd(listener, fcntl_getfd(listener)? | FdFlags::CLOEXEC)?;
-    listener.set_nonblocking(true)?;
-    trusted.recheck()
+    let flags = listener_setup(fcntl_getfd(listener), "descriptor flags")?;
+    listener_setup(
+        fcntl_setfd(listener, flags | FdFlags::CLOEXEC),
+        "close-on-exec",
+    )?;
+    listener_setup(listener.set_nonblocking(true), "nonblocking")?;
+    listener_setup(trusted.recheck(), "path recheck")
+}
+
+// Listener setup happens before any client input. Closed operation names and
+// sanitized categories make installed sandbox errors diagnosable without
+// logging paths, native error strings or authentication traffic.
+fn listener_setup<T, E: Into<TransportError>>(
+    result: Result<T, E>,
+    operation: &'static str,
+) -> Result<T, TransportError> {
+    result.map_err(|error| {
+        let error = error.into();
+        eprintln!("localpin: listener setup {operation}: {error:?}");
+        error
+    })
 }
 
 /// Acquire exactly one systemd listener at startup, before spawning threads.

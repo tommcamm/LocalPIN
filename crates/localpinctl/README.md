@@ -44,9 +44,18 @@ Boolean nor the old PIN can authorize a credential change.
 `recover` requires an already-root caller and identifies one non-root account in
 the protected local `/etc/passwd`; the broker revalidates authority and account
 identity. Recovery disables the credential and never reveals a PIN. System-wide
-integration activation belongs to separately reviewed root administration tooling
-in later milestones. `integration enable` and `disable` explain that boundary and
-make no host changes; `integration status` reports the broker's integration state.
+integration uses M8's separate fixed root tool. `integration enable` prints
+`sudo /usr/libexec/localpin/localpin-integration activate` with the prerequisite
+prepare/trial/desktop-test steps; `integration disable` prints the tool's
+`disable` command. Neither invokes sudo or changes integration.
+`integration status` reads the sanitized local root gate without a broker or
+terminal. See the [integration runbook](../../docs/integration-administration.md)
+and [ADR 0015](../../docs/adr/0015-m8-activation-and-rpm.md). Compatible RPM
+upgrades use [ADR 0016](../../docs/adr/0016-package-cache-window.md)'s bounded
+authority window. M8's recorded installed matrix passed for the restricted
+Fedora 44 x86_64 Btrfs appliance with SELinux enforcing; see the
+[M8 report](../../docs/development/m8-packaging-recovery.md). M9 review and
+physical TPM validation remain open; hosted CI is unverified.
 
 Status JSON has independent `schema_version: 1` and only closed nonsecret fields.
 `installed: "client-present"` proves the CLI is present; `broker_available` reports
@@ -55,9 +64,13 @@ fields, or `null` when no authoritative state is available, including a broker
 reply that could not inspect the account. An explicitly reported backend still
 establishes enrollment when its current availability fails. TPM usability stays
 `null` with `tpm_usability: "not-established"` until successful usability checks
-are reported; an unprobed TPM is never labeled unusable. `tested:
-"not-recorded"` deliberately makes no claim that desktop unlock or password
-recovery tests have run. Backend preference, committed backend, availability,
+are reported; an unprobed TPM is never labeled unusable. Integration distinguishes
+`"trial"` from `"active"`; a bounded trial reports `active: false` and
+`tested: "not-recorded"`. Combined broker status reports
+`tested: "operator-attested"` only when the readable root active gate and broker
+active status agree. This labels an administrator attestation, not automatic
+proof of desktop or password tests; missing or inconsistent state does not
+invent an attestation. Backend preference, committed backend, availability,
 cooldown duration, integration state, TPM detection/usability, and sanitized reason
 are also reported. `doctor` provides actions for the broker's failure category
 without reading protected credential state or claiming installation is activation.

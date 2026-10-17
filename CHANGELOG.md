@@ -6,6 +6,26 @@ Changes will be recorded here before versioned releases. There are no releases y
 
 ### Added
 
+- M8 native Fedora RPM packaging, systemd/SELinux confinement definitions,
+  staged root prepare/trial/attest/activate gate, owned-block console recovery,
+  compatible upgrade suspension/resume and removal reference checks. The
+  49-case installed matrix passed on the restricted Fedora 44 x86_64 Btrfs
+  appliance with SELinux enforcing and a private TPM emulator, retaining
+  enrollment through reboot and interrupted cache-window recovery. Evidence is
+  in the [M8 report](docs/development/m8-packaging-recovery.md); see
+  [ADR 0015](docs/adr/0015-m8-activation-and-rpm.md),
+  [ADR 0016](docs/adr/0016-package-cache-window.md) and the
+  [administration runbook](docs/integration-administration.md).
+- Exact persistent native faillock policy for M8 activation, retaining the
+  legacy volatile component variant and refusing missing accounting state.
+  [ADR 0014](docs/adr/0014-persistent-faillock.md) records the one-time offline
+  transition and reboot continuity contract. The known parallel
+  fingerprint/faillock composition remains activation-refused.
+- Explicit exact-block legacy migration before fresh sealing/enrollment,
+  without importing old verifiers; CLI status distinguishes trial from active
+  integration and operator-attested tests from automatic evidence.
+- Specification 1.4 records M8's persistent accounting, guarded activation,
+  installed recovery paths and bounded compatible-upgrade authority window.
 - M7 `localpin-pam` Rust cdylib: fresh byte-preserving PAM candidates, own-user
   KDE identity checks, authenticated durable broker grants, absolute software/TPM
   deadlines, panic containment and C allocator cleanup. Exact reviewed KDE policy
@@ -116,6 +136,8 @@ Changes will be recorded here before versioned releases. There are no releases y
 M6.1 account lifecycle/policy acceptance is complete only for the defined
 appliance domain. M7's adapter and required native/desktop acceptance cases passed
 for that domain; its report retains native accounting and TPM recovery limits.
-Packaging and activation remain unimplemented.
-Installed broker/password-worker sandbox, physical TPM validation
-and M9 human/specialist review remain open.
+M8 installed broker/password-worker confinement, staged activation, RPM lifecycle,
+ordinary reboot and interrupted-upgrade recovery passed the recorded matrix for
+the restricted Fedora 44 x86_64 Btrfs appliance. The unsafe fingerprint/faillock
+composition remains activation-refused. Physical TPM validation and M9 independent
+human/specialist review remain open; hosted CI execution remains unverified.

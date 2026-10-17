@@ -11,7 +11,10 @@ mod ipc;
 mod pam;
 mod supervisor;
 
-pub use eligibility::{EligibilitySupervisor, serve_eligibility_worker};
+pub use eligibility::{
+    EligibilitySupervisor, PERSISTENT_FAILLOCK_CONFIG, PERSISTENT_FAILLOCK_DIRECTORY,
+    reviewed_faillock_directory, serve_eligibility_worker,
+};
 pub use supervisor::{BoundPasswordWorker, PasswordSupervisor};
 
 use localpin_core::{enrollment::PasswordWorkerError, secret::SecretBytes};

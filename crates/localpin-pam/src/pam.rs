@@ -107,7 +107,9 @@ impl crate::Pam for NativePam {
                 libc::geteuid(),
             )
         };
-        service == b"kde" && crate::account::supported(user, real, effective)
+        service == b"kde"
+            && localpin_protocol::integration::permits_pin()
+            && crate::account::supported(user, real, effective)
     }
 
     fn capture(&mut self) -> Option<Pin> {

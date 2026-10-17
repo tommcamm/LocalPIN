@@ -1,10 +1,10 @@
 # LocalPIN product specification
 
-**Specification version:** 1.3
+**Specification version:** 1.4
 
 **Date:** 2026-10-17
 
-**Status:** Implementation specification; M2–M7 implemented locally, with M6.1 account-authority and M7 native/stock-KDE acceptance complete only for the restricted domain below. The [M7 report](development/m7-pam-integration.md) records native accounting and TPM recovery limits. M8 packaging/confinement and M9 release review/hardware gates remain open.
+**Status:** Implementation specification; M2–M8 implemented locally, with M6.1, M7 and M8 acceptance complete only for the restricted domain below. M8's recorded 49-case installed matrix passed on Fedora 44 x86_64 Btrfs with SELinux enforcing and a private TPM emulator; see the [M8 report](development/m8-packaging-recovery.md). M9 independent review and physical hardware gates remain open; hosted CI execution remains unverified. The [M7 report](development/m7-pam-integration.md) retains its historical native accounting and TPM recovery limits.
 **Initial deployment:** Fedora Linux, KDE Plasma, local user accounts.  
 **Working component names:** `pam_localpin.so`, `localpind`, `localpinctl`.
 
@@ -38,14 +38,24 @@ and password-hash forms. Kernel immutable inputs and a writer-drain barrier
 protect active incarnations. Administrative account, password and policy changes
 must durably revoke the whole domain first; every reseal provisions fresh
 disabled incarnations and requires enrollment again. Own-user enrollment cannot
-establish or repair continuity. Missing authoritative state, including a lost
-volatile faillock tally after reboot, makes PIN unavailable. This restriction
-does not describe general-purpose Fedora account support or authorize deployment.
+establish or repair continuity. Missing authoritative state makes PIN unavailable.
+The legacy volatile component variant can lose `/run/faillock` on reboot;
+M8 activation requires the exact persistent `/var/lib/faillock` variant in
+[ADR 0014](adr/0014-persistent-faillock.md). Its one-time offline policy
+transition preserves native counters and requires fresh enrollment. Missing
+persistent accounting is also refused, never recreated by eligibility. This
+restriction does not describe general-purpose Fedora account support or
+authorize deployment.
 M6.1's component gate is complete for this domain. See the
 [component evidence](development/m6.1-account-authorities.md),
 [sanitized results](../experiments/m61/results/2026-10-17-account-authorities.json) and
-[administration contract](account-administration.md); the separate M7/M8/M9
-integration, confinement and release gates still apply.
+[account administration contract](account-administration.md). The
+[integration runbook](integration-administration.md) and
+[ADR 0015](adr/0015-m8-activation-and-rpm.md) define staged activation, the
+fingerprint/faillock refusal and package recovery.
+[ADR 0016](adr/0016-package-cache-window.md) defines the narrow compatible-upgrade
+authority window. M8 acceptance passed for the recorded appliance matrix;
+M9 release gates still apply.
 
 The current Linux broker requires `openat2`, procfs and Linux 6.5+
 `SO_PEERPIDFD` support, with a system bus and logind for live session routing.
@@ -58,10 +68,10 @@ Use a pinned stable Rust toolchain, Rust 2024 edition, a declared minimum suppor
 ## 3. Required user experience
 
 1. A user installs the Fedora package without changing authentication automatically.
-2. `localpinctl doctor` explains whether TPM protection is usable and checks the desktop integration, state permissions, service availability, and recovery route.
+2. `localpinctl doctor` reports known backend/service availability and the desktop gate, and explains required recovery checks. Passive status does not perform desktop or password recovery tests or establish unprobed TPM usability.
 3. Enrollment requires fresh verification of the existing account password through a trusted password-only PAM policy. Merely knowing an old PIN, controlling an unlocked user process, or having a cached client-side success flag must not authorize enrollment, reset, or backend downgrade.
 4. The user chooses and confirms a six-digit PIN privately. Leading zeroes are valid. The PIN must not be provided through command-line arguments, environment variables, shell history, or normal logs.
-5. A pre-activation check verifies the selected PIN and the existing full-password route. Only then can the KDE integration be enabled.
+5. Root preparation leaves the desktop gate closed. A bounded current-boot trial permits actual PIN, full-password and console-recovery tests. The administrator explicitly attests those tests before final activation; enrollment alone never opens the gate.
 6. At the lock screen the user types the PIN and presses Enter. Do not auto-submit after the sixth character: explicit submission avoids accidental attempts and preserves the password route.
 7. Full-password fallback must remain available after a wrong PIN, during PIN cooldown, when the broker is stopped, and after backend or state failures.
 8. The user can inspect status, change the PIN, disable PIN unlocking, and restore the previous PAM configuration.
@@ -238,7 +248,9 @@ Proposed layout:
 | `/usr/lib64/security/pam_localpin.so` | Distribution-appropriate PAM module location |
 | `/usr/bin/localpinctl` | Normal-user CLI; no setuid bit |
 | `/usr/libexec/localpin/` | Broker and narrowly scoped privileged worker executables |
-| `/var/lib/localpin/integration-backups/` | Original PAM files, digests, package/version metadata |
+| `/var/lib/localpin-integration/control/` | Installed M8 root-only original PAM files, manifests and package/version metadata, mode 0700 |
+| `/var/lib/localpin-integration/gate` | Root-written public desktop gate, mode 0644 beneath a mode-0755 directory |
+| `/var/lib/localpin-accounts/` | Root-only lifecycle registry and bounded package-cache journal, mode 0700 |
 
 Use numeric UIDs for internal paths, never raw usernames. Detect UID reuse and require re-enrollment when the account identity no longer matches the recorded local-account identity. Renaming an account must not accidentally authorize a new account with an unrelated UID.
 
@@ -284,6 +296,14 @@ Interactive input requires a real terminal or an explicitly implemented protecte
 
 Cancellation before commit leaves the existing enrollment/integration unchanged. CLI output must distinguish “installed,” “enrolled,” “tested,” and “active.” It must never say setup completed merely because files were copied.
 
+Schema-1 status distinguishes `integration: "trial"` from `"active"`; a trial
+does not set `active: true`. `tested: "operator-attested"` requires agreement
+between the readable root active gate and the broker's active status; otherwise
+the test value remains `"not-recorded"`. Operator attestation is not automatic
+desktop evidence. `integration status` reads the sanitized local gate without
+a broker. `integration enable` and `disable` print the fixed root tool commands
+for `activate` and `disable`; they do not invoke privilege escalation.
+
 ## 14. Service hardening and SELinux
 
 Ship systemd socket/service units, tmpfiles configuration if needed, and a Fedora SELinux policy. Enforcing-mode operation is a release requirement. Never recommend disabling SELinux or using broad allow-all policy generation to make authentication work.
@@ -292,13 +312,39 @@ The broker must have no IP networking; restrict address families to the required
 
 The supported policy must allow KDE's unprivileged locker to contact the broker without granting it direct credential-file or TPM access. Test DAC and SELinux denial paths. Unexpected denials make PIN verification unavailable and preserve password fallback, while diagnostics identify the relevant failure without leaking secrets.
 
+M8 packages the systemd and SELinux confinement definitions. Its recorded
+installed positive, causal SELinux denial and recovery cases passed with SELinux
+enforcing in the restricted Fedora 44 x86_64 Btrfs appliance. See the
+[M8 report](development/m8-packaging-recovery.md); a package build or synthetic
+test alone does not establish that acceptance.
+
 ## 15. Packaging, installation, upgrade, rollback
 
 Deliver signed Fedora RPM packages for the supported architectures. Installation starts no enrollment and performs no broad authentication rewrites. Explicit activation must inventory PAM files, verify hashes/layout, create a root-protected backup, test both routes, and apply the smallest known change atomically. Record the package version, original digest, installed block digest, and timestamp.
 
-Do not stack `pam_localpin` and the temporary `pam_pinlock` installation. Migration requires fresh enrollment into LocalPIN, verified password fallback, disabling the old module's KDE line, and only then activating the new adapter. Do not import the old PIN hash into TPM mode or silently carry forward weaker software parameters.
+Do not stack `pam_localpin` and the temporary `pam_pinlock` installation. First
+verify password/console recovery, durably back up the exact known legacy block,
+revoke the old account domain and remove that block. Verify stock password
+recovery before preparing, freshly enrolling, trial-testing and activating
+LocalPIN. Removing protected PAM bytes invalidates the whole immutable account
+domain, so enrollment under the old graph cannot survive migration. Import no
+old verifier or weaker software parameters. See the
+[migration runbook](integration-administration.md#migrate-the-temporary-pin-block).
 
 Upgrades preserve committed enrollment and throttle state. State migrations are versioned, transactional, tested in both directions where supported, and run before enabling the new code. Unsupported downgrades must leave the password route usable and explain how to disable integration. Kernel, Plasma, PAM, and authselect upgrades are part of the compatibility matrix.
+
+The implemented M8 path supports compatible schema-1 RPM release upgrades
+within version 0.1.0. It durably suspends integration, stops the broker, binds
+registry/credential/throttle state, and checks those bindings before resuming
+the previous services. [ADR 0016](adr/0016-package-cache-window.md)'s bounded
+native cache window retains account incarnations while real distribution
+`ldconfig` triggers run. New binaries invalidate test attestation and require a
+fresh trial and activation while preserving enrollment. Other transitions
+require a separately reviewed migration. Initial installation does not start or
+enable the socket or change KDE/authselect/faillock policy. The recorded M8
+matrix proved compatible upgrade preservation, downgrade refusal and interrupted
+cache-window reboot recovery without fresh enrollment. This does not establish
+compatibility with arbitrary distribution upgrades.
 
 Uninstall/rollback must remove LocalPIN's integration before removing the module or broker. If the PAM file changed after activation, remove only the exact owned block or stop for an explicit reviewed merge; do not overwrite unrelated administrator/package updates. Preserve protected backups until verified restoration. A broken broker or missing module must not cause a blank-password path.
 

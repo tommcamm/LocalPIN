@@ -44,6 +44,10 @@ jobs:
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - name: Run tests and doctests
         run: cargo test --workspace --all-features --locked
+      - name: Check activation transactions and disposable VM guards
+        run: |
+          python3 -m unittest discover -s tools/tests -p 'test_*.py' -v
+          python3 -m unittest discover -s experiments/m8 -p 'test_*.py' -v
       - name: Build release artifacts
         run: cargo build --workspace --all-features --release --locked
 
@@ -73,7 +77,7 @@ jobs:
       image: fedora:44
     steps:
       - name: Install build tools in the disposable container
-        run: dnf install -y ca-certificates gcc git python3 rustup pkgconf-pkg-config tpm2-tss-devel dbus-devel swtpm tpm2-tools pam-devel binutils
+        run: dnf install -y ca-certificates gcc git python3 rustup pkgconf-pkg-config tpm2-tss-devel dbus-devel swtpm tpm2-tools pam-devel binutils rpm-build checkpolicy policycoreutils
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -105,6 +109,10 @@ jobs:
         run: CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu python3 crates/localpin-tpm/tests/run_simulator.py
       - name: Verify durable storage with the native TPM backend
         run: cargo test -p localpin-storage --features tpm-simulator-tests --locked --target x86_64-unknown-linux-gnu -- --ignored
+      - name: Compile confinement and build the opt-in RPM without installing it
+        run: |
+          python3 packaging/fedora/test_packaging.py
+          python3 packaging/fedora/build-rpm.py --output /tmp/localpin-rpm-ci
 
   feasibility:
     name: Isolated M1 experiments (Fedora 44)

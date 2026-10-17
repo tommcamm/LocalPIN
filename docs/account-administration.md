@@ -6,8 +6,15 @@ actual validation are recorded separately in
 [ADR 0012](adr/0012-immutable-appliance-account-authority.md) defines its
 enforcement and trust boundary. These commands are for the explicitly
 provisioned disposable Fedora KDE appliance; the everyday host is not a target.
-M7 desktop unlock integration and M8 installation, packaging, service confinement
-and console recovery remain separate gates.
+M7 records its required desktop acceptance. M8 installation, staged root
+activation/recovery, packaging and confinement passed the recorded installed
+matrix on the restricted Fedora 44 x86_64 Btrfs appliance with SELinux enforcing;
+see the [M8 report](development/m8-packaging-recovery.md). The
+[integration runbook](integration-administration.md),
+[ADR 0014](adr/0014-persistent-faillock.md),
+[ADR 0015](adr/0015-m8-activation-and-rpm.md) and
+[ADR 0016](adr/0016-package-cache-window.md) govern installed desktop use and
+compatible RPM maintenance. M9 and physical hardware gates remain open.
 
 ## Supported account domain
 
@@ -58,14 +65,19 @@ completed privileged clear/change/restore bypass.
 ## Provisioning prerequisites
 
 The non-setuid [localpin-account tool](../crates/localpind/src/bin/localpin-account.rs)
-requires real and effective UID 0. The M6.1 lab installs it as
-`/usr/libexec/localpin/localpin-account`; release installation belongs to M8.
+requires real and effective UID 0. The M6.1 lab and M8 experimental RPM use
+`/usr/libexec/localpin/localpin-account`.
 There is no shell/program argument, alternate state root or secret input.
 
 Before sealing, the privileged deployment must supply root:root 0700
-`/var/lib/localpin-accounts` and `/var/lib/localpin`, a root:root 0755
-`/run/faillock`, the reviewed fixed helpers and PAM services, and all required
-policy inputs. The fixed services are
+`/var/lib/localpin-accounts` and `/var/lib/localpin`, a root:root 0755 tally
+directory selected by the exact reviewed configuration, the fixed helpers and
+PAM services, and all required policy inputs. The legacy component policy
+selects `/run/faillock`; M8 activation requires `/var/lib/faillock` on persistent
+Btrfs with exactly `dir = /var/lib/faillock\n` in `faillock.conf`. Perform the
+one-time native-counter transition offline as described in the
+[integration runbook](integration-administration.md#prepare-persistent-accounting-once).
+The fixed services are
 [localpin-enroll](../crates/localpin-auth/policy/localpin-enroll.review-required)
 and
 [localpin-eligibility](../crates/localpin-auth/policy/localpin-eligibility.review-required).
@@ -76,15 +88,23 @@ general-purpose activation installer. The complete guarded lab setup is in
 Stop both socket activation and the broker before `seal` or lifecycle
 `recover`: the broker holds a separate storage singleton lease. In the
 disposable lab these units are `localpin-m61.socket` and
-`localpin-m61.service`. Production unit names and their confinement are part
-of M8. A successful `seal` establishes disabled baselines; it does not enroll
-a PIN or activate KDE integration.
+`localpin-m61.service`. M8 packages `localpin.socket` and `localpin.service`;
+their installed confinement checks passed the recorded restricted appliance
+matrix. A successful `seal`
+establishes disabled baselines; it does not enroll a PIN or activate KDE
+integration.
 
 ## Create, delete, rename or change an account
 
 Use this procedure for account creation/deletion, rename, UID/home/shell/group
 changes, password changes, locks, expiry, AccountsService operations and changes
 to the protected authentication policy:
+
+For an installed M8 desktop, first use the integration runbook's root
+`disable`/`recover` operation to close the gate and restore owned policy.
+After administration, repeat its prepare/enroll/trial/test/activate sequence.
+The component procedure below must not be used to carry an old desktop
+activation or test attestation across fresh account incarnations.
 
 1. As root, run:
 
@@ -176,24 +196,40 @@ account hook. Exact policy/native hashes and all input checks are recorded in
 
 A tally must already be a canonical regular single-link file owned by the
 target UID and group root, mode 0660, with bounded canonical records in the
-root-controlled `/run/faillock` directory. The worker checks its bytes and
+root-controlled directory selected by the exact reviewed configuration. The
+legacy all-comment variant selects `/run/faillock`; the exact M8 persistent
+variant selects `/var/lib/faillock`. Unknown configurations and a missing
+persistent tally never select a fallback directory. The worker checks bytes and
 metadata before and after PAM. Missing, unreadable, changed, future-dated or
 noncanonical state makes PIN unavailable. Eligibility does not create, reset,
 normalize or add a failure record.
 
 Privileged sealing may establish a missing empty tally only after the old
 incarnations are durably revoked. Existing canonical tallies are preserved;
-noncanonical existing tallies stop provisioning. Fedora's default `/run`
-directory is volatile. After a reboot a missing tally leaves PIN unavailable
-until explicit privileged recovery and fresh enrollment. An ordinary password
-operation may also create native accounting state, but own-user enrollment
-cannot repair required lifecycle or disabled-storage baselines.
+noncanonical existing tallies stop provisioning. With the legacy volatile
+variant, reboot can lose the tally and leave PIN unavailable until explicit
+privileged recovery and fresh enrollment. M8's persistent variant addresses
+ordinary reboot continuity without recreating counters. The recorded enforcing
+M8 matrix retained the same TPM enrollment through ordinary reboot and
+interrupted package-cache recovery using a private TPM emulator. Compatible
+upgrades use [ADR 0016](adr/0016-package-cache-window.md)'s bounded window;
+ordinary account or policy mutations still require fresh incarnations. Lost or
+corrupt persistent state still requires explicit privileged recovery and fresh
+enrollment. An ordinary password
+operation may create native accounting state according to its service policy,
+but own-user enrollment cannot repair lifecycle or disabled-storage baselines.
 
 The existing password route retains its normal accounting. In particular,
 wrong password attempts can add faillock records and normal password success
 can reset them according to that service's policy. A PIN-format password can
-also consume a LocalPIN attempt when M7 integrates the shared field. No counter
+also consume a LocalPIN attempt in the integrated shared field. No counter
 is suppressed or reset to conceal that ambiguity.
+
+Installed activation accepts only the measured default password-auth profile.
+The M7-observed `with-faillock`/parallel-fingerprint composition is refused;
+persisting accounting does not fix its accumulating native startup failures.
+Checks preserve each original service's applicable policy, including a default
+KDE password graph that does not itself invoke faillock.
 
 ## Diagnose an unavailable account
 
@@ -213,6 +249,9 @@ sanitized reasons are:
 | `busy` | Wait for the current bounded operation to finish and retry. |
 
 The client distinguishes installation, enrollment, test evidence and integration
-activity. Reaching the broker or enrolling a PIN does not establish a tested
-desktop unlock path. Continue to use the existing password route while the
-remaining integration and packaging gates are open.
+activity. A bounded trial is separate from active integration, and
+`operator-attested` labels the administrator's recorded tests rather than
+automatic proof. Reaching the broker or enrolling a PIN does not establish a
+tested desktop unlock path. M8's recorded installed matrix passed only for the
+restricted appliance above; M9 independent review and physical hardware
+acceptance remain open, and hosted CI execution remains unverified.

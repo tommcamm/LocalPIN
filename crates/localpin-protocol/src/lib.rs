@@ -9,6 +9,9 @@ mod session;
 mod wire;
 
 #[cfg(target_os = "linux")]
+pub mod integration;
+
+#[cfg(target_os = "linux")]
 pub mod transport;
 
 pub use codec::{EncodedFrame, RequestDecoder, ResponseDecoder, encode_request, encode_response};

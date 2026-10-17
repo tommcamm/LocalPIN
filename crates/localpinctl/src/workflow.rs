@@ -329,7 +329,8 @@ pub fn run() -> Result<(), CliError> {
     let command = crate::args::parse(&args)?;
     crate::args::check_environment(std::env::vars_os().map(|(key, _)| key))?;
     // A setuid installation is unsupported: administrative authority must come
-    // from an already-root caller using the explicit recovery command.
+    // from an already-root caller using the explicit recovery command or the
+    // separate integration administration tool.
     if rustix::process::getuid() != rustix::process::geteuid() {
         return Err(CliError::Forbidden);
     }
@@ -342,7 +343,8 @@ pub fn run() -> Result<(), CliError> {
             println!("localpinctl {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
-        Command::IntegrationChange => Err(CliError::Integration),
+        Command::IntegrationEnable => Err(CliError::Integration),
+        Command::IntegrationDisable => Err(CliError::IntegrationDisable),
         Command::Status { json, doctor } => {
             let mut client = Client::connect(Path::new(SOCKET), Deadline::after(CONNECT_TIMEOUT));
             let status = client.as_mut().ok().and_then(|client| client.status().ok());
@@ -354,8 +356,10 @@ pub fn run() -> Result<(), CliError> {
             status.map(|_| ()).ok_or(CliError::Service)
         }
         Command::IntegrationStatus => {
-            let mut client = Client::connect(Path::new(SOCKET), Deadline::after(CONNECT_TIMEOUT))?;
-            println!("{}", crate::status::text(Some(client.status()?), false));
+            println!(
+                "{}",
+                crate::status::integration_text(localpin_protocol::integration::gate())
+            );
             Ok(())
         }
         Command::Recover(account) => {

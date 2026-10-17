@@ -1,7 +1,7 @@
 # LocalPIN implementation plan
 
 - Date: 2026-10-17
-- Status: Accepted roadmap; M0 implemented locally; M1 feasibility complete; M2–M7 implemented locally. M6.1 and M7 acceptance are complete only for ADR 0012's restricted appliance domain, with production-authority, native PAM and actual enforcing-KDE evidence recorded in their reports. M7 retains native accounting and TPM recovery limits. M8 installed policy/sandbox/packaging and M9 human/specialist review and hardware gates remain open. Hosted CI execution remains unverified; unmanaged accounts remain unsupported.
+- Status: Accepted roadmap; M0 implemented locally; M1 feasibility complete; M2–M8 implemented locally, with M6.1, M7 and M8 acceptance complete only for ADR 0012's restricted appliance domain. M8's recorded 49-case installed matrix passed on Fedora 44 x86_64 Btrfs with SELinux enforcing and a private TPM emulator. M9 independent human/specialist review and physical hardware gates remain open. Hosted CI execution remains unverified; unmanaged accounts remain unsupported.
 - Source of requirements: [product-specification.md](product-specification.md), version 1.3. M1 clarifies password/PIN accounting; M2 settles time boundaries and restricts lifecycle support; M6.1 defines the narrow implemented account domain.
 
 This plan turns the specification into independently reviewable changes and evidence gates. The specification remains authoritative. An unresolved design question below must be resolved in an architecture decision record (ADR), with a specification amendment if necessary, rather than silently changing the requirements.
@@ -201,8 +201,8 @@ The [M6 report](development/m6-enrollment-cli.md) and
 [ADR 0011](adr/0011-trusted-enrollment-and-cli.md) describe the password-only
 worker, terminal CLI and staged credential transactions. Complete broker flows
 use isolated synthetic account authorities; ADR 0006 still refuses unmanaged
-production accounts. Installed password-policy/confinement evidence remains an
-explicit M8 gate, and enrollment does not activate desktop integration.
+production accounts. Installed password-policy/confinement evidence belongs to
+the separate M8 matrix recorded below; enrollment does not activate desktop integration.
 
 ### M6.1 — Implement production account lifecycle and eligibility
 
@@ -304,7 +304,7 @@ and resolve it through a reviewed design or specification amendment; do not mark
 M6.1 complete or weaken the existing default to proceed to M7.
 
 M6.1 supplies the account authorities; M7 owns the unlock PAM adapter and actual
-stock KDE success/fallback matrix. M8 retains installed password-worker/systemd
+stock KDE success/fallback matrix. M8 owns installed password-worker/systemd
 confinement, full SELinux/RPM lifecycle and activation/recovery validation.
 Component-level VM setup needed to test M6.1 does not satisfy those M7/M8 gates
 or authorize everyday-system activation.
@@ -337,22 +337,37 @@ before changing the protected policy.
 
 ### M8 — Package, activate, migrate and recover on Fedora
 
+Implementation status, 2026-10-17: **installed acceptance complete for the
+recorded restricted Fedora 44 x86_64 Btrfs appliance**. All 49 cases passed with
+SELinux enforcing and a private TPM emulator. The
+[M8 report](development/m8-packaging-recovery.md) and
+[sanitized results](../experiments/m8/results/2026-10-17-fedora44-rpm-recovery.json)
+own the installed evidence. [ADR 0014](adr/0014-persistent-faillock.md),
+[ADR 0015](adr/0015-m8-activation-and-rpm.md),
+[ADR 0016](adr/0016-package-cache-window.md) and the
+[administration runbook](integration-administration.md) define the current
+persistent accounting, staged gate, migration and RPM recovery contracts.
+
 - Ship systemd units, reviewed sandbox settings, SELinux policy and RPM packaging. Determine native dependency sourcing and the distinction between project-distributed RPMs and future Fedora repository inclusion.
 - Installation makes no enrollment or PAM activation change. Activation recognizes only verified layouts and has a dry-run diff, protected original backup, digests and transactional edits.
+- Require the exact persistent native faillock variant. Its offline transition preserves existing counters and revokes the old domain before fresh provisioning; the legacy volatile variant remains component-only support. Neither missing persistent state nor reboot permits counter reconstruction.
+- Keep preparation/enrollment separate from desktop activation. Root opens a boot-bound trial of at most ten minutes; actual desktop PIN/password/console tests precede explicit operator attestation and activation. Trial or attestation metadata alone is not automated desktop evidence.
 - Preserve the complete existing password stack and other PAM sections. Never rewrite authselect-generated files or unrelated services. Unknown layouts refuse activation with useful diagnostics.
 - Refuse the M7-observed `with-faillock`/parallel-fingerprint combination until a reviewed compatibility decision resolves its native startup failures and KDE's missing account-phase reset. Neither activation nor the PIN route may hide it by clearing original counters or disabling other authenticators. See [ADR 0013](adr/0013-pam-unlock-contract.md).
 - Implement changed-file handling, owned-block removal, upgrade/state migration, downgrade behavior, disable, uninstall ordering and backup restoration. Test package transaction failure paths.
 - Make administrative recovery a short documented text-console procedure. Prove it restores a failed graphical unlock without reboot/reinstallation in the test environment.
 - Exercise clean install -> enroll -> test -> activate -> upgrade -> disable -> uninstall, including changed PAM files, SELinux denials and missing components.
 
-Migration from the temporary installation is a separate explicit operation:
+Migration from the temporary installation is a separate explicit operation.
+ADR 0015 refines its ordering because every protected PAM change revokes the
+whole immutable account domain:
 
-1. Inventory and back up the KDE service and identify the old owned block.
-2. Verify the existing full-password recovery route and prepare console recovery.
-3. Enroll LocalPIN freshly and test it with the isolated harness; import no old verifier.
-4. Remove only the old KDE PIN block and verify the password-only route.
-5. Activate the tested LocalPIN block; never stack the two PIN modules.
-6. Test PIN and password in the actual locker and demonstrate restoration from backup.
+1. Inventory the exact known legacy block, verify full-password recovery and retain a working administrator console.
+2. Use the explicit migration tool to durably back up the original and journal intent before revoking the domain and removing the old block.
+3. Verify the stock password-only route and complete the offline persistent-accounting prerequisite while preserving native counters.
+4. Prepare all supported UIDs, seal fresh incarnations and enroll LocalPIN; import no old verifier.
+5. Open a bounded trial, test actual desktop PIN/password/console recovery, record the operator attestation and activate.
+6. Demonstrate owned restoration and package recovery; never stack the two PIN modules.
 
 Exit gate: Fedora RPM lifecycle and recovery matrix passes with SELinux enforcing; activation is opt-in and layout checked; migration and rollback have executable evidence. Changes to an everyday machine occur only as a later, deliberate rollout.
 
@@ -417,7 +432,10 @@ tested in the pure Rust suites and documented in ADRs 0005–0007; actual
 persistence and platform lifecycle evidence belong to their later milestone
 reports. The [M6.1 report](development/m6.1-account-authorities.md) now records
 the restricted production account implementation and component validation;
-M7/M8/M9 retain unlock integration, installed confinement and release gates.
+M7 records its required unlock acceptance; M8's recorded installed confinement,
+RPM, desktop, reboot and recovery matrix passed for that same restricted domain.
+M9 retains independent review and physical hardware/release gates, and hosted CI
+execution remains unverified.
 
 No calendar estimate is committed before the feasibility work. Subsequent estimates should use measured test infrastructure effort and availability of independent review/hardware, with review and recovery work included in the schedule.
 

@@ -1,5 +1,5 @@
 [Unit]
-Description=LocalPIN local broker socket (development contract)
+Description=LocalPIN local authentication broker socket
 
 [Socket]
 ListenStream=/run/localpin/broker.sock

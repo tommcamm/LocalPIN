@@ -1,0 +1,12 @@
+/usr/libexec/localpin/localpind -- system_u:object_r:localpin_broker_exec_t:s0
+/usr/libexec/localpin/localpin-auth-worker -- system_u:object_r:localpin_auth_exec_t:s0
+/usr/libexec/localpin/localpin-eligibility-worker -- system_u:object_r:localpin_eligibility_exec_t:s0
+/usr/libexec/localpin/localpin-worker -- system_u:object_r:localpin_backend_exec_t:s0
+/var/lib/localpin(/.*)? system_u:object_r:localpin_state_t:s0
+/var/lib/localpin-accounts(/.*)? system_u:object_r:localpin_accounts_t:s0
+/var/lib/localpin-integration(/.*)? system_u:object_r:localpin_integration_t:s0
+/var/lib/localpin-integration/control(/.*)? system_u:object_r:localpin_backup_t:s0
+/var/lib/localpin-integration/gate -- system_u:object_r:localpin_gate_t:s0
+/var/lib/faillock(/.*)? system_u:object_r:faillog_t:s0
+/run/localpin(/.*)? system_u:object_r:localpin_runtime_t:s0
+/etc/pam\.d/localpin-(enroll|eligibility) -- system_u:object_r:localpin_pam_conf_t:s0

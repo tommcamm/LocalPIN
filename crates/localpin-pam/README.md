@@ -10,7 +10,17 @@ enforces ADR 0012's narrower supported account and session domain.
 The regular-file size/allocation bounds and `O_NONBLOCK` reject oversized input
 and special files; they do not impose a deadline on kernel filesystem I/O.
 
-Every authentication call clears any previous `PAM_AUTHTOK`, requests exactly
+M8 additionally requires the fixed root-controlled desktop activation gate.
+Missing, malformed, unsafe, disabled or expired state returns password fallback.
+A trial is bound to the current boot and expires within ten suspend-inclusive
+minutes; final activation requires explicit administrator-recorded desktop
+tests. The adapter rechecks the gate with its identity/context checks before
+capture, after conversation and after verification. Enrollment and broker PIN
+verification do not open it. See
+[ADR 0015](../../docs/adr/0015-m8-activation-and-rpm.md) and the
+[administration runbook](../../docs/integration-administration.md).
+
+Every admitted authentication call clears any previous `PAM_AUTHTOK`, requests exactly
 one fresh `PAM_PROMPT_ECHO_OFF` conversation with `Password: `, and copies the
 response from a successful callback with `pam_set_item(PAM_AUTHTOK)` before
 erasing and freeing its transferred C allocation. It never uses
@@ -62,6 +72,13 @@ erase historical copies, compiler moves, native PAM copies, swap or dumps.
 
 Run `cargo test -p localpin-pam` for policy, broker-order/deadline and panic
 boundary tests. Isolated tests under `tests/` exercise the built module through
-real Linux-PAM in a disposable namespace. These checks do not establish the
-stock-theme KDE/enforcing-VM M7 acceptance matrix or authorize host activation;
-those require the milestone's separate recorded evidence.
+real Linux-PAM in a disposable namespace. M7's separate
+[report](../../docs/development/m7-pam-integration.md) records required native
+and stock-KDE acceptance for its artifact. M8 packaging/gate changes passed the
+recorded 49-case installed matrix on the restricted Fedora 44 x86_64 Btrfs
+appliance with SELinux enforcing; see the
+[M8 report](../../docs/development/m8-packaging-recovery.md). Activation
+requires [ADR 0014](../../docs/adr/0014-persistent-faillock.md)'s persistent
+accounting variant and refuses the known fingerprint/faillock composition.
+Unit/native harnesses alone do not authorize everyday-host activation. M9
+independent review and physical TPM validation remain open; hosted CI is unverified.

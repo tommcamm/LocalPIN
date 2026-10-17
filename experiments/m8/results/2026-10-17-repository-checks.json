@@ -1,0 +1,57 @@
+{
+  "schema": 1,
+  "date": "2026-10-17",
+  "scope": "local source, native namespace and package build checks; installed desktop evidence is separate",
+  "checks": {
+    "cargo_fmt_all_check": "passed",
+    "cargo_clippy_workspace_all_targets_all_features_locked_deny_warnings": "passed",
+    "cargo_test_workspace_all_features_locked": {
+      "passed": 307,
+      "failed": 0,
+      "ignored": 10,
+      "ignored_tests_are_not_counted_as_executed": true
+    },
+    "new_cache_window_authority_and_failure_tests_after_workspace_run": {
+      "passed": 6,
+      "failed": 0,
+      "production_code_unchanged_since_workspace_run": true
+    },
+    "new_fixed_account_cli_grammar_and_nonroot_tests": {
+      "passed": 2,
+      "failed": 0
+    },
+    "cargo_deny_0_20_2_advisories_bans_licenses_sources": "passed",
+    "activation_transaction_and_failure_tests": {
+      "passed": 51,
+      "failed": 0
+    },
+    "disposable_vm_guard_tests": {
+      "passed": 21,
+      "failed": 0
+    },
+    "packaging_and_policy_compilation_tests": {
+      "passed": 8,
+      "failed": 0
+    },
+    "release_pam_private_namespace_checks": {
+      "pass_records": 77,
+      "failed": 0
+    },
+    "protected_broker_private_namespace": "passed",
+    "enrollment_broker_private_namespace": "passed",
+    "native_persistent_faillock_private_namespace": "passed",
+    "native_tally_access_readonly_mount_and_nonmutation_private_namespace": "passed",
+    "native_release_rpm_baseline_and_upgrade_builds": "passed",
+    "git_diff_check": "passed"
+  },
+  "infrastructure": {
+    "default_syscall_sandbox_denied_required_ipc_process_and_namespace_operations": true,
+    "affected_suites_rerun_with_required_permissions": true,
+    "native_development_inputs": "repository-local extracted sysroot; no host package installation",
+    "host_authentication_configuration_changed": false,
+    "host_account_database_used_as_test_fixture": false,
+    "physical_tpm_used": false
+  },
+  "hosted_ci_execution": "unverified",
+  "independent_human_or_specialist_review": "M9 pending"
+}

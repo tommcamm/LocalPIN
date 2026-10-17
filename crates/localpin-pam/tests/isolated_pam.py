@@ -245,6 +245,10 @@ def inside():
     assert int(mapping[0]) == 0 and int(mapping[1]) != 0, "host root is forbidden"
     assert not Path("/etc/passwd").exists(), "host /etc must not be mounted"
     account = setup_accounts()
+    # Namespace-private administrator activation; absent gates deny only PIN.
+    Path("/var/lib/localpin-integration").mkdir(parents=True, mode=0o755)
+    Path("/var/lib/localpin-integration/gate").write_bytes(b"LPINT01\nactive\n")
+    Path("/var/lib/localpin-integration/gate").chmod(0o644)
     Path("/run/localpin").mkdir(mode=0o755)
     kde = Path("/etc/pam.d/kde")
     Path("/etc/pam.d/login").write_text(policy())
@@ -265,6 +269,41 @@ def inside():
     kde.write_text(policy())
     pam = Pam(broker)
     try:
+        gate = Path('/var/lib/localpin-integration/gate')
+        for name, data in [('disabled', b'LPINT01\ndisabled\n'),
+                           ('malformed', b'LPINT01\nactive'),
+                           ('expired trial', b'LPINT01\ntrial\n01234567-89ab-cdef-0123-456789abcdef\n0\n1\n')]:
+            gate.write_bytes(data)
+            pam.attempt(name + ' gate preserves full password', b'synthetic-password', operations=())
+            pam.attempt(name + ' gate cannot use broker grant', b'001122', b'other-password',
+                        mode='granted', success=False, operations=(), failures=1)
+        gate.unlink()
+        pam.attempt('missing activation gate preserves full password', b'synthetic-password')
+        gate.write_bytes(b'LPINT01\nactive\n')
+        gate.chmod(0o666)
+        pam.attempt('writable activation gate cannot authorize PIN', b'001122', b'other-password',
+                    mode='granted', success=False, failures=1)
+        gate.chmod(0o644)
+        other_gate = gate.with_name('gate-original')
+        gate.rename(other_gate)
+        gate.symlink_to(other_gate.name)
+        pam.attempt('symlink activation gate cannot authorize PIN', b'001122', b'other-password',
+                    mode='granted', success=False, failures=1)
+        gate.unlink()
+        os.link(other_gate, gate)
+        pam.attempt('hardlinked activation gate cannot authorize PIN', b'001122', b'other-password',
+                    mode='granted', success=False, failures=1)
+        other_gate.unlink()
+        gate.parent.chmod(0o777)
+        pam.attempt('writable activation directory cannot authorize PIN', b'001122', b'other-password',
+                    mode='granted', success=False, failures=1)
+        gate.parent.chmod(0o755)
+        first = time.clock_gettime_ns(time.CLOCK_BOOTTIME) // 1_000_000
+        boot = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+        gate.write_bytes(f'LPINT01\ntrial\n{boot}\n{first}\n{first + 600000}\n'.encode())
+        pam.attempt('valid current-boot trial permits PIN', b'001122', b'other-password',
+                    mode='granted', password_calls=0, operations=(1, 2, 3))
+        gate.write_bytes(b'LPINT01\nactive\n')
         for name, candidate in [
             ("ordinary password", b"synthetic-password"),
             ("empty password", b""), ("five digits", b"12345"),
@@ -278,6 +317,9 @@ def inside():
                                 ("leading-zero password", b"001122")]:
             pam.attempt(name, candidate, operations=(1, 2, 3))
         pam.attempt("PIN success short circuits password", b"001122", b"different-password", mode="granted", password_calls=0, operations=(1, 2, 3))
+        gate.write_bytes(b'LPINT01\ndisabled\n')
+        pam.attempt('gate revocation on reused successful PAM handle preserves fresh password', b'new-password')
+        gate.write_bytes(b'LPINT01\nactive\n')
         pam.attempt("reused handle obtains fresh six-digit password", b"481516", operations=(1, 2, 3))
         pam.attempt("previous success cannot authorize wrong password", b"wrong", b"481516", success=False, failures=1)
         pam.attempt("failed PIN followed by fresh full password", b"synthetic-password")

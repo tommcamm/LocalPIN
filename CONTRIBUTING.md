@@ -12,8 +12,13 @@ M7's production PAM adapter, isolated native tests and required enforcing-KDE
 acceptance cases passed for this domain. Its
 [report](docs/development/m7-pam-integration.md) records evidence and native
 accounting/TPM recovery limits.
-M8 installed sandbox/packaging and
-M9 human/specialist review and hardware validation remain open. Read the
+M8 packaging, confinement definitions, staged root activation/recovery and exact
+persistent accounting passed the recorded 49-case installed matrix on the
+restricted Fedora 44 x86_64 Btrfs appliance with SELinux enforcing. See the
+[M8 report](docs/development/m8-packaging-recovery.md) and
+[sanitized results](experiments/m8/results/2026-10-17-fedora44-rpm-recovery.json).
+M9 independent human/specialist review and physical hardware validation remain
+open; hosted CI execution remains unverified. Read the
 [product specification](docs/product-specification.md) and
 [implementation plan](docs/implementation-plan.md) before proposing implementation
 changes. Authentication behavior needs evidence appropriate to its risk, including
@@ -46,6 +51,7 @@ cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --all-features --locked
 cargo build --workspace --all-features --release --locked
 cargo deny --locked check advisories bans licenses sources
+python3 -m unittest discover -s tools/tests
 ```
 
 Install the `cargo-deny` version pinned by CI before the last command. Advisory
@@ -102,6 +108,17 @@ repair required state. Repeat the guarded real-account matrix in an independent
 disposable Fedora KDE VM with SELinux enforcing; ordinary workspace tests cannot
 establish those guarantees. Lifecycle provisioning changes global VM account
 administration and is never a host-side test setup step.
+
+Activation/package changes also require the
+[integration administration contract](docs/integration-administration.md),
+[ADR 0014](docs/adr/0014-persistent-faillock.md),
+[ADR 0015](docs/adr/0015-m8-activation-and-rpm.md) and
+[ADR 0016](docs/adr/0016-package-cache-window.md). Keep the exact legacy volatile
+component policy separate from M8's required persistent variant. Activation
+refuses the known fingerprint/faillock composition; tests must preserve native
+counters. Synthetic tool/fault tests do not complete the installed enforcing-VM
+RPM, desktop, reboot and console-recovery acceptance matrix. A root-recorded
+test attestation is explicitly operator supplied, not automated desktop proof.
 
 ## Authentication experiments
 

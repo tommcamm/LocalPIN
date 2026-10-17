@@ -1,0 +1,3 @@
+# Package installation never opts an appliance into authentication integration.
+disable localpin.socket
+disable localpin.service

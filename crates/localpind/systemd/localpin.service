@@ -1,11 +1,15 @@
 [Unit]
-Description=LocalPIN bounded broker (development contract)
+Description=LocalPIN bounded authentication broker
 Requires=localpin.socket
 After=localpin.socket dbus.service systemd-logind.service
+ConditionPathIsDirectory=/var/lib/localpin-accounts
+StartLimitIntervalSec=60
+StartLimitBurst=3
 
 [Service]
 Type=simple
 ExecStart=/usr/libexec/localpin/localpind
+SELinuxContext=system_u:system_r:localpin_broker_t:s0
 User=root
 Group=root
 RuntimeDirectory=localpin
@@ -15,20 +19,37 @@ StateDirectory=localpin
 StateDirectoryMode=0700
 UMask=0077
 NoNewPrivileges=yes
-CapabilityBoundingSet=
+# The shared service contains exec-transitioned PAM children. SELinux permits
+# DAC reads in the lifecycle broker/PAM domains and audit writes only in PAM.
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_AUDIT_WRITE
 AmbientCapabilities=
 PrivateTmp=yes
 ProtectSystem=strict
+ReadWritePaths=/var/lib/localpin /var/lib/faillock
+ReadOnlyPaths=/var/lib/localpin-accounts /var/lib/localpin-integration
 ProtectHome=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectKernelLogs=yes
 ProtectControlGroups=yes
-RestrictAddressFamilies=AF_UNIX
+# PAM audit writes require AF_NETLINK. No IP family or network namespace escape.
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
 RestrictNamespaces=yes
-RestrictSUIDSGID=yes
+# RestrictSUIDSGID is incompatible with the required openat2 path boundary:
+# systemd259 blocks that syscall with ENOSYS. NNP, capability and MAC limits
+# still prevent privilege gain or execution from writable credential storage.
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictRealtime=yes
+RemoveIPC=yes
+KeyringMode=private
+SystemCallArchitectures=native
+# A worker descendant must remain in the operation's charged process group.
+# The broker sets a child group before exec; SELinux denies helper setpgid.
+SystemCallFilter=~setsid
+SystemCallErrorNumber=EPERM
 DevicePolicy=closed
 DeviceAllow=/dev/tpmrm0 rw
 LimitCORE=0

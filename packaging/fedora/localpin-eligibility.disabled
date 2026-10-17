@@ -1,0 +1,3 @@
+# Explicit appliance preparation installs the reviewed policy after inventory.
+auth requisite pam_deny.so
+account requisite pam_deny.so

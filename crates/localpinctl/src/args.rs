@@ -29,8 +29,10 @@ pub enum Command {
     Migrate(BackendPreference),
     /// Display system integration state.
     IntegrationStatus,
-    /// Explain the administrative integration boundary.
-    IntegrationChange,
+    /// Show the exact root activation command and its separate test prerequisite.
+    IntegrationEnable,
+    /// Show the exact root integration-disable command.
+    IntegrationDisable,
     /// Root-only recovery of a named local account.
     Recover(String),
 }
@@ -66,9 +68,8 @@ pub fn parse(args: &[OsString]) -> Result<Command, CliError> {
             }
         }
         2 if equals(0, "integration") && equals(1, "status") => Ok(Command::IntegrationStatus),
-        2 if equals(0, "integration") && (equals(1, "enable") || equals(1, "disable")) => {
-            Ok(Command::IntegrationChange)
-        }
+        2 if equals(0, "integration") && equals(1, "enable") => Ok(Command::IntegrationEnable),
+        2 if equals(0, "integration") && equals(1, "disable") => Ok(Command::IntegrationDisable),
         3 if equals(0, "recover") && equals(1, "--user") => {
             let account = args[2].to_str().ok_or(CliError::Arguments)?;
             if account.is_empty()
@@ -101,7 +102,7 @@ pub fn check_environment(
 }
 
 /// Supported commands and security-relevant input behavior.
-pub const HELP: &str = "Usage: localpinctl doctor [--json]\n       localpinctl status [--json]\n       localpinctl enroll --backend auto|tpm2-required|software\n       localpinctl change\n       localpinctl disable\n       localpinctl migrate --backend tpm2-required|software\n       localpinctl integration enable|disable|status\n       localpinctl recover --user <account>\n\nPINs and passwords require a foreground terminal. No secret arguments,\nenvironment variables, stdin input, or simulator overrides are supported.\nIntegration changes require the separately reviewed administrative activation\ntooling; installation and enrollment do not activate desktop integration.";
+pub const HELP: &str = "Usage: localpinctl doctor [--json]\n       localpinctl status [--json]\n       localpinctl enroll --backend auto|tpm2-required|software\n       localpinctl change\n       localpinctl disable\n       localpinctl migrate --backend tpm2-required|software\n       localpinctl integration enable|disable|status\n       localpinctl recover --user <account>\n\nPINs and passwords require a foreground terminal. No secret arguments,\nenvironment variables, stdin input, or simulator overrides are supported.\nIntegration enable/disable print the exact root administration command.\nPrepare, a bounded trial, and administrator-recorded desktop/password tests\nprecede activation; installation and enrollment do not activate integration.";
 
 #[cfg(test)]
 mod tests {
@@ -149,6 +150,25 @@ mod tests {
             command(&["recover", "--user", "../user"]),
             Err(CliError::Arguments)
         );
+        assert_eq!(
+            command(&["integration", "enable"]),
+            Ok(Command::IntegrationEnable)
+        );
+        assert_eq!(
+            command(&["integration", "disable"]),
+            Ok(Command::IntegrationDisable)
+        );
+        assert_eq!(
+            command(&["integration", "status"]),
+            Ok(Command::IntegrationStatus)
+        );
+        for parts in [
+            vec!["integration", "activate"],
+            vec!["integration", "enable", "--yes"],
+            vec!["integration", "disable", "/tmp/helper"],
+        ] {
+            assert_eq!(command(&parts), Err(CliError::Arguments));
+        }
     }
     #[test]
     fn environment_secret_channels_and_simulator_overrides_are_rejected() {

@@ -226,6 +226,25 @@ identify the implemented compatibility domain; the
 [M6.1 evidence report](../development/m6.1-account-authorities.md) must state
 which actual real-account cases passed before milestone acceptance is claimed.
 
+M8 extension, 2026-10-17: the native account-expiry path additionally pins
+Fedora's root-owned `/usr/bin/unix_chkpwd` from the same PAM package:
+
+| Added M8 native input | SHA256 |
+| --- | --- |
+| `/usr/bin/unix_chkpwd` | `0cb285f3c1819e3ca92545b448fed4d0b6a41ce81899ad11d9512d80b18b7e79` |
+
+The installed enforcing matrix verified its `chkpwd_exec_t` label and maintained
+`chkpwd_t` transition. The actual linked policy allowed no helper-domain
+`setpgid`; the service also denied `setsid`. This is the measured Fedora 44
+policy boundary, not a claim about arbitrary future policy updates. The
+[M8 report](../development/m8-packaging-recovery.md) records those checks.
+[ADR 0014](0014-persistent-faillock.md) adds the exact persistent accounting
+variant required for installed activation.
+[ADR 0016](0016-package-cache-window.md) defines the narrow compatible-RPM
+exception: authority is revoked while only `/etc`'s directory flag is released,
+and exact validated completion can retain original account incarnations. These
+are M8 extensions; the M6.1 component evidence above retains its historical scope.
+
 Faillock preauth is performed under both supported password-auth profiles:
 the separate enrollment password service itself uses native faillock accounting.
 Its tally must be a bounded single-link regular file, target-UID:root, mode 0660,

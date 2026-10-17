@@ -10,6 +10,7 @@ Run: cargo build -p localpin-auth --bin localpin-auth-worker
 import pathlib
 import os
 import select
+import shutil
 import struct
 import subprocess
 import sys
@@ -36,11 +37,13 @@ def frame(stream):
     return header[0], header[1:17], struct.unpack("!I", header[17:21])[0], exact(stream, struct.unpack("!H", header[21:23])[0])
 
 
-def run(worker, etc, runtime, password):
+def run(worker, etc, runtime, password, persistent=None):
     token = bytes([8]) * 16
     request = b"LPA1" + token + struct.pack("!I", 1000) + bytes([1])*16 + bytes([2])*16 + bytes([3])*16 + bytes([2]) + struct.pack("!Q", 2) + bytes([4])*16 + struct.pack("!Q", 100)
     assert len(request) == 105
     command = ["/usr/bin/unshare", "--user", "--map-root-user", "--net", "--", "/usr/bin/bwrap", "--unshare-all", "--share-net", "--die-with-parent", "--clearenv", "--uid", "0", "--gid", "0", "--ro-bind", "/usr", "/usr", "--symlink", "usr/lib64", "/lib64", "--symlink", "usr/lib", "/lib", "--symlink", "usr/bin", "/bin", "--symlink", "usr/sbin", "/sbin", "--proc", "/proc", "--dev", "/dev", "--ro-bind", str(etc), "/etc", "--bind", str(runtime), "/run", "--ro-bind", str(worker), "/worker", "--", "/worker"]
+    if persistent is not None:
+        command[-2:-2] = ["--bind", str(persistent), "/var/lib/faillock"]
     process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env={})
     try:
         process.stdin.write(request)
@@ -128,7 +131,26 @@ def main():
         for forbidden in ["auth sufficient pam_permit.so\n", "auth include system-auth\n", "auth sufficient pam_localpin.so\n", "auth sufficient pam_pinlock.so\n", "auth sufficient pam_fprintd.so\n", "auth sufficient pam_timestamp.so\n"]:
             service.write_text(forbidden + POLICY.read_text())
             assert run(worker, etc, runtime, PASSWORD) == (2, False), "unsupported shortcut policy"
-        print("PASS: private real PAM password, failure accounting, lockout, locked/expired account, unsupported policy")
+        service.write_text(POLICY.read_text())
+        persistent = root / "persistent-faillock"
+        persistent.mkdir()
+        (etc / "security" / "faillock.conf").write_bytes(b"dir = /var/lib/faillock\n")
+        shutil.rmtree(runtime)
+        runtime.mkdir()
+        for _ in range(3):
+            assert run(worker, etc, runtime, b"wrong synthetic", persistent) == (1, True)
+        persistent_tally = persistent / "fixture"
+        before = persistent_tally.read_bytes()
+        assert len(before) == 3 * 64, "native failures must use the fixed persistent directory"
+        assert not (runtime / "faillock" / "fixture").exists(), "persistent policy must not fall back to volatile accounting"
+        # Recreate the entire private /run between fresh native worker processes.
+        # This proves accounting survives volatile-runtime loss; actual reboot
+        # and installed SELinux acceptance remain separate VM requirements.
+        shutil.rmtree(runtime)
+        runtime.mkdir()
+        assert run(worker, etc, runtime, PASSWORD, persistent) == (1, False), "persistent native lockout must survive volatile-runtime loss"
+        assert persistent_tally.read_bytes() == before, "denied locked password must preserve exact persistent counters"
+        print("PASS: private real PAM password, failure accounting, lockout, locked/expired account, unsupported policy, persistent lockout across volatile-runtime loss")
 
 
 if __name__ == "__main__":

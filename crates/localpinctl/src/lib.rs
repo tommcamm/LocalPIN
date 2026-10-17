@@ -42,8 +42,10 @@ pub enum CliError {
     NotEnrolled,
     /// Account selection did not resolve to one non-root local account.
     Account,
-    /// Desktop activation is owned by separately reviewed administrative tooling.
+    /// Desktop activation requires the separate root tool and recorded tests.
     Integration,
+    /// System integration disable requires the separate root administration tool.
+    IntegrationDisable,
 }
 
 impl fmt::Display for CliError {
@@ -65,7 +67,8 @@ impl fmt::Display for CliError {
             Self::Backend => "TPM protection is unavailable; inspect localpinctl doctor, or explicitly choose --backend software",
             Self::NotEnrolled => "no existing enrollment is available for this action",
             Self::Account => "select one existing, non-root local account by its account name",
-            Self::Integration => "integration changes require the separately reviewed root activation tooling; CLI enrollment does not activate desktop integration",
+            Self::Integration => "root activation tooling requires prepare, a bounded trial, and administrator-recorded desktop/password tests first; then run sudo /usr/libexec/localpin/localpin-integration activate; enrollment does not activate desktop integration",
+            Self::IntegrationDisable => "run sudo /usr/libexec/localpin/localpin-integration disable to disable system desktop integration; this is separate from disabling an account's PIN credential",
         })
     }
 }

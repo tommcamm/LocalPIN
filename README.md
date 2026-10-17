@@ -6,7 +6,7 @@ It is intended to become useful, reviewable open-source software.
 
 Repository: [tommcamm/LocalPIN](https://github.com/tommcamm/LocalPIN).
 
-**Development status: M2–M7 implemented and locally verified for the restricted account domain below.**
+**Development status: M2–M8 verified for the restricted appliance domain below; M9 review and physical hardware gates remain open.**
 This repository contains the specification, implementation roadmap, pure Rust
 state machines, bounded IPC parsers, protected Linux filesystem storage,
 isolated PAM/TPM/platform experiments and guarded Fedora KDE VM tests under
@@ -38,9 +38,20 @@ policy extension. Native PAM tests and stock KDE PIN/password/fault cases passed
 in a disposable enforcing VM, including the native TPM route with a private
 emulator. See the [M7 report](docs/development/m7-pam-integration.md) for evidence,
 TPM recovery limits and the native fingerprint/faillock activation blocker.
-M8 packaging/confinement and M9 human/specialist
-review and hardware validation remain open. No installable package is provided.
-There is no supported production release.
+M8 adds native Fedora RPM packaging, systemd/SELinux confinement definitions,
+staged root activation and console recovery, and persistent native accounting.
+Its 49-case installed acceptance matrix passed on the recorded Fedora 44 x86_64
+Btrfs appliance with SELinux enforcing and a private TPM emulator. The
+[M8 report](docs/development/m8-packaging-recovery.md) and
+[sanitized results](experiments/m8/results/2026-10-17-fedora44-rpm-recovery.json)
+record desktop, RPM, ordinary reboot and interrupted-upgrade recovery evidence. The
+[administration runbook](docs/integration-administration.md),
+[persistent-accounting decision](docs/adr/0014-persistent-faillock.md),
+[activation/RPM decision](docs/adr/0015-m8-activation-and-rpm.md) and
+[package-cache window](docs/adr/0016-package-cache-window.md) define the narrow
+deployment contract. The known fingerprint/faillock combination is refused.
+M9 independent review and physical hardware validation remain open; hosted CI
+execution is unverified and there is no supported production release.
 
 ## Intended scope
 
@@ -49,7 +60,8 @@ design uses a small PAM adapter, a local broker with durable attempt limits, and
 either a TPM 2.0 credential or an explicitly selected software backend. Password
 fallback, opt-in activation, enforcing SELinux support, and tested recovery are
 release requirements. PAM unlock and fallback have disposable-VM evidence;
-installed activation, confinement, packaging and hardware recovery remain open.
+installed M8 activation/confinement/recovery acceptance passed for the restricted
+appliance, and physical hardware validation remains open.
 
 Initial login, sudo, SSH, polkit, and disk encryption are outside the initial
 scope. Six-digit PINs have limited entropy. The
@@ -81,6 +93,7 @@ cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --all-features --locked
 cargo build --workspace --all-features --release --locked
 cargo deny --locked check advisories bans licenses sources
+python3 -m unittest discover -s tools/tests
 ```
 
 These workspace checks cover policy, protocol, storage, backends and broker.
@@ -103,8 +116,10 @@ The simulator test requires `swtpm` and `tpm2-tools`. The protected broker suite
 requires bubblewrap, user namespaces and subordinate UID/GID mappings; it uses
 only disposable state and synthetic account authorities. The benchmark uses synthetic
 input and reports local KDF latency. These checks do not validate production PAM, physical TPMs,
-password fallback, or desktop integration. There are no installation or
-activation commands at this stage.
+password fallback, or desktop integration. Experimental RPM and fixed-path root
+administration commands are documented in the
+[installation and recovery runbook](docs/integration-administration.md); their
+installed acceptance is separate from these checks.
 
 The CLI command grammar is available with `cargo run -p localpinctl -- --help`.
 Status and doctor are read-only. Enrollment requires a trusted supported account
@@ -123,11 +138,15 @@ that authority only within the [sealed appliance domain](docs/account-administra
 It freezes global account/policy inputs, drains pre-existing writers before
 sealing, and requires durable global revocation before administration. Resealing
 creates fresh disabled incarnations and requires enrollment again. Own-user
-enrollment never provisions or repairs lifecycle state. Missing volatile faillock
-state after reboot also makes PIN unavailable pending privileged recovery.
-Broker systemd units remain development contracts; installed SELinux/sandbox
-validation remains part of M8. Do not apply the appliance setup to an everyday
-machine as a development test.
+enrollment never provisions or repairs lifecycle state. The legacy component
+policy still refuses PIN when reboot loses `/run/faillock` state. M8 activation
+requires the exact persistent `/var/lib/faillock` variant; its one-time offline
+transition preserves native counters and requires fresh enrollment. Missing
+persistent state is also refused, never reconstructed. The installed enforcing
+matrix retained the same TPM enrollment through ordinary reboot and interrupted
+package-cache recovery. Compatible upgrades use
+[ADR 0016](docs/adr/0016-package-cache-window.md)'s bounded authority window.
+Do not apply the appliance setup to an everyday machine as a development test.
 
 ## Development
 
@@ -143,9 +162,10 @@ and their remaining gates.
 Changes are tracked in [CHANGELOG.md](CHANGELOG.md).
 
 The existing [pam_pinlock project](https://github.com/saltnpepper97/pam_pinlock)
-provides migration context. LocalPIN begins as an independent implementation;
-no compatibility, migration tooling, or security improvement over that project
-has been demonstrated.
+provides migration context. LocalPIN is an independent implementation. M8's
+explicit migration removes one exact measured legacy KDE block before fresh
+provisioning/enrollment; it imports no old verifier. Broader compatibility or a
+security improvement over that project has not been demonstrated.
 
 ## AI disclosure
 

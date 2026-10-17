@@ -1,0 +1,8 @@
+# State is intentionally retained on erase. No age-based deletion of authority,
+# throttle, enrollment or recovery data is permitted.
+d /var/lib/localpin 0700 root root -
+d /var/lib/localpin-accounts 0700 root root -
+d /var/lib/localpin-integration 0755 root root -
+d /var/lib/localpin-integration/control 0700 root root -
+d /var/lib/faillock 0755 root root -
+d /run/localpin 0755 root root -

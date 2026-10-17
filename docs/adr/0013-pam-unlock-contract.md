@@ -2,7 +2,12 @@
 
 Date: 2026-10-17. Status: accepted M7 implementation contract; acceptance requires
 the production adapter's isolated tests and disposable stock KDE evidence.
-Installed activation, packaging and confinement remain M8 gates.
+The historical M7 evidence below retains its original accounting and TPM limits.
+M8's recorded installed activation, packaging, confinement, reboot and recovery
+matrix subsequently passed for the restricted Fedora 44 x86_64 Btrfs appliance
+with SELinux enforcing; see the [M8 report](../development/m8-packaging-recovery.md).
+Its unsafe fingerprint/faillock composition remains activation-refused, and M9
+independent review and physical TPM validation remain open.
 
 ## Exact policy extension
 

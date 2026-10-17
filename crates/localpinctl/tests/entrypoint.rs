@@ -40,10 +40,28 @@ fn secret_environment_and_simulator_override_are_rejected_without_values() {
 
 #[test]
 fn integration_changes_do_not_claim_activation() {
-    let output = command().args(["integration", "enable"]).output().unwrap();
-    assert!(!output.status.success());
-    assert!(output.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("root activation tooling"));
+    for (operation, root_action) in [("enable", "activate"), ("disable", "disable")] {
+        let output = command().args(["integration", operation]).output().unwrap();
+        assert!(!output.status.success());
+        assert!(output.stdout.is_empty());
+        let diagnostic = String::from_utf8_lossy(&output.stderr);
+        assert!(diagnostic.contains(&format!(
+            "sudo /usr/libexec/localpin/localpin-integration {root_action}"
+        )));
+        if operation == "enable" {
+            assert!(diagnostic.contains("root activation tooling"));
+            assert!(diagnostic.contains("bounded trial"));
+            assert!(diagnostic.contains("tests first"));
+        }
+    }
+}
+
+#[test]
+fn integration_status_reads_the_local_gate_without_broker_or_terminal() {
+    let output = command().args(["integration", "status"]).output().unwrap();
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("Desktop integration gate:"));
 }
 
 #[test]

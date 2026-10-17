@@ -26,7 +26,10 @@ use localpin_storage::Storage;
 use std::{
     io,
     os::unix::net::{UnixListener, UnixStream},
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
     thread,
     time::Duration,
 };
@@ -123,10 +126,15 @@ impl EligibilityAuthority for SystemEligibility {
             return Err(EligibilityError::WrongAccount);
         }
         if let Some(session) = &self.session {
-            self.resolver
-                .revalidate(&self.peer, session, self.deadline)?;
+            authority_result(
+                self.resolver.revalidate(&self.peer, session, self.deadline),
+                "session revalidation",
+            )?;
         } else {
-            self.session = Some(self.resolver.resolve(&self.peer, self.deadline)?);
+            self.session = Some(authority_result(
+                self.resolver.resolve(&self.peer, self.deadline),
+                "session routing",
+            )?);
         }
         // Leave time to deliver unavailable after killing a delayed native PAM
         // check. The original password stack retains its own failure delay.
@@ -139,23 +147,53 @@ impl EligibilityAuthority for SystemEligibility {
         let policy_deadline = now
             .checked_add(remaining)
             .ok_or(EligibilityError::Unavailable)?;
-        self.policy
-            .check_password_free(account.uid.get(), policy_deadline, &mut || {
-                self.peer.cancelled()
-            })?;
+        authority_result(
+            self.policy
+                .check_password_free(account.uid.get(), policy_deadline, &mut || {
+                    self.peer.cancelled()
+                }),
+            "native eligibility",
+        )?;
         self.peer
             .ensure_live()
             .map_err(|_| EligibilityError::Unavailable)?;
         // The reference remains bound to this exact logind incarnation. Both
         // account policy and session are repeated at the existing final fences.
         let session = self.session.as_ref().ok_or(EligibilityError::Unavailable)?;
-        self.resolver
-            .revalidate(&self.peer, session, self.deadline)?;
+        authority_result(
+            self.resolver.revalidate(&self.peer, session, self.deadline),
+            "final session revalidation",
+        )?;
         Ok(EligibilitySnapshot::from_trusted_check(
             account,
             session.reference(),
         ))
     }
+}
+
+// One static diagnostic per minute, shared across callers. No account, PID,
+// session properties, candidate or native error strings enter the journal.
+fn authority_result<T>(
+    result: Result<T, EligibilityError>,
+    component: &'static str,
+) -> Result<T, EligibilityError> {
+    static LAST_DIAGNOSTIC: AtomicU64 = AtomicU64::new(0);
+    if matches!(
+        result,
+        Err(EligibilityError::Unavailable | EligibilityError::UnknownProperties)
+    ) {
+        let seconds = rustix::time::clock_gettime(rustix::time::ClockId::Boottime).tv_sec;
+        let now = u64::try_from(seconds).unwrap_or(0).max(1);
+        let previous = LAST_DIAGNOSTIC.load(Ordering::Relaxed);
+        if (previous == 0 || now.saturating_sub(previous) >= 60)
+            && LAST_DIAGNOSTIC
+                .compare_exchange(previous, now, Ordering::Relaxed, Ordering::Relaxed)
+                .is_ok()
+        {
+            eprintln!("localpind: account authority unavailable ({component})");
+        }
+    }
+    result
 }
 
 struct Lifecycle(Box<dyn LifecycleAuthority>);
@@ -337,6 +375,11 @@ impl Engine for ProtectedEngine {
             _ => return unavailable_status(Reason::Storage),
         };
         let mut status = unavailable_status(Reason::None);
+        status.integration = if localpin_protocol::integration::permits_pin() {
+            Integration::Active
+        } else {
+            Integration::Inactive
+        };
         status.enrolled = state.backend().map(|backend| match backend {
             Backend::Software => localpin_protocol::Backend::Software,
             Backend::Tpm2 => localpin_protocol::Backend::Tpm,

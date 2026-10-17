@@ -14,13 +14,96 @@ use std::{
     os::unix::{fs::MetadataExt, net::UnixStream, process::CommandExt},
     path::{Component, Path, PathBuf},
     process::{Child, Command, ExitStatus, Stdio},
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
     thread,
     time::Duration,
 };
 use zeroize::{Zeroize, Zeroizing};
 
 const POLL: Duration = Duration::from_millis(2);
+
+#[derive(Clone, Copy)]
+enum EligibilityStage {
+    Entropy,
+    Reserve,
+    Launch,
+    IpcWrite,
+    IpcRead,
+    FrameSize,
+    ProcessState,
+    Reap,
+    TerminalExit,
+    IncompleteRequest,
+    Deadline,
+    Decode,
+    IncompleteFrame,
+    Binding,
+    WorkerUnavailable,
+    WorkerResult,
+}
+
+impl EligibilityStage {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Entropy => "entropy",
+            Self::Reserve => "reserve",
+            Self::Launch => "launch",
+            Self::IpcWrite => "ipc-write",
+            Self::IpcRead => "ipc-read",
+            Self::FrameSize => "frame-size",
+            Self::ProcessState => "process-state",
+            Self::Reap => "reap",
+            Self::TerminalExit => "terminal-exit",
+            Self::IncompleteRequest => "incomplete-request",
+            Self::Deadline => "deadline",
+            Self::Decode => "decode",
+            Self::IncompleteFrame => "incomplete-frame",
+            Self::Binding => "binding",
+            Self::WorkerUnavailable => "worker-unavailable",
+            Self::WorkerResult => "worker-result",
+        }
+    }
+}
+
+fn diagnostic_allowed(last: &AtomicU64, seconds: u64) -> bool {
+    let now = seconds.max(1);
+    let previous = last.load(Ordering::Relaxed);
+    (previous == 0 || now.saturating_sub(previous) >= 60)
+        && last
+            .compare_exchange(previous, now, Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
+}
+
+fn eligibility_diagnostic(stage: EligibilityStage, kind: Option<io::ErrorKind>) -> String {
+    match kind {
+        Some(kind) => format!(
+            "localpin: eligibility supervisor unavailable stage={} io-kind={kind:?}",
+            stage.name()
+        ),
+        None => format!(
+            "localpin: eligibility supervisor unavailable stage={}",
+            stage.name()
+        ),
+    }
+}
+
+fn eligibility_failure(
+    stage: EligibilityStage,
+    kind: Option<io::ErrorKind>,
+) -> localpin_core::eligibility::EligibilityError {
+    // One static category per minute across every supervisor/account. No UID,
+    // token, frame, candidate, path or native error string enters this record.
+    // Password enrollment and ordinary account-policy denial are not logged.
+    static LAST_DIAGNOSTIC: AtomicU64 = AtomicU64::new(0);
+    let seconds = rustix::time::clock_gettime(rustix::time::ClockId::Boottime).tv_sec;
+    if diagnostic_allowed(&LAST_DIAGNOSTIC, u64::try_from(seconds).unwrap_or(0)) {
+        eprintln!("{}", eligibility_diagnostic(stage, kind));
+    }
+    localpin_core::eligibility::EligibilityError::Unavailable
+}
 
 struct Entry {
     uid: u32,
@@ -171,25 +254,28 @@ impl PasswordSupervisor {
     ) -> Result<(), localpin_core::eligibility::EligibilityError> {
         use localpin_core::eligibility::EligibilityError;
         let deadline = deadline.min(BootInstant::now() + Duration::from_secs(2));
-        fn unavailable<T>(_: T) -> EligibilityError {
-            EligibilityError::Unavailable
-        }
         if uid == 0 || uid == u32::MAX || BootInstant::now() >= deadline || cancelled() {
             return Err(EligibilityError::Unavailable);
         }
         let mut token = [0; 16];
-        getrandom::fill(&mut token).map_err(unavailable)?;
+        getrandom::fill(&mut token)
+            .map_err(|_| eligibility_failure(EligibilityStage::Entropy, None))?;
         if token == [0; 16] {
-            return Err(EligibilityError::Unavailable);
+            return Err(eligibility_failure(EligibilityStage::Entropy, None));
         }
-        let index = self.reserve(uid).map_err(unavailable)?;
+        let index = self
+            .reserve(uid)
+            .map_err(|_| eligibility_failure(EligibilityStage::Reserve, None))?;
         let mut stream = match self.spawn(index, uid) {
             Ok(stream) => stream,
-            Err(_) => {
+            Err(error) => {
                 if let Ok(mut slots) = self.shared.slots.lock() {
                     slots[index] = None;
                 }
-                return Err(EligibilityError::Unavailable);
+                return Err(eligibility_failure(
+                    EligibilityStage::Launch,
+                    Some(error.kind()),
+                ));
             }
         };
         let mut guard = Guard {
@@ -206,19 +292,32 @@ impl PasswordSupervisor {
         let mut eof = false;
         let mut status = None;
         loop {
-            if BootInstant::now() >= deadline || cancelled() {
+            if BootInstant::now() >= deadline {
+                return Err(eligibility_failure(EligibilityStage::Deadline, None));
+            }
+            if cancelled() {
                 return Err(EligibilityError::Unavailable);
             }
             if sent < request.len() {
                 match stream.write(&request[sent..]) {
-                    Ok(0) => return Err(EligibilityError::Unavailable),
+                    Ok(0) => {
+                        return Err(eligibility_failure(
+                            EligibilityStage::IpcWrite,
+                            Some(io::ErrorKind::WriteZero),
+                        ));
+                    }
                     Ok(n) => sent += n,
                     Err(error)
                         if matches!(
                             error.kind(),
                             io::ErrorKind::WouldBlock | io::ErrorKind::Interrupted
                         ) => {}
-                    Err(_) => return Err(EligibilityError::Unavailable),
+                    Err(error) => {
+                        return Err(eligibility_failure(
+                            EligibilityStage::IpcWrite,
+                            Some(error.kind()),
+                        ));
+                    }
                 }
             }
             if !eof {
@@ -227,7 +326,7 @@ impl PasswordSupervisor {
                     Ok(0) => eof = true,
                     Ok(n) => {
                         if incoming.len() + n > ipc::HEADER + 1 {
-                            return Err(EligibilityError::Unavailable);
+                            return Err(eligibility_failure(EligibilityStage::FrameSize, None));
                         }
                         incoming.extend_from_slice(&buffer[..n]);
                     }
@@ -236,43 +335,68 @@ impl PasswordSupervisor {
                             error.kind(),
                             io::ErrorKind::WouldBlock | io::ErrorKind::Interrupted
                         ) => {}
-                    Err(_) => return Err(EligibilityError::Unavailable),
+                    Err(error) => {
+                        return Err(eligibility_failure(
+                            EligibilityStage::IpcRead,
+                            Some(error.kind()),
+                        ));
+                    }
                 }
             }
             if status.is_none() {
-                let mut slots = self.shared.slots.lock().map_err(unavailable)?;
+                let mut slots = self
+                    .shared
+                    .slots
+                    .lock()
+                    .map_err(|_| eligibility_failure(EligibilityStage::ProcessState, None))?;
                 let Some(Slot::Child(entry)) = &mut slots[index] else {
-                    return Err(EligibilityError::Unavailable);
+                    return Err(eligibility_failure(EligibilityStage::ProcessState, None));
                 };
-                status = entry.reap().map_err(unavailable)?;
+                status = entry.reap().map_err(|error| {
+                    eligibility_failure(EligibilityStage::Reap, Some(error.kind()))
+                })?;
                 if status.is_some() {
                     slots[index] = None;
                     guard.reaped = true;
                 }
             }
             if eof && let Some(status) = status {
-                if !status.success()
-                    || sent != request.len()
-                    || BootInstant::now() >= deadline
-                    || cancelled()
-                {
+                if !status.success() {
+                    return Err(eligibility_failure(EligibilityStage::TerminalExit, None));
+                }
+                if sent != request.len() {
+                    return Err(eligibility_failure(
+                        EligibilityStage::IncompleteRequest,
+                        None,
+                    ));
+                }
+                if BootInstant::now() >= deadline {
+                    return Err(eligibility_failure(EligibilityStage::Deadline, None));
+                }
+                if cancelled() {
                     return Err(EligibilityError::Unavailable);
                 }
                 let (frame, length) = ipc::decode(&incoming)
-                    .map_err(unavailable)?
-                    .ok_or(EligibilityError::Unavailable)?;
+                    .map_err(|error| {
+                        eligibility_failure(EligibilityStage::Decode, Some(error.kind()))
+                    })?
+                    .ok_or_else(|| eligibility_failure(EligibilityStage::IncompleteFrame, None))?;
                 if length != incoming.len()
                     || frame.kind != ipc::RESULT
                     || frame.token != token
                     || frame.sequence != 2
                     || frame.payload.expose().len() != 1
                 {
-                    return Err(EligibilityError::Unavailable);
+                    return Err(eligibility_failure(EligibilityStage::Binding, None));
                 }
                 return match frame.payload.expose()[0] {
                     0 => Ok(()),
                     1 => Err(EligibilityError::AccountRestricted),
-                    _ => Err(EligibilityError::Unavailable),
+                    2 => Err(eligibility_failure(
+                        EligibilityStage::WorkerUnavailable,
+                        None,
+                    )),
+                    _ => Err(eligibility_failure(EligibilityStage::WorkerResult, None)),
                 };
             }
             thread::sleep(POLL.min(deadline.saturating_duration_since(BootInstant::now())));
@@ -584,4 +708,96 @@ pub(crate) fn fixture(
     let mut supervisor = PasswordSupervisor::build(executable, timeout).unwrap();
     supervisor.arguments = arguments;
     supervisor
+}
+
+#[cfg(test)]
+mod diagnostic_tests {
+    use super::*;
+
+    #[test]
+    fn eligibility_diagnostics_share_a_one_minute_suspend_inclusive_budget() {
+        let last = AtomicU64::new(0);
+        assert!(diagnostic_allowed(&last, 100));
+        for now in [100, 101, 159, 99] {
+            assert!(!diagnostic_allowed(&last, now));
+        }
+        assert!(diagnostic_allowed(&last, 160));
+        let last = Arc::new(AtomicU64::new(0));
+        let barrier = Arc::new(std::sync::Barrier::new(8));
+        let callers = (0..8)
+            .map(|_| {
+                let last = last.clone();
+                let barrier = barrier.clone();
+                thread::spawn(move || {
+                    barrier.wait();
+                    diagnostic_allowed(&last, 100)
+                })
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            callers
+                .into_iter()
+                .map(|caller| caller.join().unwrap())
+                .filter(|allowed| *allowed)
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn eligibility_diagnostic_formats_only_static_stage_and_error_kind() {
+        let native = io::Error::other("synthetic-secret-path-and-token-20317");
+        let line = eligibility_diagnostic(EligibilityStage::Launch, Some(native.kind()));
+        assert_eq!(
+            line,
+            "localpin: eligibility supervisor unavailable stage=launch io-kind=Other"
+        );
+        assert!(!line.contains("synthetic"));
+        assert!(!line.contains("20317"));
+        assert_eq!(
+            eligibility_diagnostic(EligibilityStage::WorkerUnavailable, None),
+            "localpin: eligibility supervisor unavailable stage=worker-unavailable"
+        );
+    }
+
+    #[test]
+    fn missing_eligibility_worker_logs_launch_category_without_account_or_path() {
+        const CHILD: &str = "LOCALPIN_ELIGIBILITY_DIAGNOSTIC_CHILD";
+        const TEST: &str = "supervisor::diagnostic_tests::missing_eligibility_worker_logs_launch_category_without_account_or_path";
+        if std::env::var_os(CHILD).is_some() {
+            let supervisor = fixture(
+                PathBuf::from("/nonexistent-localpin-eligibility-worker"),
+                Vec::new(),
+                Duration::from_secs(2),
+            );
+            assert_eq!(
+                supervisor.run_eligibility(
+                    20317,
+                    BootInstant::now() + Duration::from_secs(1),
+                    &mut || false,
+                ),
+                Err(localpin_core::eligibility::EligibilityError::Unavailable)
+            );
+            assert_eq!(supervisor.occupied(), 0);
+            return;
+        }
+        let output = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", TEST, "--nocapture"])
+            .env_clear()
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let diagnostic = String::from_utf8(output.stderr).unwrap();
+        assert_eq!(
+            diagnostic,
+            "localpin: eligibility supervisor unavailable stage=launch io-kind=NotFound\n"
+        );
+        assert!(!diagnostic.contains("20317"));
+        assert!(!diagnostic.contains("nonexistent"));
+    }
 }
