@@ -13,6 +13,16 @@ import urllib.error
 import urllib.request
 
 
+def require_signing_fingerprint(data):
+    signing = data.get("signing", {})
+    if signing.get("signed") is not True:
+        raise ValueError("experimental release publication requires a signed RPM")
+    fingerprint = signing.get("fingerprint") or ""
+    if not re.fullmatch(r"(?:[0-9A-F]{40}|[0-9A-F]{64})", fingerprint):
+        raise ValueError("signed release requires a full signing fingerprint")
+    return fingerprint
+
+
 def verify_bundle(directory, tag, commit):
     data = json.loads((directory / "RELEASE.json").read_text())
     if data["tag"] != tag or data["source_commit"] != commit:
@@ -32,14 +42,8 @@ def verify_bundle(directory, tag, commit):
             or rpm.get("filename") != rpm_name or rpm.get("version") != version.split("-")[0]
             or rpm.get("release") != expected_release + ".fc44"):
         raise ValueError("release schema, target, version or RPM identity is inconsistent")
-    required = {rpm_name, source, "BUILD-INPUTS.json", "NATIVE-RPMS.json", "SBOM.spdx.json", "RELEASE.json", "RELEASE-NOTES.md"}
-    signing = data.get("signing", {})
-    if signing.get("signed") is True:
-        if not re.fullmatch(r"(?:[0-9A-F]{40}|[0-9A-F]{64})", signing.get("fingerprint") or ""):
-            raise ValueError("signed release requires a full signing fingerprint")
-        required.add("RPM-GPG-KEY-LocalPIN")
-    elif signing.get("signed") is not False or signing.get("fingerprint") is not None:
-        raise ValueError("invalid signing status")
+    require_signing_fingerprint(data)
+    required = {rpm_name, source, "BUILD-INPUTS.json", "NATIVE-RPMS.json", "SBOM.spdx.json", "RELEASE.json", "RELEASE-NOTES.md", "RPM-GPG-KEY-LocalPIN"}
     checked = set()
     for line in (directory / "SHA256SUMS").read_text().splitlines():
         digest, name = line.split("  ", 1)
@@ -52,7 +56,7 @@ def verify_bundle(directory, tag, commit):
     if checked != required:
         raise ValueError("release bundle has missing or unexpected assets")
     assets = sorted(directory.iterdir())
-    if {p.name for p in assets} != checked | {"SHA256SUMS"} | ({"SHA256SUMS.asc"} if data["signing"]["signed"] else set()):
+    if {p.name for p in assets} != checked | {"SHA256SUMS", "SHA256SUMS.asc"}:
         raise ValueError("release directory contains missing or unchecked assets")
     if any(p.is_symlink() or not p.is_file() for p in assets):
         raise ValueError("release assets must be regular files")
@@ -73,6 +77,7 @@ def verify_bundle(directory, tag, commit):
 def verify_native_assets(directory):
     """Recheck final package/signatures in isolated public key databases."""
     data = json.loads((directory / "RELEASE.json").read_text())
+    fingerprint = require_signing_fingerprint(data)
     rpm = directory / data["rpm"]["filename"]
     env = {**os.environ, "LC_ALL": "C"}
     with tempfile.TemporaryDirectory(prefix="localpin-publish-verify-") as temporary:
@@ -83,9 +88,6 @@ def verify_native_assets(directory):
             actual = run(["rpm", "-qp", "--queryformat", "%{NAME}\\t%{VERSION}\\t%{RELEASE}\\t%{ARCH}", str(rpm)])
             if actual != f'localpin\t{data["rpm"]["version"]}\t{data["rpm"]["release"]}\tx86_64':
                 raise ValueError("package header differs from release manifest")
-            if not data["signing"]["signed"]:
-                run(["rpmkeys", "--checksig", "--nosignature", str(rpm)])
-                return
             public = directory / "RPM-GPG-KEY-LocalPIN"
             run(["gpg", "--batch", "--import", str(public)])
             listing = run(["gpg", "--batch", "--with-colons", "--list-keys", "--fingerprint"])
@@ -98,7 +100,7 @@ def verify_native_assets(directory):
                 elif fields[0] == "fpr" and primary:
                     fingerprints.append(fields[9])
                     primary = False
-            if fingerprints != [data["signing"]["fingerprint"]]:
+            if fingerprints != [fingerprint]:
                 raise ValueError("release public key differs from signing fingerprint")
             run(["gpg", "--batch", "--verify", str(directory / "SHA256SUMS.asc"), str(directory / "SHA256SUMS")])
             database = str(Path(temporary) / "rpmdb")

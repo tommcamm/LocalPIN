@@ -433,8 +433,9 @@ remain M9 work.
 In progress: the [requirement-to-evidence checklist](development/m9-release-readiness.md)
 tracks section 18 acceptance and section 20 completion gates. The
 [manual release workflow](releasing.md) reruns CI and creates experimental Fedora
-44 RPM/GitHub prereleases with source, SPDX inventory, checksums and optional
-protected signing. Deterministic parser/state campaigns extend source checks.
+44 RPM/GitHub prereleases with source, SPDX inventory, checksums and mandatory
+verified OpenPGP signing in the protected release environment. Deterministic
+parser/state campaigns extend source checks.
 Independent review, physical acceptance, coverage-guided fuzzing/applicable
 native instrumentation and the remaining candidate-bound evidence are still
 open; release automation alone does not complete M9.

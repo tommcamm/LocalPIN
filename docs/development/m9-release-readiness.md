@@ -239,19 +239,21 @@ the changelog, build/dependency/SBOM inputs, checksums, actual workflow run and
 known limitations. Review release contents for privacy and verify the installed
 RPM rather than assuming a successful build implies installed acceptance. The
 [release runbook](../releasing.md) defines manual experimental prerelease
-publication, optional signing and generated SPDX dependency inventory. The
-[packaging guide](../../packaging/fedora/README.md) covers downloads and installed
-testing. Workflow source and generated metadata do not establish that a release
-was dispatched or that a maintainer signing key has been configured.
+publication, mandatory verified OpenPGP signing and generated SPDX dependency
+inventory. The [packaging guide](../../packaging/fedora/README.md) covers downloads
+and installed testing. Workflow source and generated metadata do not establish
+that a release was dispatched or that a maintainer signing key has been configured.
 
 Specification section 15 and the M9 plan require **signed RPMs for a supported
 release**. Checksums detect changes and provenance identifies build inputs;
 neither supplies the package's RPM signature. Keep signing authority separate
 from pull-request CI, document who controls the key and its public fingerprint,
 provide trusted key distribution and rotation/revocation instructions, and
-verify the exact distributed RPM with that trust established. An explicitly
-unsigned experimental prerelease must say so and retain all open production
-gates. Signing itself does not establish independent review or desktop safety.
+verify the exact distributed RPM with that trust established. Experimental
+GitHub prereleases also require verified RPM and checksum signatures before
+publication; ordinary CI testing artifacts remain unsigned. Every prerelease
+retains all open production gates. Signing itself does not establish independent
+review or desktop safety.
 
 Only describe a release as supported/production-ready after every section 18
 area and all eight completion gates have candidate-bound evidence, blocking

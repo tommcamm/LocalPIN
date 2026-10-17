@@ -8,7 +8,7 @@ Changes will be recorded here before versioned releases. There are no releases y
 
 - Manual main-only experimental GitHub prereleases for Fedora KDE 44 x86_64,
   gated on CI, with RPM/source assets, SPDX dependency/native inventory,
-  provenance/checksums and optional protected OpenPGP signing. Stable publication
+  provenance/checksums and mandatory verified OpenPGP signing. Stable publication
   remains disabled while M9 gates are open. See [release instructions](docs/releasing.md).
 - M9 requirement-to-evidence checklist and independent review/hardware runbook;
   deterministic record/stream adversarial campaigns and exhaustive verification

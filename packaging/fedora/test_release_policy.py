@@ -19,6 +19,7 @@ def load(name):
 
 policy = load("release-policy")
 publish = load("publish-release")
+verify_native_assets = publish.verify_native_assets
 signer = load("sign-release")
 COMMIT = "a" * 40
 TAG = "v0.1.0-alpha.1"
@@ -60,7 +61,7 @@ class PublicationTests(unittest.TestCase):
                          "project_version": "0.1.0-alpha.1", "target": "Fedora KDE 44 x86_64",
                          "source_archive": "localpin-0.1.0-alpha.1-source.tar.gz",
                          "rpm": {"filename": RPM, "version": "0.1.0", "release": "0.1.alpha1.release.fc44"},
-                         "signing": {"signed": False, "fingerprint": None}}
+                         "signing": {"signed": True, "fingerprint": "A" * 40}}
         self.write_bundle()
         self.environment = patch.dict(os.environ, {"GITHUB_REF": "refs/heads/main", "GITHUB_SHA": COMMIT,
                                                    "GITHUB_REPOSITORY": "synthetic/localpin"})
@@ -80,6 +81,8 @@ class PublicationTests(unittest.TestCase):
         (self.output / "BUILD-INPUTS.json").write_text(json.dumps({"project_version": "0.1.0-alpha.1", "signed": False, "architecture": "x86_64"}))
         (self.output / "NATIVE-RPMS.json").write_text("{}")
         (self.output / "SBOM.spdx.json").write_text(json.dumps({"spdxVersion": "SPDX-2.3", "packages": [{"SPDXID": "SPDXRef-LocalPIN-RPM", "packageFileName": RPM, "checksums": [{"algorithm": "SHA256", "checksumValue": digest}]}]}))
+        (self.output / "RPM-GPG-KEY-LocalPIN").write_text("synthetic public key")
+        (self.output / "SHA256SUMS.asc").write_text("synthetic detached signature")
         self.checksums()
 
     def checksums(self):
@@ -108,14 +111,58 @@ class PublicationTests(unittest.TestCase):
             publish.verify_bundle(self.output, TAG, COMMIT)
 
     def test_signed_bundle_requires_checksum_signature_and_key(self):
-        self.manifest["signing"] = {"signed": True, "fingerprint": "A" * 40}
-        self.write_bundle()
+        (self.output / "RPM-GPG-KEY-LocalPIN").unlink()
+        self.checksums()
         with self.assertRaisesRegex(ValueError, "missing or unexpected assets"):
             publish.verify_bundle(self.output, TAG, COMMIT)
         (self.output / "RPM-GPG-KEY-LocalPIN").write_text("synthetic public key")
+        (self.output / "SHA256SUMS.asc").unlink()
         self.checksums()
         with self.assertRaisesRegex(ValueError, "unchecked assets"):
             publish.verify_bundle(self.output, TAG, COMMIT)
+
+    def test_unsigned_or_missing_signing_status_prevents_publication(self):
+        for signing in ({"signed": False, "fingerprint": None}, {}, {"signed": "true", "fingerprint": "A" * 40}):
+            with self.subTest(signing=signing):
+                self.manifest["signing"] = signing
+                self.write_bundle()
+                with patch.object(publish, "api") as api, patch.object(publish, "verify_native_assets") as native:
+                    with self.assertRaisesRegex(ValueError, "requires a signed RPM"):
+                        publish.publish(self.output, TAG, COMMIT)
+                    native.assert_not_called()
+                    api.assert_not_called()
+
+    def test_native_verifier_rejects_unsigned_manifest_before_running_tools(self):
+        self.manifest["signing"] = {"signed": False, "fingerprint": None}
+        self.write_bundle()
+        with patch.object(publish.subprocess, "run") as tools:
+            with self.assertRaisesRegex(ValueError, "requires a signed RPM"):
+                verify_native_assets(self.output)
+            tools.assert_not_called()
+
+    def test_missing_fingerprint_prevents_publication(self):
+        self.manifest["signing"]["fingerprint"] = None
+        self.write_bundle()
+        with patch.object(publish, "api") as api, self.assertRaisesRegex(ValueError, "full signing fingerprint"):
+            publish.publish(self.output, TAG, COMMIT)
+        api.assert_not_called()
+
+    def test_invalid_checksum_or_rpm_signature_prevents_github_mutation(self):
+        for invalid_signature in ("gpg", "rpmkeys"):
+            def run(argv, **kwargs):
+                if argv[0] == "rpm" and "-qp" in argv:
+                    return subprocess.CompletedProcess(argv, 0, "localpin\t0.1.0\t0.1.alpha1.release.fc44\tx86_64")
+                if argv[0] == "gpg" and "--list-keys" in argv:
+                    return subprocess.CompletedProcess(argv, 0, f"pub:::::::::\nfpr:::::::::{'A' * 40}:\n")
+                if (argv[0] == invalid_signature and
+                        ("--verify" in argv or "--checksig" in argv)):
+                    raise subprocess.CalledProcessError(1, argv)
+                return subprocess.CompletedProcess(argv, 0, "")
+
+            with self.subTest(invalid_signature=invalid_signature), patch.object(publish, "verify_native_assets", side_effect=verify_native_assets), patch.object(publish.subprocess, "run", side_effect=run), patch.object(publish, "api") as api:
+                with self.assertRaises(subprocess.CalledProcessError):
+                    publish.publish(self.output, TAG, COMMIT)
+                api.assert_not_called()
 
     def test_native_verification_failure_prevents_any_github_mutation(self):
         with patch.object(publish, "verify_native_assets", side_effect=ValueError("invalid signature")), patch.object(publish, "api") as api:
