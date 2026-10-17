@@ -6,7 +6,7 @@ It is intended to become useful, reviewable open-source software.
 
 Repository: [tommcamm/LocalPIN](https://github.com/tommcamm/LocalPIN).
 
-**Development status: M6.1 complete for the restricted account domain below; M2–M6 implemented locally. M7 has not started.**
+**Development status: M2–M7 implemented and locally verified for the restricted account domain below.**
 This repository contains the specification, implementation roadmap, pure Rust
 state machines, bounded IPC parsers, protected Linux filesystem storage,
 isolated PAM/TPM/platform experiments and guarded Fedora KDE VM tests under
@@ -32,9 +32,14 @@ gate is complete for this domain. The
 record the lifecycle, policy, crash/reboot and concurrency evidence;
 [ADR 0012](docs/adr/0012-immutable-appliance-account-authority.md)
 defines the exact policy and lifecycle restrictions. Ordinary unmanaged accounts
-remain unavailable. M7 unlock integration, M8 packaging/confinement and M9
-human/specialist review and hardware validation remain open.
-It does not yet provide a PAM unlock module or installable package.
+remain unavailable. M7 adds the small Rust PAM unlock module, fresh candidate
+handling, authenticated bounded broker verification and an exact reviewed KDE
+policy extension. Native PAM tests and stock KDE PIN/password/fault cases passed
+in a disposable enforcing VM, including the native TPM route with a private
+emulator. See the [M7 report](docs/development/m7-pam-integration.md) for evidence,
+TPM recovery limits and the native fingerprint/faillock activation blocker.
+M8 packaging/confinement and M9 human/specialist
+review and hardware validation remain open. No installable package is provided.
 There is no supported production release.
 
 ## Intended scope
@@ -43,7 +48,8 @@ The first target is Fedora KDE on x86_64, for local, non-root accounts. The plan
 design uses a small PAM adapter, a local broker with durable attempt limits, and
 either a TPM 2.0 credential or an explicitly selected software backend. Password
 fallback, opt-in activation, enforcing SELinux support, and tested recovery are
-release requirements; they have not yet been demonstrated end to end.
+release requirements. PAM unlock and fallback have disposable-VM evidence;
+installed activation, confinement, packaging and hardware recovery remain open.
 
 Initial login, sudo, SSH, polkit, and disk encryption are outside the initial
 scope. Six-digit PINs have limited entropy. The

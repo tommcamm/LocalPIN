@@ -73,7 +73,7 @@ jobs:
       image: fedora:44
     steps:
       - name: Install build tools in the disposable container
-        run: dnf install -y ca-certificates gcc git python3 rustup pkgconf-pkg-config tpm2-tss-devel dbus-devel swtpm tpm2-tools
+        run: dnf install -y ca-certificates gcc git python3 rustup pkgconf-pkg-config tpm2-tss-devel dbus-devel swtpm tpm2-tools pam-devel binutils
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -95,6 +95,12 @@ jobs:
         run: cargo build --workspace --all-features --release --locked --target x86_64-unknown-linux-gnu
       - name: Run tests on Fedora
         run: cargo test --workspace --all-features --locked --target x86_64-unknown-linux-gnu
+      - name: Check the native PAM module ABI without loading a host policy
+        run: |
+          gcc -std=c11 -O2 -Wall -Wextra -Werror crates/localpin-pam/tests/abi_smoke.c -ldl -o /tmp/localpin-pam-abi
+          /tmp/localpin-pam-abi "$GITHUB_WORKSPACE/target/x86_64-unknown-linux-gnu/release/liblocalpin_pam.so"
+          nm -D --defined-only target/x86_64-unknown-linux-gnu/release/liblocalpin_pam.so
+          rm /tmp/localpin-pam-abi
       - name: Verify M4 against disposable TPM simulators
         run: CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu python3 crates/localpin-tpm/tests/run_simulator.py
       - name: Verify durable storage with the native TPM backend
@@ -134,6 +140,9 @@ jobs:
           /tmp/localpin-m1-format-only
           rm /tmp/localpin-m1-format-only
           python3 experiments/m1/vm/worker-positive/run.py --compile-only
+          python3 -m py_compile experiments/m7/run.py experiments/m7/cases.py experiments/m7/console.py experiments/m7/tpm.py
+          gcc -std=c11 -O2 -Wall -Wextra -Werror experiments/m7/pam.c -lpam -o /tmp/localpin-m7-pam-compile-only
+          rm /tmp/localpin-m7-pam-compile-only
           gcc -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror experiments/m1/vm/selinux/fixture.c -lpam -o /tmp/localpin-m1-boundary-compile-only
           rm /tmp/localpin-m1-boundary-compile-only
       - name: Run isolated PAM baselines and candidate tests

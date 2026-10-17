@@ -200,6 +200,11 @@ The helper requires these measured SHA256 policy inputs:
 | `/etc/pam.d/password-auth`, reviewed faillock profile | `de00ea01b5ffe6b08efd7027e437bdd4a3bad18e231e9593f6b45cc64b334276` |
 | `/etc/security/faillock.conf`, reviewed all-comment configuration | `662303cf89938c12d95a7fc59d92cbe76c398312527fa908894fb319809093b3` |
 
+[ADR 0013](0013-pam-unlock-contract.md) extends only the KDE row with one exact
+M7 integrated layout. Its original stock suffix is unchanged; unknown edits
+remain unavailable. Both layouts remain immutable account-authority inputs, and
+changing between them requires durable revocation, fresh sealing and enrollment.
+
 It also requires the exact canonical private enrollment and eligibility policies,
 and snapshots the protected `pam_env.conf` and `/etc/environment` inputs.
 Canonical authselect symlinks must point to their exact protected absolute

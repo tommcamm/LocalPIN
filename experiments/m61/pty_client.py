@@ -22,11 +22,12 @@ def read_frame():
 
 def main():
     operation = sys.argv[1]
-    commands = {'enroll': ['enroll', '--backend', 'software'], 'change': ['change'],
+    commands = {'enroll': ['enroll', '--backend', 'software'],
+                'enroll-tpm': ['enroll', '--backend', 'tpm2-required'], 'change': ['change'],
                 'disable': ['disable'], 'recover': ['recover', '--user', 'lp61test']}
     if operation not in commands: raise RuntimeError('unsupported fixture operation')
     password = read_frame() if operation != 'recover' else None
-    pin = read_frame() if operation in ('enroll', 'change') else None
+    pin = read_frame() if operation in ('enroll', 'enroll-tpm', 'change') else None
     pid, descriptor = pty.fork()
     if pid == 0:
         os.execv('/usr/libexec/localpin/localpinctl', ['localpinctl', *commands[operation]])

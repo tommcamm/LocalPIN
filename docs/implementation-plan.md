@@ -1,7 +1,7 @@
 # LocalPIN implementation plan
 
 - Date: 2026-10-17
-- Status: Accepted roadmap; M0 implemented locally; M1 feasibility complete; M2–M6 implemented locally. M6.1 is complete only for ADR 0012's restricted appliance domain, with production-authority component evidence recorded in its report. M7 has not started. M8 installed policy/sandbox/packaging and M9 human/specialist review and hardware gates remain open. Hosted CI execution remains unverified; unmanaged accounts remain unsupported.
+- Status: Accepted roadmap; M0 implemented locally; M1 feasibility complete; M2–M7 implemented locally. M6.1 and M7 acceptance are complete only for ADR 0012's restricted appliance domain, with production-authority, native PAM and actual enforcing-KDE evidence recorded in their reports. M7 retains native accounting and TPM recovery limits. M8 installed policy/sandbox/packaging and M9 human/specialist review and hardware gates remain open. Hosted CI execution remains unverified; unmanaged accounts remain unsupported.
 - Source of requirements: [product-specification.md](product-specification.md), version 1.3. M1 clarifies password/PIN accounting; M2 settles time boundaries and restricts lifecycle support; M6.1 defines the narrow implemented account domain.
 
 This plan turns the specification into independently reviewable changes and evidence gates. The specification remains authoritative. An unresolved design question below must be resolved in an architecture decision record (ADR), with a specification amendment if necessary, rather than silently changing the requirements.
@@ -215,8 +215,9 @@ PIN verification in a disposable enforcing KDE VM. The
 [sanitized results](../experiments/m61/results/2026-10-17-account-authorities.json)
 record lifecycle mutation/bypass, missing/corrupt state, crash/reboot, policy and
 unchanged accounting, plus all four staging/publication/success/delivery
-concurrency points using actual authorities. M7 has not started;
-ordinary unmanaged accounts remain unavailable.
+concurrency points using actual authorities. M7's
+[integration report](development/m7-pam-integration.md) records its later PAM
+adapter and desktop acceptance work; ordinary unmanaged accounts remain unavailable.
 
 Planning baseline: M6 completed its test-broker gate using synthetic authorities.
 At that point the installed broker used `UnmanagedUnixAccounts`, and
@@ -323,11 +324,23 @@ for the production authorities or pass the M7 gate.
 
 Exit gate: isolated PAM tests and real stock-theme KDE tests pass in the disposable enforcing VM, including account eligibility and password fallback under failures. Successful mock PAM authentication alone does not pass this gate.
 
+The [M7 report](development/m7-pam-integration.md) records the implemented
+adapter, isolated Linux-PAM tests, development review and actual desktop evidence.
+Status, 2026-10-17: required isolated and stock-KDE PIN/password/restriction/fault
+cases passed in the disposable enforcing guest. Native TPM fault fallback passed
+through a private emulator; in-place driver rebind and same-enrollment reboot
+recovery did not pass and remain explicitly recorded limits. Privileged fresh
+recovery, original-policy password recovery and clone disposal passed.
+[ADR 0013](adr/0013-pam-unlock-contract.md) defines the exact compatible KDE
+layout and original client deadlines; lifecycle revocation remains mandatory
+before changing the protected policy.
+
 ### M8 — Package, activate, migrate and recover on Fedora
 
 - Ship systemd units, reviewed sandbox settings, SELinux policy and RPM packaging. Determine native dependency sourcing and the distinction between project-distributed RPMs and future Fedora repository inclusion.
 - Installation makes no enrollment or PAM activation change. Activation recognizes only verified layouts and has a dry-run diff, protected original backup, digests and transactional edits.
 - Preserve the complete existing password stack and other PAM sections. Never rewrite authselect-generated files or unrelated services. Unknown layouts refuse activation with useful diagnostics.
+- Refuse the M7-observed `with-faillock`/parallel-fingerprint combination until a reviewed compatibility decision resolves its native startup failures and KDE's missing account-phase reset. Neither activation nor the PIN route may hide it by clearing original counters or disabling other authenticators. See [ADR 0013](adr/0013-pam-unlock-contract.md).
 - Implement changed-file handling, owned-block removal, upgrade/state migration, downgrade behavior, disable, uninstall ordering and backup restoration. Test package transaction failure paths.
 - Make administrative recovery a short documented text-console procedure. Prove it restores a failed graphical unlock without reboot/reinstallation in the test environment.
 - Exercise clean install -> enroll -> test -> activate -> upgrade -> disable -> uninstall, including changed PAM files, SELinux denials and missing components.

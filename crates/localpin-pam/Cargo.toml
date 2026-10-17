@@ -1,0 +1,25 @@
+[package]
+name = "localpin-pam"
+description = "Small Linux-PAM adapter for LocalPIN screen-lock authentication"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+localpin-core.workspace = true
+localpin-protocol = { path = "../localpin-protocol", version = "=0.1.0-alpha.1" }
+libc = "=0.2.191"
+zeroize.workspace = true
+
+# The complete Linux-PAM ABI and C allocator exception is isolated in pam.rs.
+[lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[lints.clippy]
+all = "warn"

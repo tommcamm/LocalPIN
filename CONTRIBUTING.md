@@ -8,7 +8,11 @@ Fedora appliance domain in [ADR 0012](docs/adr/0012-immutable-appliance-account-
 The [M6.1 report](docs/development/m6.1-account-authorities.md) and
 [sanitized results](experiments/m61/results/2026-10-17-account-authorities.json)
 record the real-account evidence. Ordinary unmanaged accounts remain unsupported.
-M7 PAM unlock integration has not started; M8 installed sandbox/packaging and
+M7's production PAM adapter, isolated native tests and required enforcing-KDE
+acceptance cases passed for this domain. Its
+[report](docs/development/m7-pam-integration.md) records evidence and native
+accounting/TPM recovery limits.
+M8 installed sandbox/packaging and
 M9 human/specialist review and hardware validation remain open. Read the
 [product specification](docs/product-specification.md) and
 [implementation plan](docs/implementation-plan.md) before proposing implementation

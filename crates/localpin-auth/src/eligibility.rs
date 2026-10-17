@@ -22,6 +22,8 @@ const MAX_FILE: usize = 65_536;
 const MAX_DATABASE: usize = 1_048_576;
 const SERVICE: &str = "/etc/pam.d/localpin-eligibility";
 const POLICY: &str = "auth required pam_env.so\nauth required pam_faildelay.so delay=2000000\nauth requisite pam_faillock.so preauth silent\naccount required pam_unix.so\naccount required pam_nologin.so\n";
+const STOCK_KDE_DIGEST: &str = "7d91b3ad73a998e8b10f9edccd74ba04179a778c4a5e61d9176872f43c7bbac3";
+const LOCALPIN_KDE_POLICY: &[u8] = include_bytes!("../policy/kde-localpin.review-required");
 
 /// Shared bounded supervisor for password-free account-policy children.
 ///
@@ -210,6 +212,13 @@ fn canonical(text: &str) -> String {
         + "\n"
 }
 
+// ADR 0013 adds exactly one integrated layout to ADR 0012's measured stock
+// layout. Never normalize this policy: placement, controls, path, arguments and
+// every original downstream byte are part of the compatibility contract.
+fn kde_policy(bytes: &[u8]) -> bool {
+    digest_is(bytes, STOCK_KDE_DIGEST) || bytes == LOCALPIN_KDE_POLICY
+}
+
 fn nss_policy(text: &str) -> bool {
     ["passwd", "group", "shadow"].iter().all(|database| {
         let mut matches = text
@@ -238,10 +247,6 @@ fn policy() -> Result<Vec<Snapshot>, EligibilityError> {
         directory(Path::new(path))?;
     }
     let expected = [
-        (
-            "/etc/pam.d/kde",
-            "7d91b3ad73a998e8b10f9edccd74ba04179a778c4a5e61d9176872f43c7bbac3",
-        ),
         (
             "/etc/pam.d/postlogin",
             "c1ecd4d1a5b5de7d26e3336cd33551d1d65e13751b5f46405183472895838a9d",
@@ -292,6 +297,11 @@ fn policy() -> Result<Vec<Snapshot>, EligibilityError> {
     {
         return Err(EligibilityError::Unavailable);
     }
+    let kde = Snapshot::read(policy_path("/etc/pam.d/kde")?, 0, None, MAX_FILE)?;
+    if !kde_policy(&kde.bytes) {
+        return Err(EligibilityError::Unavailable);
+    }
+    snapshots.push(kde);
     for (path, digest) in expected {
         let snapshot = Snapshot::read(policy_path(path)?, 0, None, MAX_FILE)?;
         if !digest_is(&snapshot.bytes, digest) {
@@ -722,5 +732,42 @@ if mode == 'duplicate': os.write(1,f)
             canonical(&format!("auth sufficient pam_permit.so\n{POLICY}")),
             POLICY
         );
+    }
+
+    #[test]
+    fn kde_policy_preserves_the_measured_stock_bytes_and_one_exact_module_block() {
+        let prefix = b"# BEGIN LOCALPIN\nauth [success=done default=ignore] /usr/lib64/security/pam_localpin.so\n# END LOCALPIN\n";
+        let stock = LOCALPIN_KDE_POLICY.strip_prefix(prefix).unwrap();
+        assert!(digest_is(stock, STOCK_KDE_DIGEST));
+        assert!(kde_policy(stock));
+        assert!(kde_policy(LOCALPIN_KDE_POLICY));
+        assert!(digest_is(
+            LOCALPIN_KDE_POLICY,
+            "ea0adc6291dccb0360f5d3565c5dad1f8b886d037f0bcadbbfbf70625383375d"
+        ));
+
+        let integrated = std::str::from_utf8(LOCALPIN_KDE_POLICY).unwrap();
+        for changed in [
+            integrated.replace("success=done default=ignore", "default=ignore success=done"),
+            integrated.replace("success=done", "success=ok"),
+            integrated.replace("default=ignore", "default=bad"),
+            integrated.replace("pam_localpin.so\n", "pam_localpin.so debug\n"),
+            integrated.replace("/usr/lib64/security/pam_localpin.so", "pam_localpin.so"),
+            integrated.replace("pam_localpin.so", "pam_pinlock.so"),
+            integrated.replace("password-auth", "system-auth"),
+            integrated.replace("auth        substack", "auth        include "),
+            integrated.replace("auth [success=done", "account [success=done"),
+            integrated.replace("# BEGIN LOCALPIN\n", "# BEGIN LOCALPIN kde\n"),
+            format!("auth required pam_access.so\n{integrated}"),
+            format!("{integrated}auth sufficient pam_permit.so\n"),
+            String::from_utf8(stock.to_vec()).unwrap() + std::str::from_utf8(prefix).unwrap(),
+            integrated.replace('\n', "\r\n"),
+        ] {
+            assert!(!kde_policy(changed.as_bytes()));
+        }
+        assert!(!kde_policy(
+            &LOCALPIN_KDE_POLICY[..LOCALPIN_KDE_POLICY.len() - 1]
+        ));
+        assert!(!kde_policy(b""));
     }
 }

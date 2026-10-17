@@ -4,7 +4,7 @@
 
 **Date:** 2026-10-17
 
-**Status:** Implementation specification; M2–M6 code implemented locally and M6.1 component gate complete only for the restricted domain below. M7 has not started; unlock integration, M8 packaging/confinement and M9 release review/hardware gates remain open.
+**Status:** Implementation specification; M2–M7 implemented locally, with M6.1 account-authority and M7 native/stock-KDE acceptance complete only for the restricted domain below. The [M7 report](development/m7-pam-integration.md) records native accounting and TPM recovery limits. M8 packaging/confinement and M9 release review/hardware gates remain open.
 **Initial deployment:** Fedora Linux, KDE Plasma, local user accounts.  
 **Working component names:** `pam_localpin.so`, `localpind`, `localpinctl`.
 

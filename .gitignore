@@ -21,8 +21,9 @@
 /core
 /core.[0-9]*
 
-# Python caches from the isolated feasibility harnesses.
+# Python caches from the isolated experiment and native-integration harnesses.
 /experiments/**/__pycache__/
+/crates/**/__pycache__/
 
 # Editor/OS scratch files.
 *.swp

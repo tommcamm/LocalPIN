@@ -308,6 +308,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "localpin-pam"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "libc",
+ "localpin-core",
+ "localpin-protocol",
+ "zeroize",
+]
+
+[[package]]
 name = "localpin-protocol"
 version = "0.1.0-alpha.1"
 dependencies = [

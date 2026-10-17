@@ -6,6 +6,13 @@ Changes will be recorded here before versioned releases. There are no releases y
 
 ### Added
 
+- M7 `localpin-pam` Rust cdylib: fresh byte-preserving PAM candidates, own-user
+  KDE identity checks, authenticated durable broker grants, absolute software/TPM
+  deadlines, panic containment and C allocator cleanup. Exact reviewed KDE policy
+  compatibility is defined by [ADR 0013](docs/adr/0013-pam-unlock-contract.md).
+  Passing native tests and required enforcing-KDE PIN/password/fault cases,
+  guarded fixtures and explicit native recovery limits are recorded in
+  the [M7 report](docs/development/m7-pam-integration.md).
 - M6.1 production account lifecycle authority for the explicitly provisioned
   Fedora 44 x86_64 Btrfs appliance domain: durable opaque incarnations,
   revocation before account mutation, kernel immutable flags and writer-drain
@@ -107,7 +114,8 @@ Changes will be recorded here before versioned releases. There are no releases y
   attempt before fallback and that forwarded failures retain password accounting.
 
 M6.1 account lifecycle/policy acceptance is complete only for the defined
-appliance domain. M7 has not started. PAM unlock integration, packaging and
-activation remain
-unimplemented. Installed broker/password-worker sandbox, physical TPM validation
+appliance domain. M7's adapter and required native/desktop acceptance cases passed
+for that domain; its report retains native accounting and TPM recovery limits.
+Packaging and activation remain unimplemented.
+Installed broker/password-worker sandbox, physical TPM validation
 and M9 human/specialist review remain open.

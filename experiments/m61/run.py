@@ -2,6 +2,8 @@
 """M6.1 real-account evidence runner, ONLY inside an explicitly guarded Fedora VM.
 
 No host namespace substitutes, fixture authorities, physical TPM or KDE adapter.
+The default guard refuses every TPM; M7 alone can explicitly opt into a private
+libvirt emulator after independently checking its clone and emulator markers.
 The operator supplies an independent clone, actual built binaries in work/bin,
 and dedicated secrets in work/secrets.json (never exported). See README.md.
 """
@@ -38,7 +40,22 @@ def command(args, *, data=None, check=True, timeout=30):
     return result
 
 
-def guard():
+def emulated_tpm_guard():
+    """M7-only private emulator opt-in; host XML validation remains independent."""
+    require(os.getuid() == os.geteuid() == 0, 'guest root required')
+    marker = Path('/run/localpin-m7-emulator')
+    parent = marker.parent.lstat()
+    require(stat.S_ISDIR(parent.st_mode) and parent.st_uid == 0 and not parent.st_mode & 0o022,
+            'unsafe emulator marker directory')
+    info = marker.lstat()
+    require(stat.S_ISREG(info.st_mode) and info.st_uid == 0
+            and stat.S_IMODE(info.st_mode) == 0o600 and info.st_nlink == 1,
+            'unsafe private emulator marker')
+    dmi_uuid = str(uuid.UUID(Path('/sys/class/dmi/id/product_uuid').read_text().strip()))
+    require(marker.read_text() == dmi_uuid + '\nemulator2.0\n', 'emulator marker mismatch')
+
+
+def guard(*, allow_emulated_tpm=False):
     require(os.getuid() == os.geteuid() == 0, 'guest root required')
     marker = Path('/run/localpin-m61-guard')
     info = marker.lstat()
@@ -48,7 +65,11 @@ def guard():
     require(command(['systemd-detect-virt', '--vm']).stdout.strip() == b'kvm', 'dedicated KVM clone required')
     os_release = Path('/etc/os-release').read_text()
     require('VERSION_ID=44' in os_release and 'VARIANT_ID=kde' in os_release, 'Fedora 44 KDE required')
-    require(not Path('/dev/tpm0').exists() and not Path('/dev/tpmrm0').exists(), 'no TPM may be attached')
+    if allow_emulated_tpm:
+        emulated_tpm_guard()
+    else:
+        require(not Path('/dev/tpm0').exists() and not Path('/dev/tpmrm0').exists(),
+                'no TPM may be attached')
     secret = WORK / 'secrets.json'
     info = secret.stat()
     require(info.st_uid == 0 and stat.S_IMODE(info.st_mode) == 0o600, 'private dedicated secrets required')
@@ -92,7 +113,9 @@ def stop():
 
 def start():
     # Repeated component matrices intentionally restart these clone-only units.
-    command(['systemctl', 'reset-failed', 'localpin-m61.socket', 'localpin-m61.service'])
+    # On a fresh clone systemd may not have loaded these units yet; reset-failed
+    # then reports "not loaded". The following start still validates both units.
+    command(['systemctl', 'reset-failed', 'localpin-m61.socket', 'localpin-m61.service'], check=False)
     command(['systemctl', 'start', 'localpin-m61.socket', 'localpin-m61.service'])
 
 

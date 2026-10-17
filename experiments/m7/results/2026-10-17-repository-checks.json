@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-17",
+  "workspace_tests": {
+    "passed": 298,
+    "failed": 0,
+    "intentionally_ignored": 9,
+    "all_features": true,
+    "locked": true,
+    "test_threads": 1
+  },
+  "isolated_native_pam_attempts": 63,
+  "native_abi_smoke": "passed",
+  "format": "passed",
+  "clippy_all_targets_all_features": "passed",
+  "dependency_advisories_licenses_bans_sources": "passed",
+  "hosted_ci_verified": false,
+  "source_input_sha256": {
+    "Cargo.toml": "78e7680b5bba6383d125c308e867830b3aee51935cef90bdfc77b01ae90bfa6a",
+    "Cargo.lock": "d955d877277da7455148f518b5a13349e31e47bcf8623547b58963a64ac58f21",
+    "crates/localpin-pam/Cargo.toml": "5488b3077c3457918dbf77f28ad69bd7989fa6aa607af6cc2fae61ef9a64b9c9",
+    "crates/localpin-pam/src/account.rs": "e903902eacc0c1b3d580dacf7c8c5893914d9225f5f604fa158ab2028f7887d3",
+    "crates/localpin-pam/src/broker.rs": "b488d85b7fe2a101686d1465b75912a7b1ca756a609751c4654f35bb81c023e1",
+    "crates/localpin-pam/src/lib.rs": "d0cd3c26c901e7c403c653b6b194111e295d7a8bda428e8deda4969dbc3bab06",
+    "crates/localpin-pam/src/pam.rs": "37de51d582dfd49ebbb09653256033c7ba5b26caff7a83bccbd17013f593df40",
+    "crates/localpin-auth/src/eligibility.rs": "c8df6a2590fcc6ae520ea178bcb13fd353b05d38942489afa1940007108a3f26",
+    "crates/localpin-auth/policy/kde-localpin.review-required": "ea0adc6291dccb0360f5d3565c5dad1f8b886d037f0bcadbbfbf70625383375d",
+    "crates/localpin-pam/tests/abi_smoke.c": "cd307f23dbafd785a09e17f423008bccf2a6025f2756e969c633879a0644954d",
+    "crates/localpin-pam/tests/harness.c": "77d08d742f10f7faec2049855a7fb1a26fbfa4705e26fe1fb70a53ab241d5ce5",
+    "crates/localpin-pam/tests/password_module.c": "c09e699839a9ef4f25e796f131b7f50ec02a5a6ce2087fad05eca6bee69554bc",
+    "crates/localpin-pam/tests/fixture.h": "3f4967dd010060311dd4fe0fd5ad8c484e9952062079b861fb12bdc0b7944da8",
+    "crates/localpin-pam/tests/isolated_pam.py": "5b1641b0dcd97f382d9225f85373784d6ec3918eebdc4f8250fb56d58252fd88",
+    "experiments/m7/cases.py": "07441eb07d41764187e0086e405590d4ff19f595355119c59139d15c59c787e0",
+    "experiments/m7/console.py": "9d500f6550820c2e5f9f59238e7444a709efad80960569761e4cfeba6861cd1f",
+    "experiments/m7/run.py": "2dc9fe98c82fe3ba028ad8029b89d90ecd3a9da0c319052127cb46c6d45e76c3",
+    "experiments/m7/tpm.py": "dceaa556c3660796c1c590bd09043d5cafaa43338f9fb5ceaf1c334b1603649b",
+    "experiments/m7/pam.c": "45c6481a46a0a0a8cc70f1703e329e77dab5e5d2f27644d87f682ee5458a275f",
+    "experiments/m61/run.py": "1bb1b76771af6e4b666a2841a85dbf44fa1e4cd1d489bb9a2a2e8b1d36920cbf",
+    "experiments/m61/pty_client.py": "39f25387e2afc6f0af3399d4b8992a4ff99ec710346194d2ab87502956eb7907",
+    ".github/workflows/ci.yml": "eb14e534b007c4e8b41cd81c05de15aaa02d0ce094a4db5fdc0bfa38e6e853a7"
+  }
+}
