@@ -5,37 +5,53 @@ body:
   - type: markdown
     attributes:
       value: |
-        LocalPIN is at the repository-foundation milestone; authentication and installation are not implemented.
-        For suspected vulnerabilities, follow SECURITY.md. Do not include secrets or private exploit details here.
+        Thanks for helping improve LocalPIN. It is experimental Fedora KDE authentication software with CLI, PAM, and RPM integration; there is no supported production release.
+        For suspected vulnerabilities, follow the [security policy](https://github.com/tommcamm/LocalPIN/security). Do not include secrets or private exploit details in a public issue.
   - type: input
     id: revision
     attributes:
-      label: Affected commit or version
-      placeholder: Commit SHA
+      label: Affected commit or RPM version
+      description: Include the commit SHA for source builds or the full LocalPIN RPM version.
+      placeholder: Commit SHA or RPM version
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Build or development tools
+        - CLI or enrollment
+        - KDE unlock or PAM integration
+        - TPM or software backend
+        - RPM installation, updates, or recovery
+        - Documentation
+        - Other or unsure
     validations:
       required: true
   - type: textarea
     id: environment
     attributes:
       label: Environment
-      description: OS, architecture, Rust version, and relevant tool versions. Include desktop or TPM details only when relevant.
+      description: Include Fedora release/edition, architecture, Plasma version, and SELinux mode when relevant. For source builds, include Rust and native dependency versions. For credential issues, identify TPM (physical or emulated) or software backend. Omit machine identifiers and account details.
     validations:
       required: true
   - type: textarea
     id: reproduction
     attributes:
       label: Steps to reproduce
-      description: Use a minimal example and synthetic data.
+      description: Use a minimal example and synthetic data on a disposable test system. Include commands and the integration stage (disabled, prepared, trial, or active) if relevant. Do not risk locking yourself out to reproduce a problem.
     validations:
       required: true
   - type: textarea
     id: behavior
     attributes:
       label: Expected and observed behavior
+      description: For unlock or recovery problems, describe whether the normal password route and documented console recovery worked, if already tested. Do not include the password or PIN.
     validations:
       required: true
   - type: textarea
     id: diagnostics
     attributes:
       label: Sanitized diagnostics
-      description: Include relevant errors only. Remove passwords, PINs, credential material, personal information, and unrelated logs.
+      description: Include relevant error text or sanitized doctor/status output only. Remove passwords, PINs, shadow records, credential/state directories, TPM private material, personal information, and unrelated logs. Do not attach core dumps.

@@ -1,149 +1,172 @@
 # Contributing to LocalPIN
 
-LocalPIN implements the core policy, storage, credentials, bounded broker,
-trusted enrollment CLI, PAM adapter and Fedora packaging. Earlier M6.1–M8
-acceptance passed for the historical immutable Fedora 44 x86_64 Btrfs appliance;
-see the [M8 report](docs/development/m8-packaging-recovery.md). M8.1 changes the
-account authority, KDE fingerprint/password composition and distribution-update
-contract for an ordinary Fedora KDE 44 x86_64 desktop. Its recorded
-[targeted installed cases](docs/development/m8.1-desktop-compatibility.md) passed
-with SELinux enforcing and a private TPM emulator, including actual
-[KDE/RPM/reboot continuity](experiments/m81/results/installed-desktop-and-continuity.json)
-and [DNF updates](experiments/m81/results/dnf-upgrade.json). Final source checks
-and the compatible `.5` → `.6` RPM upgrade passed with exact protected-state
-preservation and automatic restoration of prior activation. The report keeps
-each earlier installed case's build scope explicit. GUI/DBus
-AccountsService, full old-TPM-credential migration, physical devices and the full
-hardware matrix remain unvalidated. M9 independent human/specialist review and
-release gates remain open; hosted CI execution remains unverified.
+Thanks for helping make LocalPIN easier to use, understand, and review.
+Documentation fixes, reproducible bug reports, test improvements, and code
+contributions are welcome.
 
-Read the [product specification](docs/product-specification.md) and
-[implementation plan](docs/implementation-plan.md) before implementation changes.
-Authentication behavior needs evidence appropriate to its risk, including
-failure and recovery paths.
+LocalPIN is experimental authentication software with no supported production
+release. The current target is an existing Fedora KDE 44 x86_64 session. Targeted
+M8.1 desktop and package tests passed in a disposable guest with SELinux enforcing
+and a private TPM emulator; independent review, physical hardware validation,
+and release gates remain open. See the [README](README.md) for an overview and
+the [M8.1 report](docs/development/m8.1-desktop-compatibility.md) for the exact
+evidence and its limits.
 
-## Workflow
+## Choose a contribution
 
-- Keep `main` reviewable. Use a short-lived branch such as `feat/policy-models`,
-  `fix/frame-limit`, or `docs/recovery` for each focused change.
-- Make small commits with a clear purpose. Include relevant documentation and
-  meaningful tests in the same change.
-- Explain the problem, resulting behavior, and validation in a pull request.
-  Link the milestone or requirement it addresses and identify remaining limits.
-- Resolve design questions in an architecture decision record and amend the
-  specification when requirements change. Do not silently weaken release gates.
-- Keep unrelated refactoring and generated artifacts out of a change.
+- **Report a bug:** use the [bug report form](https://github.com/tommcamm/LocalPIN/issues/new?template=bug_report.yml).
+  Include the affected commit or package version, environment, expected and
+  actual behavior, and steps to reproduce with synthetic data.
+- **Suggest a feature:** use the [feature request form](https://github.com/tommcamm/LocalPIN/issues/new?template=feature_request.yml).
+  Describe the problem and intended use. Discuss substantial architecture or
+  scope changes before implementation.
+- **Improve the project:** choose an existing issue or open a focused pull
+  request for a small fix. Documentation and test contributions are useful
+  starting points.
+- **Report a vulnerability:** follow [SECURITY.md](SECURITY.md). Keep exploit
+  details and sensitive authentication data out of public issues and PRs.
 
-Use [tommcamm/LocalPIN](https://github.com/tommcamm/LocalPIN) for issues and pull
-requests, targeting `main`. Distinguish local validation from GitHub CI results
-and link the relevant workflow run when reporting hosted checks.
+Keep discussions considerate and specific. Explain your assumptions, ask for
+context when needed, and give feedback about the work and its behavior.
 
-## Local checks
+## Get started
 
-Use the toolchain pinned in `rust-toolchain.toml`; the workspace declares its MSRV
-in `Cargo.toml`. Commit `Cargo.lock` when dependencies change and review its diff.
+Fork [tommcamm/LocalPIN](https://github.com/tommcamm/LocalPIN) if you do not have
+write access, then clone your fork. With a local checkout:
+
+```sh
+git switch main
+git pull --ff-only
+git switch -c docs/clearer-recovery-guide
+```
+
+Choose a branch name that describes your change; `fix/`, `feat/`, `test/`, and
+`docs/` are useful prefixes. Install the native build prerequisites described in
+the [README](README.md#build-from-source). `rust-toolchain.toml` selects the pinned
+Rust toolchain; `Cargo.toml` declares the minimum supported Rust version.
+
+Before changing behavior, read the [product specification](docs/product-specification.md)
+and the relevant part of the [implementation plan](docs/implementation-plan.md).
+The specification defines the requirements; development reports describe the
+evidence gathered so far. Resolve changes to a design contract in an
+[architecture decision record](docs/adr/) and update the specification when
+requirements change.
+
+## Branches and pull requests
+
+Every focused change, including documentation, gets its own short-lived branch
+and pull request targeting `main`. Do not commit or push changes directly to
+`main`.
+
+1. Start a branch from current `main` and keep unrelated work out of it.
+2. Make clear, focused commits. Include relevant documentation and meaningful
+   tests with behavior changes; avoid generated build outputs and local state.
+3. Run checks appropriate to the change and record their actual results.
+4. Open a PR against `main` using the repository template. Explain the problem,
+   resulting behavior, relevant issue or requirement, and remaining limits.
+5. Leave the PR open for maintainer review and approval. Address feedback on the
+   same branch; do not merge it automatically or before that review is complete.
+
+## Validation
+
+The [CI workflow](.github/workflows/ci.yml) is the source of truth for automated
+checks. Ubuntu runs Rust formatting, Clippy, Python checks, and the release build;
+Fedora 44 runs the full workspace tests and doctests with native PAM inputs,
+simulator checks, and packaging checks. The corresponding local commands are:
 
 ```sh
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --all-features --locked
+python3 -m unittest discover -s tools/tests -p 'test_*.py' -v
+python3 -m unittest discover -s experiments/m8 -p 'test_*.py' -v
 cargo build --workspace --all-features --release --locked
-cargo deny --locked check advisories bans licenses sources
-python3 -m unittest discover -s tools/tests
 ```
 
-Install the `cargo-deny` version pinned by CI before the last command. Advisory
-checks need access to the configured advisory database. Report unavailable checks
-honestly, including environmental failures. These workspace checks include
-`localpin-storage`, which requires Linux and kernel support for `openat2` and
-fails closed when unavailable. Policy/protocol tests use simulated authorities,
-stores and workers. Storage tests use synthetic lifecycle identities and
-credentials with actual temporary-file and process I/O to exercise persistence,
-recovery and locking. They do not establish production lifecycle enforcement or
-platform authentication. Read the [M3 storage report](docs/development/m3-protected-storage.md)
-and [ADR 0008](docs/adr/0008-protected-storage-and-recovery.md) when changing these
-contracts. Run the separate
-[M1 harnesses](experiments/m1/README.md) when changing feasibility code; do not
-report their container results as real KDE or SELinux evidence.
-
-New dependencies need a documented purpose, maintenance and advisory review,
-license review, MSRV compatibility, and any native-library requirements. Keep the
-dependency set small and pin reproducible release inputs.
-
-Native builds require TPM2-TSS 4.x and libdbus development libraries and pkg-config.
-Run `python3 crates/localpin-tpm/tests/run_simulator.py` with
-`swtpm` and `tpm2-tools` for the explicit disposable simulator suite. Ordinary
-workspace tests never open a TPM device. Read the
-[M4 report](docs/development/m4-credential-backends.md) before changing cryptographic
-payloads or session templates; the native primitives run through M5's supervised
-worker boundary in the broker. Read the
-[M5 report](docs/development/m5-bounded-broker.md) and
-[ADR 0010](docs/adr/0010-bounded-broker-and-live-peers.md) when changing sockets,
-peer identity, deadlines or authorization delivery. Local socket and
-`SO_PEERPIDFD` tests require Linux 6.5+ and permission to use local IPC; denied
-syscalls are infrastructure failures, not passing negative assertions.
-Ordinary tests never install units or change host authentication.
-
-Read the [M6 report](docs/development/m6-enrollment-cli.md) and
-[ADR 0011](docs/adr/0011-trusted-enrollment-and-cli.md) before changing enrollment,
-password-worker policy, terminal input or credential publication. Run the
-isolated enrollment and password-PAM suites when modifying those boundaries:
+For dependency policy checks, install the checker version pinned by CI:
 
 ```sh
-python3 crates/localpind/tests/run_enrollment_broker.py
-python3 crates/localpin-auth/tests/isolated_pam.py
+cargo install cargo-deny --version 0.20.2 --locked
+cargo deny --locked check advisories licenses bans sources
 ```
 
-Changes to production account support require
-[ADR 0017](docs/adr/0017-shadow-record-account-authority.md) and the
-[account administration contract](docs/account-administration.md). Managed
-identity uses a random root-owned marker in the native shadow record, a separate
-random 128-bit incarnation and retained native account locks through delivery.
-Test delete/recreate with identical UID/name/home/imported hash, retained home,
-normal passwd/chage/usermod and AccountsService, systemd-sysusers additions,
-concurrent mutation, restart, migration and crash recovery. Refuse legacy
-registries; never infer continuity from UID/name/home or successful password
-verification. Own-user operations cannot create/repair required state. Use
-isolated native account-tool harnesses and disposable enforcing Fedora guests;
-ordinary workspace tests cannot establish the full installed guarantee.
+Use Fedora 44 x86_64 for native validation, matching the current target. Some
+native PAM tests load Fedora's `libpam.so.0` path; a passing build on another
+distribution does not establish native test compatibility. The commands above
+describe the configured checks; report their actual results in your environment.
 
-Activation/package changes also require the
-[integration administration contract](docs/integration-administration.md),
-[persistent accounting decision](docs/adr/0014-persistent-faillock.md), and
-current M8.1 compatibility ADRs. Keep historical ADRs/reports distinguishable
-from current implementation. The new authority sets no immutable flags and
-requires no package-cache window. Prove native marker/incarnation/enrollment and
-throttle preservation through real `dnf upgrade`, including package replacements
-and service-account creation. Verify KDE password/fingerprint behavior with
-persistent counters and no device, wrong/right factor, broker outage and normal
-password success. Never reset existing counters or disable a factor to conceal
-an incompatible graph. Unknown graphs remain refused.
+Successful Fedora jobs publish an unsigned testing RPM, build provenance, and
+SHA256 checksums for 14 days. Follow the
+[artifact download and testing instructions](packaging/fedora/README.md#download-a-ci-testing-rpm)
+and link the workflow run and tested commit in testing reports. Pull-request
+builds test GitHub's merge commit; the bundle records the PR head separately.
 
-Synthetic tests, root operator attestations and package builds do not complete
-the installed enforcing KDE/RPM/reboot/console matrix. The
-[M8.1 report](docs/development/m8.1-desktop-compatibility.md) links the targeted
-cases that passed, including final source and targeted final RPM validation. Repeat
-affected installed cases when changing these boundaries; do not extend that
-result to unseen policies, untested account administration paths or physical
-devices. M9 independent review and hardware/release gates remain separate.
+Advisory checks need access to the configured advisory database. Workspace
+storage tests require Linux with `openat2`; local socket and `SO_PEERPIDFD`
+tests require Linux 6.5+ and permission to use local IPC. Report unavailable tools,
+denied syscalls, and other infrastructure failures explicitly. An unavailable
+check is not a passing check. Distinguish local results from
+[hosted CI results](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml);
+link a workflow run when claiming GitHub checks passed.
 
-## Authentication experiments
+Match validation to the change. For documentation-only work, check accuracy,
+links, commands, and formatting; explain why runtime tests are unnecessary.
+Behavior changes need relevant tests, including failure paths. CI also defines
+Fedora builds, disposable simulator tests, PAM ABI checks, packaging checks, and
+isolated feasibility harnesses; use the relevant component's instructions for
+additional validation.
 
-Use disposable Fedora KDE VMs and simulated TPMs for early integration and
-negative tests. Do not use an everyday machine's PAM configuration, real password
-database, credential state, or TPM failure budget as a test fixture. Read-only
-host observations do not establish supported-platform compatibility.
+Dependency changes must explain their purpose, maintenance status, license,
+enabled features, MSRV compatibility, and native-library requirements. Review
+and commit the resulting `Cargo.lock` diff. See the
+[dependency policy and inventory](docs/development/dependencies.md).
+
+## Work safely on authentication boundaries
+
+Use disposable Fedora KDE VMs and simulated TPMs for integration and negative
+tests. Never use an everyday machine's PAM configuration, password database,
+credential state, or TPM failure budget as a test fixture. Ordinary workspace
+tests do not install units, modify host authentication, or open a TPM device.
+
+Use the relevant design and validation references when changing these boundaries:
+
+| Change | Start here |
+| --- | --- |
+| Protected storage, recovery, or credential formats | [Storage and recovery](docs/adr/0008-protected-storage-and-recovery.md), [credential backends](docs/development/m4-credential-backends.md) |
+| Sockets, peer identity, worker deadlines, or authorization delivery | [Broker contract](docs/adr/0010-bounded-broker-and-live-peers.md), [broker evidence](docs/development/m5-bounded-broker.md) |
+| Enrollment, terminal input, or password verification | [Enrollment contract](docs/adr/0011-trusted-enrollment-and-cli.md), [enrollment evidence](docs/development/m6-enrollment-cli.md) |
+| Account identity, lifecycle, or provisioning | [Current account authority](docs/adr/0017-shadow-record-account-authority.md), [account administration](docs/account-administration.md) |
+| PAM, fingerprint/password composition, activation, or packaging | [Desktop compatibility contract](docs/adr/0018-kde-native-update-compatibility.md), [persistent accounting](docs/adr/0014-persistent-faillock.md), [integration and recovery](docs/integration-administration.md) |
+
+Preserve password fallback, persistent failure counters, and fail-closed handling
+of unknown policy or missing authority. Never infer account continuity from
+UID/name/home or password success; own-user operations cannot repair privileged
+account or accounting state. Do not reset counters or disable a factor to hide
+an incompatible authentication graph.
+
+Changes to these boundaries need evidence appropriate to their risk, including
+failure and recovery paths. Repeat affected installed desktop, RPM, and update
+cases using the [M8.1 instructions and evidence](docs/development/m8.1-desktop-compatibility.md).
+Synthetic tests, container runs, package builds, and operator attestations do not
+establish installed KDE behavior, enforcing SELinux compatibility, or physical
+hardware support. Keep historical appliance results separate from the current
+desktop contract; do not extend a recorded result beyond its tested build and
+environment. Independent review and release gates remain separate requirements.
 
 Never commit passwords, PINs, derived authorization values, real credential
 records, private keys, system authentication files, VM images, or unsanitized
 logs. Use clearly synthetic, sanitized fixtures and document their purpose.
 
-Report suspected vulnerabilities according to [SECURITY.md](SECURITY.md).
+## AI assistance and licensing
 
-## Licensing
+AI-assisted contributions are welcome. Contributors remain responsible for
+understanding the submitted work, checking its correctness and provenance, and
+providing appropriate validation. Explain substantial generated changes when
+relevant to review. AI output and automated checks do not replace maintainer or
+independent security review.
 
 By submitting original contributions for inclusion in LocalPIN, you agree that
 they may be distributed under `MIT OR Apache-2.0`, unless explicitly stated
-otherwise. Retain applicable attribution and license notices for any reused
-material, and identify it in the change. Do not copy upstream code or
-documentation without checking its terms.
+otherwise. Retain applicable attribution and license notices for reused material
+and identify it in the PR. Check the terms before copying upstream code or
+documentation.

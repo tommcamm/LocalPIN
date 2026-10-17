@@ -22,7 +22,7 @@ env:
 
 jobs:
   quality:
-    name: Rust quality
+    name: Rust lint and build (Ubuntu)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -42,8 +42,8 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Check Clippy
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-      - name: Run tests and doctests
-        run: cargo test --workspace --all-features --locked
+      # Native PAM tests use Fedora's reviewed runtime paths. The Fedora job
+      # below runs the complete workspace test/doctest suite on the target OS.
       - name: Check activation transactions and disposable VM guards
         run: |
           python3 -m unittest discover -s tools/tests -p 'test_*.py' -v
@@ -77,7 +77,7 @@ jobs:
       image: fedora:44
     steps:
       - name: Install build tools in the disposable container
-        run: dnf install -y ca-certificates gcc git python3 rustup pkgconf-pkg-config tpm2-tss-devel dbus-devel swtpm tpm2-tools pam-devel binutils rpm-build checkpolicy policycoreutils
+        run: dnf install -y ca-certificates gcc git python3 rustup pkgconf-pkg-config tpm2-tss-devel dbus-devel swtpm tpm2-tools pam-devel binutils rpm-build checkpolicy policycoreutils systemd selinux-policy-targeted
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -92,7 +92,7 @@ jobs:
       - name: Record Fedora build inputs
         run: |
           cat /etc/os-release
-          rpm -q gcc glibc git rustup tpm2-tss-devel dbus-devel swtpm libtpms tpm2-tools
+          rpm -q gcc glibc git rustup tpm2-tss-devel dbus-devel swtpm libtpms tpm2-tools pam dbus-libs tpm2-tss systemd selinux-policy-targeted
           rustc --version --verbose
           cargo --version --verbose
       - name: Build with the committed lockfile
@@ -112,7 +112,70 @@ jobs:
       - name: Compile confinement and build the opt-in RPM without installing it
         run: |
           python3 packaging/fedora/test_packaging.py
-          python3 packaging/fedora/build-rpm.py --output /tmp/localpin-rpm-ci
+          python3 packaging/fedora/build-rpm.py --output /tmp/localpin-rpm-ci \
+            --release "0.1.alpha1.ci.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+      - name: Collect the testing RPM, provenance, and checksums
+        env:
+          LOCALPIN_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import shutil
+          import subprocess
+          import tarfile
+
+          build = Path('/tmp/localpin-rpm-ci')
+          packages = sorted((build / 'RPMS/x86_64').glob('*.rpm'))
+          sources = sorted((build / 'SOURCES').glob('*-native.tar.gz'))
+          if len(packages) != 1 or len(sources) != 1:
+              raise SystemExit('Expected exactly one native RPM and one build-input bundle')
+          # Container steps can run under a different owner than checkout.
+          # Trust only this workspace for this read-only Git invocation.
+          source_commit = subprocess.check_output(['git', '-c', f'safe.directory={Path.cwd()}', 'rev-parse', 'HEAD'], text=True).strip()
+          if source_commit != os.environ['GITHUB_SHA']:
+              raise SystemExit('Checked-out source differs from the workflow commit')
+          output = Path(os.environ['RUNNER_TEMP']) / 'localpin-artifact'
+          output.mkdir()
+          shutil.copy2(packages[0], output / packages[0].name)
+          with tarfile.open(sources[0], 'r:gz') as archive:
+              member = sources[0].name.removesuffix('.tar.gz') + '/BUILD-INPUTS.json'
+              with archive.extractfile(member) as manifest:
+                  (output / 'BUILD-INPUTS.json').write_bytes(manifest.read())
+          run_url = f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+          metadata = {
+              'schema': 1,
+              'repository': os.environ['GITHUB_REPOSITORY'],
+              'source_commit': source_commit,
+              'pull_request_head_commit': os.environ.get('LOCALPIN_PR_HEAD_SHA') or None,
+              'workflow_run_url': run_url,
+              'run_number': os.environ['GITHUB_RUN_NUMBER'],
+              'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'],
+              'rpm': packages[0].name,
+              'rpm_release': subprocess.check_output(['rpm', '-qp', '--queryformat', '%{RELEASE}', str(packages[0])], text=True),
+              'signed': False,
+          }
+          (output / 'CI-BUILD.json').write_text(json.dumps(metadata, indent=2) + '\n')
+          checksums = ''.join(f'{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n' for path in sorted(output.iterdir()))
+          (output / 'SHA256SUMS').write_text(checksums)
+          PY
+      - name: Upload the experimental Fedora RPM
+        id: rpm_artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: localpin-fedora44-x86_64-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/localpin-artifact/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+      - name: Add the RPM download to the workflow summary
+        env:
+          LOCALPIN_ARTIFACT_URL: ${{ steps.rpm_artifact.outputs.artifact-url }}
+        run: |
+          printf '## Experimental Fedora KDE 44 x86_64 RPM\n\n[Download the testing RPM bundle](%s)\n\nIncludes the unsigned RPM, SHA256SUMS, BUILD-INPUTS.json, and CI-BUILD.json. Retained for 14 days.\n\nTest in a disposable Fedora KDE VM using the [installation and recovery runbook](%s/%s/blob/%s/docs/integration-administration.md).\n' \
+            "$LOCALPIN_ARTIFACT_URL" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
 
   feasibility:
     name: Isolated M1 experiments (Fedora 44)
