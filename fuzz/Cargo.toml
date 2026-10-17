@@ -1,0 +1,39 @@
+[package]
+name = "localpin-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "MIT OR Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+members = ["."]
+
+[dependencies]
+libfuzzer-sys = "=0.4.13"
+localpin-core = { path = "../crates/localpin-core", version = "=0.1.0-alpha.1" }
+localpin-protocol = { path = "../crates/localpin-protocol", version = "=0.1.0-alpha.1" }
+localpin-credentials = { path = "../crates/localpin-credentials", version = "=0.1.0-alpha.1" }
+
+[[bin]]
+name = "records"
+path = "fuzz_targets/records.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "streams"
+path = "fuzz_targets/streams.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "phc"
+path = "fuzz_targets/phc.rs"
+test = false
+doc = false
+bench = false

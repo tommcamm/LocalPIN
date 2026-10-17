@@ -7,6 +7,15 @@ and [section 20](../product-specification.md#20-production-completion-gates) to
 reviewable evidence. A manually published experimental GitHub prerelease does
 not complete these gates.
 
+The [2026-10-17 development validation](m9-review-validation.md) adds
+candidate-bound source/native results, bounded coverage-guided parser campaigns,
+selected Miri and PAM ASan/UBSan evidence, and two scoped AI development reviews.
+It retains an intermittent simulator failure and identifies unimplemented
+memory-locking, operational-event and TPM reserve configuration requirements.
+Its successful hosted CI/testing RPM is separate from local binaries. Independent
+human review, the complete installed candidate matrix and physical acceptance
+remain open.
+
 The target is Fedora KDE 44 x86_64, ordinary local non-root files accounts,
 SELinux enforcing, the documented local authselect graphs and persistent native
 faillock accounting. Stock `files systemd` NSS, including the supported group
@@ -127,8 +136,12 @@ The [M2 report](m2-policy-contracts.md) records 32,768 seeded steps checked agai
 an independent rolling-window model and bounded parser mutations. Additional
 M9 core/protocol adversarial and state tests are deterministic checks as well;
 their actual results belong in the change's validation record. They do not
-establish coverage-guided fuzzing. No executed coverage-guided fuzz campaign or
-applicable Miri/sanitizer result is linked by this initial checklist.
+establish coverage-guided fuzzing. The
+[development validation record](m9-review-validation.md#parser-and-memory-instrumentation)
+now links three bounded parser campaigns, 22 selected pure Miri tests and scoped
+native PAM instrumentation. It explicitly excludes the remaining targets,
+uninstrumented distribution libraries and installed/physical behavior; the
+complete tooling gate is still open.
 
 The initial M9 automation change adds
 [record canonicalization campaigns](../../crates/localpin-core/tests/m9_records.rs),
