@@ -430,6 +430,15 @@ remain M9 work.
 
 ### M9 — Review, hardware validation and versioned release
 
+In progress: the [requirement-to-evidence checklist](development/m9-release-readiness.md)
+tracks section 18 acceptance and section 20 completion gates. The
+[manual release workflow](releasing.md) reruns CI and creates experimental Fedora
+44 RPM/GitHub prereleases with source, SPDX inventory, checksums and optional
+protected signing. Deterministic parser/state campaigns extend source checks.
+Independent review, physical acceptance, coverage-guided fuzzing/applicable
+native instrumentation and the remaining candidate-bound evidence are still
+open; release automation alone does not complete M9.
+
 - Build a requirement-to-evidence checklist covering every acceptance category in specification section 18 and every completion gate in section 20. Link tests, VM reports, hardware observations, benchmarks and review findings.
 - Run parser fuzzing, state-machine property/model tests, and applicable FFI Miri/sanitizer checks. Explain where native library or platform constraints limit those tools.
 - Complete the physical matrix: laptop closed, external monitor, USB/dock keyboard, top-row/numpad/leading zeroes, reconnect, suspend/resume, multiple sessions/seats, and supported theme variations.

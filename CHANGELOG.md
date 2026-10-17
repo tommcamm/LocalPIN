@@ -6,6 +6,15 @@ Changes will be recorded here before versioned releases. There are no releases y
 
 ### Added
 
+- Manual main-only experimental GitHub prereleases for Fedora KDE 44 x86_64,
+  gated on CI, with RPM/source assets, SPDX dependency/native inventory,
+  provenance/checksums and optional protected OpenPGP signing. Stable publication
+  remains disabled while M9 gates are open. See [release instructions](docs/releasing.md).
+- M9 requirement-to-evidence checklist and independent review/hardware runbook;
+  deterministic record/stream adversarial campaigns and exhaustive verification
+  state-model traces. These do not complete independent review, coverage-guided
+  fuzzing, native instrumentation or physical hardware acceptance.
+
 - Downloadable unsigned Fedora 44 x86_64 CI testing RPMs with build provenance,
   SHA256 checksums, 14-day retention, and a versioned release sequence for testing
   successive CI upgrades. See the [artifact guide](packaging/fedora/README.md#download-a-ci-testing-rpm).

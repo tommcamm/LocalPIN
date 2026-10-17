@@ -101,6 +101,19 @@ SHA256 checksums for 14 days. Follow the
 and link the workflow run and tested commit in testing reports. Pull-request
 builds test GitHub's merge commit; the bundle records the PR head separately.
 
+Versioned experimental releases use the separate
+[manual release workflow](docs/releasing.md), which reruns CI before publishing.
+Its release helper tests run with:
+
+```sh
+python3 -m unittest discover -s packaging/fedora -p 'test_release*.py' -v
+```
+
+Track remaining candidate, review and hardware evidence in the
+[M9 checklist](docs/development/m9-release-readiness.md). Reproducible core/protocol
+adversarial campaigns run in normal Cargo tests; they do not substitute for
+coverage-guided fuzzing, applicable native tooling or independent review.
+
 Advisory checks need access to the configured advisory database. Workspace
 storage tests require Linux with `openat2`; local socket and `SO_PEERPIDFD`
 tests require Linux 6.5+ and permission to use local IPC. Report unavailable tools,

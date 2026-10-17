@@ -1,0 +1,127 @@
+name: Experimental release
+
+on:
+  workflow_dispatch:
+    inputs:
+      sign_rpm:
+        description: Sign with the release environment's OpenPGP key (requires setup)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: localpin-release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.policy.outputs.tag }}
+      rpm_release: ${{ steps.policy.outputs.rpm_release }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require an unpublished experimental version dispatched from main
+        id: policy
+        run: python3 packaging/fedora/release-policy.py
+
+  checks:
+    needs: validate
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  build:
+    needs: [validate, checks]
+    outputs:
+      artifact_name: ${{ steps.artifact_name.outputs.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container:
+      image: fedora:44
+    steps:
+      - name: Install disposable Fedora build tools
+        run: dnf install -y ca-certificates gcc git python3 rustup pkgconf-pkg-config tpm2-tss-devel dbus-devel pam-devel binutils rpm-build checkpolicy policycoreutils systemd selinux-policy-targeted
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned compiler
+        run: |
+          test "$(uname -m)" = x86_64
+          rustup-init -y --no-modify-path --default-toolchain none --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          LOCALPIN_TOOLCHAIN=$(python3 -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
+          "$HOME/.cargo/bin/rustup" toolchain install "$LOCALPIN_TOOLCHAIN" --profile minimal --no-self-update
+      - name: Test the shipping default feature set and build without installing
+        env:
+          LOCALPIN_RPM_RELEASE: ${{ needs.validate.outputs.rpm_release }}
+        run: |
+          cargo fetch --locked
+          cargo test --workspace --locked --offline
+          python3 packaging/fedora/build-rpm.py --output "$RUNNER_TEMP/rpm" --release "$LOCALPIN_RPM_RELEASE"
+          gcc -std=c11 -O2 -Wall -Wextra -Werror crates/localpin-pam/tests/abi_smoke.c -ldl -o "$RUNNER_TEMP/pam-abi"
+          "$RUNNER_TEMP/pam-abi" "$RUNNER_TEMP/rpm/cargo/release/liblocalpin_pam.so"
+          rpm -qp --queryformat '%{RELEASE}' "$RUNNER_TEMP"/rpm/RPMS/x86_64/*.rpm | python3 -c 'import os,sys; assert sys.stdin.read() == os.environ["LOCALPIN_RPM_RELEASE"] + ".fc44"'
+      - name: Collect source, RPM, SPDX inventory, provenance and checksums
+        env:
+          LOCALPIN_TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          python3 packaging/fedora/release-bundle.py --build-dir "$RUNNER_TEMP/rpm" --output "$RUNNER_TEMP/release" --tag "$LOCALPIN_TAG" --commit "$GITHUB_SHA"
+      - name: Identify this build attempt
+        id: artifact_name
+        run: echo "name=release-$GITHUB_SHA-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.artifact_name.outputs.name }}
+          path: ${{ runner.temp }}/release/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  publish:
+    needs: [validate, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      actions: read
+      contents: write
+    container:
+      image: fedora:44
+    steps:
+      - name: Install publication tools only
+        run: dnf install -y ca-certificates git python3 gh gnupg2 rpm-sign
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download this run's candidate and verify transport checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LOCALPIN_ARTIFACT_NAME: ${{ needs.build.outputs.artifact_name }}
+        run: |
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$LOCALPIN_ARTIFACT_NAME" --dir "$RUNNER_TEMP/release"
+          cd "$RUNNER_TEMP/release"
+          sha256sum --check SHA256SUMS
+      - name: Sign and verify the RPM with the configured release key
+        if: inputs.sign_rpm
+        env:
+          LOCALPIN_SIGNING_KEY: ${{ secrets.RPM_SIGNING_KEY }}
+          LOCALPIN_SIGNING_PASSPHRASE: ${{ secrets.RPM_SIGNING_PASSPHRASE }}
+          LOCALPIN_SIGNING_FINGERPRINT: ${{ vars.RPM_SIGNING_FINGERPRINT }}
+        run: python3 packaging/fedora/sign-release.py "$RUNNER_TEMP/release"
+      - name: Create an annotated tag and publish all assets as an experimental prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LOCALPIN_TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          python3 packaging/fedora/publish-release.py "$RUNNER_TEMP/release" --tag "$LOCALPIN_TAG" --commit "$GITHUB_SHA"
