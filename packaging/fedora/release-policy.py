@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 """Validate a main-only experimental release; never mutate refs or publish."""
+import argparse
 import os
 from pathlib import Path
 import re
@@ -19,12 +20,17 @@ def release_identity(version):
     return f"v{version}", f"0.{stage}.{channel}{sequence}.release"
 
 
+def rpm_prefix(version):
+    """Use the Cargo channel/sequence for ordinary and CI RPM identities too."""
+    return release_identity(version)[1].removesuffix(".release")
+
+
 def main():
     if os.environ.get("GITHUB_REF") != "refs/heads/main":
         raise SystemExit("dispatch the release workflow from main")
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    if commit != os.environ.get("GITHUB_SHA"):
-        raise SystemExit("checkout does not match the dispatched commit")
+    if commit != os.environ.get("LOCALPIN_SOURCE_COMMIT", os.environ.get("GITHUB_SHA")):
+        raise SystemExit("checkout does not match the selected release commit")
     version = tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["package"]["version"]
     tag, rpm_release = release_identity(version)
     if subprocess.run(["git", "show-ref", "--verify", "--quiet", f"refs/tags/{tag}"], cwd=ROOT).returncode != 1:
@@ -35,4 +41,11 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--rpm-prefix", action="store_true", help="print the Cargo-derived RPM prefix without publishing or checking refs")
+    args = parser.parse_args()
+    if args.rpm_prefix:
+        version = tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["package"]["version"]
+        print(rpm_prefix(version))
+    else:
+        main()

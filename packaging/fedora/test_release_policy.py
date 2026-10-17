@@ -59,6 +59,8 @@ class ReleasePolicyTests(unittest.TestCase):
         self.assertEqual(policy.release_identity("0.1.0-alpha.1"), (TAG, "0.1.alpha1.release"))
         self.assertEqual(policy.release_identity("1.2.3-beta.12"), ("v1.2.3-beta.12", "0.2.beta12.release"))
         self.assertEqual(policy.release_identity("1.2.3-rc.2"), ("v1.2.3-rc.2", "0.3.rc2.release"))
+        self.assertEqual(policy.rpm_prefix("0.1.0-alpha.12"), "0.1.alpha12")
+        self.assertEqual(load("build-rpm").default_release("0.1.0-beta.2"), "0.2.beta2")
 
     def test_supported_versions_and_injected_versions_are_refused(self):
         for version in ("1.0.0", "0.1.0-alpha.0", "0.1.0-alpha.01", "01.2.3-alpha.1", "0.1.0-dev.1", "0.1.0-alpha.1\ncontents=write", "0.1.0-alpha.1+metadata"):
@@ -86,15 +88,21 @@ class PublicationTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.output = Path(self.temporary.name)
         self.manifest = {"schema": 1, "experimental": True, "tag": TAG, "source_commit": COMMIT,
+                         "reviewed_main_commit": COMMIT,
                          "project_version": "0.1.0-alpha.1", "target": "Fedora KDE 44 x86_64",
                          "source_archive": "localpin-0.1.0-alpha.1-source.tar.gz",
                          "rpm": {"filename": RPM, "version": "0.1.0", "release": "0.1.alpha1.release.fc44"},
                          "signing": {"signed": True, "fingerprint": "A" * 40}}
         self.write_bundle()
         self.environment = patch.dict(os.environ, {"GITHUB_REF": "refs/heads/main", "GITHUB_SHA": COMMIT,
+                                                   "LOCALPIN_SOURCE_COMMIT": COMMIT,
+                                                   "LOCALPIN_RELEASE_BASE_COMMIT": COMMIT,
                                                    "GITHUB_REPOSITORY": "synthetic/localpin", "GITHUB_STEP_SUMMARY": ""})
         self.environment.start()
         self.addCleanup(self.environment.stop)
+        self.head = patch.object(publish.subprocess, "check_output", return_value=COMMIT + "\n")
+        self.head.start()
+        self.addCleanup(self.head.stop)
         self.native = patch.object(publish, "verify_native_assets")
         self.native.start()
         self.addCleanup(self.native.stop)
@@ -158,6 +166,12 @@ class PublicationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "manifest RPM digest mismatch"):
             publish.verify_bundle(self.output, TAG, COMMIT)
 
+    def test_unexpected_reviewed_main_commit_is_refused(self):
+        self.manifest["reviewed_main_commit"] = "b" * 40
+        self.write_bundle()
+        with self.assertRaisesRegex(ValueError, "reviewed main"):
+            publish.verify_bundle(self.output, TAG, COMMIT)
+
     def test_signed_bundle_requires_checksum_signature_and_key(self):
         (self.output / "RPM-GPG-KEY-LocalPIN").unlink()
         self.checksums()
@@ -217,6 +231,40 @@ class PublicationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "invalid signature"):
                 publish.publish(self.output, TAG, COMMIT)
             api.assert_not_called()
+
+    def test_prepared_commit_can_differ_from_original_workflow_commit(self):
+        with patch.dict(os.environ, {"GITHUB_SHA": "b" * 40}), patch.object(publish, "_publish_downloads") as uploads:
+            publish.publish(self.output, TAG, COMMIT)
+        self.assertEqual(uploads.call_args.args[2], COMMIT)
+
+    def test_generated_release_checks_reviewed_base_and_tags_the_tested_child(self):
+        child = "b" * 40
+        with patch.object(publish, "verify_release_source") as verify, \
+                patch.object(publish, "api", side_effect=[None, None, {"status": "ahead"}, {"sha": "c" * 40}, {}]) as api, \
+                patch.object(publish.subprocess, "run"), patch.object(publish, "verify_github_release", return_value="https://example.invalid/release"):
+            publish._publish_downloads(self.output, TAG, child, [self.output / RPM])
+        verify.assert_called_once_with(COMMIT, child, "0.1.0-alpha.1")
+        self.assertEqual(api.call_args_list[2].args, (f"compare/{COMMIT}...main",))
+        self.assertEqual(api.call_args_list[3].args[1]["object"], child)
+
+    def test_unexpected_generated_source_or_base_refuses_before_github_mutation(self):
+        with patch.object(publish, "verify_release_source", side_effect=ValueError("unexpected code")), patch.object(publish, "api") as api:
+            with self.assertRaisesRegex(ValueError, "unexpected code"):
+                publish._publish_downloads(self.output, TAG, "b" * 40, [])
+            api.assert_not_called()
+        with patch.dict(os.environ, {"LOCALPIN_RELEASE_BASE_COMMIT": "b" * 40}), patch.object(publish, "api") as api:
+            with self.assertRaisesRegex(ValueError, "dispatched main"):
+                publish._publish_downloads(self.output, TAG, COMMIT, [])
+            api.assert_not_called()
+
+    def test_wrong_selected_commit_checkout_or_ref_prevents_publication(self):
+        for environment, head in (({"LOCALPIN_SOURCE_COMMIT": "b" * 40}, COMMIT),
+                                  ({}, "b" * 40), ({"GITHUB_REF": "refs/heads/topic"}, COMMIT)):
+            with self.subTest(environment=environment, head=head), patch.dict(os.environ, environment), \
+                    patch.object(publish.subprocess, "check_output", return_value=head), patch.object(publish, "api") as api:
+                with self.assertRaisesRegex(ValueError, "selected"):
+                    publish.publish(self.output, TAG, COMMIT)
+                api.assert_not_called()
 
     def test_upload_failure_leaves_draft_without_publishing(self):
         with patch.object(publish, "api", side_effect=[None, None, {"status": "identical"}, {"sha": "c" * 40}, {}]), patch.object(publish.subprocess, "run", side_effect=subprocess.CalledProcessError(1, "gh")) as gh:

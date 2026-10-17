@@ -28,6 +28,8 @@ def verify_bundle(directory, tag, commit):
     data = json.loads((directory / "RELEASE.json").read_text())
     if data["tag"] != tag or data["source_commit"] != commit:
         raise ValueError("release manifest does not match the requested tag and source")
+    if data.get("reviewed_main_commit") != os.environ.get("LOCALPIN_RELEASE_BASE_COMMIT", os.environ.get("GITHUB_SHA")):
+        raise ValueError("release manifest does not match the reviewed main commit")
     spec = importlib.util.spec_from_file_location("release_policy", Path(__file__).with_name("release-policy.py"))
     policy = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(policy)
@@ -179,8 +181,12 @@ def prepare_downloads(directory, output):
 def publish(directory, tag, commit):
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("full source commit required")
-    if os.environ.get("GITHUB_REF") != "refs/heads/main" or commit != os.environ.get("GITHUB_SHA"):
-        raise ValueError("publication requires the dispatched main commit")
+    if os.environ.get("GITHUB_REF") != "refs/heads/main" or commit != os.environ.get("LOCALPIN_SOURCE_COMMIT", os.environ.get("GITHUB_SHA")):
+        raise ValueError("publication requires the selected main release commit")
+    root = Path(__file__).resolve().parents[2]
+    head = subprocess.check_output(["git", "-c", f"safe.directory={root}", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    if head != commit:
+        raise ValueError("publication checkout differs from the selected release commit")
     verify_bundle(directory, tag, commit)
     verify_native_assets(directory)
     with tempfile.TemporaryDirectory(prefix="localpin-release-downloads-") as temporary:
@@ -188,11 +194,23 @@ def publish(directory, tag, commit):
         _publish_downloads(directory, tag, commit, assets)
 
 
+def verify_release_source(base, commit, version):
+    spec = importlib.util.spec_from_file_location("verify_release_source", Path(__file__).with_name("verify-release-source.py"))
+    verifier = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(verifier)
+    verifier.verify_source(Path(__file__).resolve().parents[2], base, commit, version)
+
+
 def _publish_downloads(directory, tag, commit, assets):
+    base = os.environ.get("LOCALPIN_RELEASE_BASE_COMMIT", os.environ.get("GITHUB_SHA", ""))
+    if not re.fullmatch(r"[0-9a-f]{40}", base) or base != os.environ.get("GITHUB_SHA"):
+        raise ValueError("release base must be the dispatched main commit")
+    if commit != base:
+        verify_release_source(base, commit, tag.removeprefix("v"))
     if api(f"git/ref/tags/{tag}", missing_ok=True) is not None or api(f"releases/tags/{tag}", missing_ok=True) is not None:
         raise ValueError("tag or release already exists; refusing to overwrite published history")
-    if api(f"compare/{commit}...main")["status"] not in ("ahead", "identical"):
-        raise ValueError("source commit is no longer on main")
+    if api(f"compare/{base}...main")["status"] not in ("ahead", "identical"):
+        raise ValueError("reviewed base commit is no longer on main")
     annotation = api("git/tags", {"tag": tag, "message": f"LocalPIN {tag} experimental Fedora KDE 44 prerelease", "object": commit, "type": "commit"})
     api("git/refs", {"ref": f"refs/tags/{tag}", "sha": annotation["sha"]})
     # gh uploads to a draft before publishing; any upload failure leaves a draft.

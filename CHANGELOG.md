@@ -17,6 +17,40 @@ experimental builds.
   requires an offline maintenance handoff and real recovery revokes enrollment.
   [ADR 0019](docs/adr/0019-guided-setup-orchestration.md) defines the boundary;
   new installed onboarding acceptance and all M9 gates remain outstanding.
+- Isolated coverage-guided fuzz targets, native instrumentation harnesses,
+  dependency policy and recorded component validation for M9. See the
+  [review and validation report](docs/development/m9-review-validation.md) for
+  the tested candidate and limits; independent review and physical hardware
+  acceptance remain open.
+
+### Fixed
+
+- Guided setup can enroll a new PIN after own-user disable while preserving
+  active desktop integration. Native account administration now shares the
+  integration transaction lock, preventing concurrent provisioning from
+  invalidating setup's single-account scope check before mutation.
+
+### Changed
+
+- The manual release workflow bumps an already-tagged experimental version,
+  commits matching manifests, lockfiles, RPM defaults and integration metadata
+  to a release branch, then tests and publishes that exact commit in the same run.
+  The generated version-only commit records its reviewed `main` parent; existing
+  tags and release assets stay intact. CI derives its testing RPM sequence from
+  the committed workspace version.
+
+- Report missing private signing material separately from mismatched public
+  primary fingerprints. Release descriptions include features, selected changes,
+  verification/recovery guidance and source/run links; publication verifies the
+  draft description and assets, then reports the verified public release URL.
+- Publish the signed RPM and its checksum as the two release downloads, with
+  full signed build evidence retained in the workflow artifact for 90 days.
+- Focus the README and setup documentation on installation, guided setup and
+  everyday use, with explicit recovery and experimental-readiness limits.
+
+## [0.1.0-alpha.1] - 2026-10-17
+
+### Added
 
 - Manual main-only experimental GitHub prereleases for Fedora KDE 44 x86_64,
   gated on CI, with RPM/source assets, SPDX dependency/native inventory,
@@ -137,20 +171,7 @@ experimental builds.
   desktop/locker tests, guarded clone tooling and final recovery evidence,
   completing M1 feasibility.
 
-### Fixed
-
-- Guided setup can enroll a new PIN after own-user disable while preserving
-  active desktop integration. Native account administration now shares the
-  integration transaction lock, preventing concurrent provisioning from
-  invalidating setup's single-account scope check before mutation.
-
 ### Changed
-
-- Report missing private signing material separately from mismatched public
-  primary fingerprints. Describe experimental releases with features, selected
-  committed changes, downloads, verification/recovery guidance and source/run
-  links; verify GitHub's description and complete attachment list before making
-  a draft public, then verify and report the published release URL.
 
 - Run full workspace runtime tests on the Fedora target while retaining Ubuntu
   formatting, Clippy, Python checks, and release builds. Install the native RPM

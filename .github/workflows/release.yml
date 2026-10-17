@@ -15,33 +15,46 @@ defaults:
     shell: bash
 
 jobs:
-  validate:
+  prepare:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    permissions:
+      contents: write
     outputs:
-      tag: ${{ steps.policy.outputs.tag }}
-      rpm_release: ${{ steps.policy.outputs.rpm_release }}
+      tag: ${{ steps.prepare.outputs.tag }}
+      rpm_release: ${{ steps.prepare.outputs.rpm_release }}
+      source_commit: ${{ steps.prepare.outputs.source_commit }}
+      base_commit: ${{ steps.prepare.outputs.base_commit }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Require an unpublished experimental version dispatched from main
-        id: policy
-        run: python3 packaging/fedora/release-policy.py
+      - name: Prepare the next unpublished experimental version
+        id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 packaging/fedora/prepare-release.py
 
   checks:
-    needs: validate
+    needs: prepare
     uses: ./.github/workflows/ci.yml
+    with:
+      source_commit: ${{ needs.prepare.outputs.source_commit }}
     permissions:
       contents: read
 
   build:
-    needs: [validate, checks]
+    needs: [prepare, checks]
     outputs:
       artifact_name: ${{ steps.artifact_name.outputs.name }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      LOCALPIN_SOURCE_COMMIT: ${{ needs.prepare.outputs.source_commit }}
+      LOCALPIN_RELEASE_BASE_COMMIT: ${{ needs.prepare.outputs.base_commit }}
     container:
       image: fedora:44
     steps:
@@ -49,6 +62,7 @@ jobs:
         run: dnf install -y ca-certificates gcc git python3 rustup pkgconf-pkg-config tpm2-tss-devel dbus-devel pam-devel binutils rpm-build checkpolicy policycoreutils systemd selinux-policy-targeted
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.prepare.outputs.source_commit }}
           persist-credentials: false
       - name: Install the pinned compiler
         run: |
@@ -59,7 +73,7 @@ jobs:
           "$HOME/.cargo/bin/rustup" toolchain install "$LOCALPIN_TOOLCHAIN" --profile minimal --no-self-update
       - name: Test the shipping default feature set and build without installing
         env:
-          LOCALPIN_RPM_RELEASE: ${{ needs.validate.outputs.rpm_release }}
+          LOCALPIN_RPM_RELEASE: ${{ needs.prepare.outputs.rpm_release }}
         run: |
           cargo fetch --locked
           cargo test --workspace --locked --offline
@@ -69,12 +83,12 @@ jobs:
           rpm -qp --queryformat '%{RELEASE}' "$RUNNER_TEMP"/rpm/RPMS/x86_64/*.rpm | python3 -c 'import os,sys; assert sys.stdin.read() == os.environ["LOCALPIN_RPM_RELEASE"] + ".fc44"'
       - name: Collect source, RPM, SPDX inventory, provenance and checksums
         env:
-          LOCALPIN_TAG: ${{ needs.validate.outputs.tag }}
+          LOCALPIN_TAG: ${{ needs.prepare.outputs.tag }}
         run: |
-          python3 packaging/fedora/release-bundle.py --build-dir "$RUNNER_TEMP/rpm" --output "$RUNNER_TEMP/release" --tag "$LOCALPIN_TAG" --commit "$GITHUB_SHA"
+          python3 packaging/fedora/release-bundle.py --build-dir "$RUNNER_TEMP/rpm" --output "$RUNNER_TEMP/release" --tag "$LOCALPIN_TAG" --commit "$LOCALPIN_SOURCE_COMMIT"
       - name: Identify this build attempt
         id: artifact_name
-        run: echo "name=release-$GITHUB_SHA-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+        run: echo "name=release-$LOCALPIN_SOURCE_COMMIT-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ steps.artifact_name.outputs.name }}
@@ -84,13 +98,16 @@ jobs:
           compression-level: 0
 
   publish:
-    needs: [validate, build]
+    needs: [prepare, build]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: release
     permissions:
       actions: read
       contents: write
+    env:
+      LOCALPIN_SOURCE_COMMIT: ${{ needs.prepare.outputs.source_commit }}
+      LOCALPIN_RELEASE_BASE_COMMIT: ${{ needs.prepare.outputs.base_commit }}
     container:
       image: fedora:44
     steps:
@@ -98,6 +115,8 @@ jobs:
         run: dnf install -y ca-certificates git python3 gh gnupg2 rpm-sign
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.prepare.outputs.source_commit }}
+          fetch-depth: 0
           persist-credentials: false
       - name: Download this run's candidate and verify transport checksums
         env:
@@ -116,7 +135,7 @@ jobs:
       - name: Preserve the complete signed release evidence
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: release-evidence-${{ github.sha }}-${{ github.run_attempt }}
+          name: release-evidence-${{ needs.prepare.outputs.source_commit }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/release/
           if-no-files-found: error
           retention-days: 90
@@ -124,6 +143,6 @@ jobs:
       - name: Create an annotated tag and publish the RPM and checksum as an experimental prerelease
         env:
           GH_TOKEN: ${{ github.token }}
-          LOCALPIN_TAG: ${{ needs.validate.outputs.tag }}
+          LOCALPIN_TAG: ${{ needs.prepare.outputs.tag }}
         run: |
-          python3 packaging/fedora/publish-release.py "$RUNNER_TEMP/release" --tag "$LOCALPIN_TAG" --commit "$GITHUB_SHA"
+          python3 packaging/fedora/publish-release.py "$RUNNER_TEMP/release" --tag "$LOCALPIN_TAG" --commit "$LOCALPIN_SOURCE_COMMIT"
