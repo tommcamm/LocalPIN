@@ -51,6 +51,8 @@ BINARIES = [MODULE, *(Path('/usr/libexec/localpin') / n for n in (
 # authority/worker at each operation. They are not an installation fingerprint.
 PROTECTED = [KDE, FINGERPRINT, *(Path('/etc/pam.d') / n for n in PRIVATE),
              Path('/etc/security/faillock.conf')]
+ACCOUNT_MUTATIONS = frozenset(('begin-mutation', 'seal', 'recover', 'cache-window-begin', 'cache-window-finish'))
+_integration_lock_fd = None
 
 
 class Refusal(RuntimeError):
@@ -143,8 +145,15 @@ def atomic_write(path, data, mode=0o600):
 
 def run(args, *, check=True, timeout=30):
     # Fixed programs and argument lists only; no shell and no inherited secrets.
+    passed = ()
+    if args[0] == ACCOUNT and len(args) > 1 and args[1] in ACCOUNT_MUTATIONS:
+        require(_integration_lock_fd is not None, 'account mutation requires the integration transaction lock')
+        validate_lock(_integration_lock_fd)
+        args = [*args, '--integration-lock-fd', str(_integration_lock_fd)]
+        passed = (_integration_lock_fd,)
     result = subprocess.run(args, env=ENV, stdin=subprocess.DEVNULL,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout,
+                            pass_fds=passed)
     if check:
         require(result.returncode == 0, 'required administrative operation failed; gate remains closed')
     return result
@@ -207,24 +216,42 @@ def ensure_dirs():
         info = path.lstat()
         require(stat.S_ISDIR(info.st_mode) and info.st_uid == info.st_gid == 0
                 and stat.S_IMODE(info.st_mode) == mode, 'unsafe integration state directory')
-    run(['/usr/sbin/restorecon', '-R', str(STATE)])
+
+
+def validate_lock(fd):
+    path = CONTROL / 'lock'
+    safe_parents(path)
+    for directory, mode in ((STATE, 0o755), (CONTROL, 0o700)):
+        info = directory.lstat()
+        require(stat.S_ISDIR(info.st_mode) and info.st_uid == info.st_gid == 0
+                and stat.S_IMODE(info.st_mode) == mode, 'unsafe integration state directory')
+    info = os.fstat(fd)
+    current = path.lstat()
+    require(stat.S_ISREG(info.st_mode) and info.st_uid == info.st_gid == 0
+            and info.st_nlink == 1 and stat.S_IMODE(info.st_mode) == 0o600
+            and (current.st_dev, current.st_ino) == (info.st_dev, info.st_ino),
+            'unsafe or replaced integration lock')
 
 
 @contextlib.contextmanager
 def locked():
+    global _integration_lock_fd
+    require(_integration_lock_fd is None, 'nested integration transaction is unsupported')
     ensure_dirs()
     path = CONTROL / 'lock'
-    fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK, 0o600)
     try:
-        info = os.fstat(fd)
-        require(stat.S_ISREG(info.st_mode) and info.st_uid == info.st_gid == 0
-                and info.st_nlink == 1 and stat.S_IMODE(info.st_mode) == 0o600, 'unsafe integration lock')
+        validate_lock(fd)
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise Refusal('another integration operation is in progress') from None
+        validate_lock(fd)
+        _integration_lock_fd = fd
+        run(['/usr/sbin/restorecon', '-R', str(STATE)])
         yield
     finally:
+        _integration_lock_fd = None
         os.close(fd)
 
 

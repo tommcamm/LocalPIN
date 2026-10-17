@@ -23,6 +23,7 @@ use zeroize::Zeroizing;
 
 const REGISTRY_ROOT: &str = "/var/lib/localpin-accounts";
 const STORAGE_ROOT: &str = "/var/lib/localpin";
+const INTEGRATION_ROOT: &str = "/var/lib/localpin-integration";
 const MAGIC: &[u8; 8] = b"LPACCT03";
 const MAX_REGISTRY: usize = 16 * 1024;
 const MAX_INPUT: u64 = 64 * 1024;
@@ -176,6 +177,144 @@ fn safe_record_owned(file: &File, owner: u32) -> Result<()> {
         return Err(AccountError::Unavailable);
     }
     Ok(())
+}
+
+// Administration always orders integration -> registry -> native password ->
+// storage. Python already owns the first lease and passes that same open-file
+// description to fixed native children. Never explicitly unlock an adopted fd:
+// flock ownership is shared with its parent until every duplicate is closed.
+struct IntegrationLease {
+    root: File,
+    control: File,
+    lock: File,
+}
+
+impl IntegrationLease {
+    fn open(inherited: Option<i32>) -> Result<Option<Self>> {
+        root_required()?;
+        Self::open_with(INTEGRATION_ROOT, inherited, 0, 0, |path| {
+            fixed_open(path, OFlags::RDONLY | OFlags::DIRECTORY)
+        })
+    }
+
+    fn open_with(
+        path: &str,
+        inherited: Option<i32>,
+        owner: u32,
+        group: u32,
+        open: impl Fn(&str) -> Result<File>,
+    ) -> Result<Option<Self>> {
+        match std::fs::symlink_metadata(path) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound && inherited.is_none() => {
+                return Ok(None);
+            }
+            Err(_) => return Err(AccountError::Unavailable),
+            Ok(metadata) if !metadata.is_dir() => return Err(AccountError::Unavailable),
+            Ok(_) => {}
+        }
+        let root = open(path)?;
+        let control = open(&format!("{path}/control"))?;
+        Self::validate_directories(&root, &control, path, owner, group, &open)?;
+        let lock = match inherited {
+            Some(fd) => duplicate_integration_lock(fd)?,
+            None => child(
+                &control,
+                "lock",
+                OFlags::RDWR | OFlags::CREATE,
+                Mode::RUSR | Mode::WUSR,
+            )?,
+        };
+        let lease = Self {
+            root,
+            control,
+            lock,
+        };
+        lease.validate(path, owner, group, &open)?;
+        flock(&lease.lock, FlockOperation::NonBlockingLockExclusive)?;
+        // A replaced lock/directory must not authorize changes after acquisition.
+        lease.validate(path, owner, group, &open)?;
+        Ok(Some(lease))
+    }
+
+    fn validate(
+        &self,
+        path: &str,
+        owner: u32,
+        group: u32,
+        open: &impl Fn(&str) -> Result<File>,
+    ) -> Result<()> {
+        Self::validate_directories(&self.root, &self.control, path, owner, group, open)?;
+        let held = self.lock.metadata()?;
+        let actual = child(&self.control, "lock", OFlags::RDONLY, Mode::empty())?.metadata()?;
+        if !held.is_file()
+            || held.uid() != owner
+            || held.gid() != group
+            || held.mode() & 0o7777 != 0o600
+            || held.nlink() != 1
+            || held.dev() != actual.dev()
+            || held.ino() != actual.ino()
+        {
+            return Err(AccountError::Unavailable);
+        }
+        Ok(())
+    }
+
+    fn validate_directories(
+        root: &File,
+        control: &File,
+        path: &str,
+        owner: u32,
+        group: u32,
+        open: &impl Fn(&str) -> Result<File>,
+    ) -> Result<()> {
+        for (held, name, mode) in [
+            (root, path.to_owned(), 0o755),
+            (control, format!("{path}/control"), 0o700),
+        ] {
+            let actual = open(&name)?.metadata()?;
+            let metadata = held.metadata()?;
+            if !metadata.is_dir()
+                || metadata.uid() != owner
+                || metadata.gid() != group
+                || metadata.mode() & 0o7777 != mode
+                || metadata.dev() != actual.dev()
+                || metadata.ino() != actual.ino()
+            {
+                return Err(AccountError::Unavailable);
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Duplicate an untrusted numeric descriptor without borrowing invalid Rust fd
+/// ownership. The integer-only fcntl calls cannot access caller memory.
+#[allow(unsafe_code)]
+fn duplicate_integration_lock(fd: i32) -> Result<File> {
+    use std::os::fd::FromRawFd;
+
+    if fd < 3 {
+        return Err(AccountError::Invalid);
+    }
+    // SAFETY: F_GETFD takes an integer descriptor and no pointer argument. Bad
+    // descriptors return -1; no Rust borrowed-fd validity invariant is assumed.
+    let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
+    if flags < 0 {
+        return Err(AccountError::Unavailable);
+    }
+    // SAFETY: F_SETFD takes integer flags. Prevent the inherited original from
+    // leaking through any later exec, while retaining the parent's open file.
+    if unsafe { libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC) } < 0 {
+        return Err(AccountError::Unavailable);
+    }
+    // SAFETY: F_DUPFD_CLOEXEC returns a new exclusively owned fd on success.
+    let duplicate = unsafe { libc::fcntl(fd, libc::F_DUPFD_CLOEXEC, 3) };
+    if duplicate < 0 {
+        return Err(AccountError::Unavailable);
+    }
+    // SAFETY: successful fcntl above transferred this new descriptor exclusively
+    // to this function. File closes only the duplicate, never the supplied fd.
+    Ok(unsafe { File::from_raw_fd(duplicate) })
 }
 
 struct Lease {
@@ -758,7 +897,14 @@ fn discard_legacy_cache(directory: &File) -> Result<()> {
 /// Durably revoke all bindings before explicit account/integration maintenance.
 /// Legacy appliance flags are removed only after this revocation is durable.
 pub fn begin_mutation() -> Result<()> {
+    begin_mutation_with_integration_lock(None)
+}
+
+/// Revoke under the installed integration lease, optionally adopted from the
+/// root integration helper's verified descriptor.
+pub fn begin_mutation_with_integration_lock(inherited: Option<i32>) -> Result<()> {
     root_required()?;
+    let _integration = IntegrationLease::open(inherited)?;
     let lease = Lease::open(true, true)?;
     let (previous, legacy) = previous_authority(&lease);
     close_desktop_gate()?;
@@ -808,12 +954,13 @@ fn storage_guard() -> Result<localpin_storage::Storage> {
 
 // Compatibility entrypoints for existing package scripts. There is no mutable
 // cache window with marker authority and no journal from which to restore state.
-fn package_check() -> Result<()> {
+fn package_check(inherited: Option<i32>) -> Result<()> {
     root_required()?;
+    let _integration = IntegrationLease::open(inherited)?;
     let lease = Lease::open(true, false)?;
     close_desktop_gate()?;
-    let _storage = storage_guard()?;
     let _password = PasswordLease::open(false, false)?;
+    let _storage = storage_guard()?;
     let registry = lease.read()?;
     if !registry.active() {
         return Err(AccountError::Unavailable);
@@ -832,12 +979,22 @@ fn package_check() -> Result<()> {
 
 /// Validate quiescent package identity state; marker authority needs no cache window.
 pub fn cache_window_begin() -> Result<()> {
-    package_check()
+    cache_window_begin_with_integration_lock(None)
+}
+
+/// Validate package identity under an optionally inherited integration lease.
+pub fn cache_window_begin_with_integration_lock(inherited: Option<i32>) -> Result<()> {
+    package_check(inherited)
 }
 
 /// Revalidate identity state after package work, without rebuilding authority.
 pub fn cache_window_finish() -> Result<()> {
-    package_check()
+    cache_window_finish_with_integration_lock(None)
+}
+
+/// Revalidate package identity under an optionally inherited integration lease.
+pub fn cache_window_finish_with_integration_lock(inherited: Option<i32>) -> Result<()> {
+    package_check(inherited)
 }
 
 struct ProvisionAuthority {
@@ -998,16 +1155,26 @@ fn replace_shadow(
 /// Provision fresh disabled incarnations and rotate their root shadow markers.
 /// The broker must be stopped. Old state is quarantined and never adopted.
 pub fn seal(uids: &[Uid]) -> Result<()> {
-    provision(uids, false)
+    seal_with_integration_lock(uids, None)
+}
+
+/// Provision under an optionally inherited integration lease.
+pub fn seal_with_integration_lock(uids: &[Uid], inherited: Option<i32>) -> Result<()> {
+    provision(uids, false, inherited)
 }
 
 /// Explicit root recovery, including replacing an unknown reserved shadow field.
 /// This never retains the old incarnation, marker, credentials or throttle state.
 pub fn recover(uids: &[Uid]) -> Result<()> {
-    provision(uids, true)
+    recover_with_integration_lock(uids, None)
 }
 
-fn provision(uids: &[Uid], recover_unknown: bool) -> Result<()> {
+/// Recover under an optionally inherited integration lease.
+pub fn recover_with_integration_lock(uids: &[Uid], inherited: Option<i32>) -> Result<()> {
+    provision(uids, true, inherited)
+}
+
+fn provision(uids: &[Uid], recover_unknown: bool, inherited: Option<i32>) -> Result<()> {
     root_required()?;
     if uids.is_empty()
         || uids.len() > MAX_ACCOUNTS
@@ -1021,6 +1188,7 @@ fn provision(uids: &[Uid], recover_unknown: bool) -> Result<()> {
     {
         return Err(AccountError::Invalid);
     }
+    let _integration = IntegrationLease::open(inherited)?;
     let lease = Lease::open(true, true)?;
     let (previous, legacy) = previous_authority(&lease);
     close_desktop_gate()?;
@@ -1310,6 +1478,279 @@ mod tests {
             bindings: vec![binding(1000, "alice", 42, 7)],
         }
     }
+
+    fn integration_fixture() -> Fixture {
+        let fixture = Fixture::new();
+        std::fs::set_permissions(&fixture.path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(fixture.path.join("control"))
+            .unwrap();
+        fixture
+    }
+
+    fn integration_test_open(path: &str) -> Result<File> {
+        // Only tests inject fixture ownership and ancestors. Production uses
+        // fixed_open and the constant canonical installation path exclusively.
+        if !std::fs::symlink_metadata(path)?.is_dir() {
+            return Err(AccountError::Unavailable);
+        }
+        Ok(File::open(path)?)
+    }
+
+    fn integration_test_lease(
+        fixture: &Fixture,
+        inherited: Option<i32>,
+    ) -> Result<Option<IntegrationLease>> {
+        IntegrationLease::open_with(
+            fixture.path.to_str().unwrap(),
+            inherited,
+            fixture.owner,
+            fixture.directory.metadata().unwrap().gid(),
+            integration_test_open,
+        )
+    }
+
+    #[test]
+    fn integration_lock_adoption_retains_parent_lock_until_every_duplicate_closes() {
+        let fixture = integration_fixture();
+        let parent = integration_test_lease(&fixture, None).unwrap().unwrap();
+        assert!(matches!(
+            integration_test_lease(&fixture, None),
+            Err(AccountError::Busy)
+        ));
+        rustix::io::fcntl_setfd(&parent.lock, rustix::io::FdFlags::empty()).unwrap();
+        let adopted = integration_test_lease(&fixture, Some(parent.lock.as_raw_fd()))
+            .unwrap()
+            .unwrap();
+        assert!(
+            rustix::io::fcntl_getfd(&parent.lock)
+                .unwrap()
+                .contains(rustix::io::FdFlags::CLOEXEC)
+        );
+        assert!(
+            rustix::io::fcntl_getfd(&adopted.lock)
+                .unwrap()
+                .contains(rustix::io::FdFlags::CLOEXEC)
+        );
+        drop(adopted);
+        assert!(matches!(
+            integration_test_lease(&fixture, None),
+            Err(AccountError::Busy)
+        ));
+        let adopted = integration_test_lease(&fixture, Some(parent.lock.as_raw_fd()))
+            .unwrap()
+            .unwrap();
+        drop(parent);
+        assert!(matches!(
+            integration_test_lease(&fixture, None),
+            Err(AccountError::Busy)
+        ));
+        drop(adopted);
+        assert!(integration_test_lease(&fixture, None).unwrap().is_some());
+    }
+
+    #[test]
+    fn integration_lock_refuses_wrong_fds_metadata_and_replaced_paths() {
+        let fixture = integration_fixture();
+        let parent = integration_test_lease(&fixture, None).unwrap().unwrap();
+        let other = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(fixture.path.join("other"))
+            .unwrap();
+        for fd in [
+            0,
+            1,
+            2,
+            -1,
+            i32::MAX,
+            other.as_raw_fd(),
+            fixture.directory.as_raw_fd(),
+        ] {
+            assert!(integration_test_lease(&fixture, Some(fd)).is_err());
+        }
+        let lock = fixture.path.join("control/lock");
+        std::fs::set_permissions(&lock, std::fs::Permissions::from_mode(0o640)).unwrap();
+        assert!(integration_test_lease(&fixture, Some(parent.lock.as_raw_fd())).is_err());
+        std::fs::set_permissions(&lock, std::fs::Permissions::from_mode(0o600)).unwrap();
+        std::fs::hard_link(&lock, fixture.path.join("alias")).unwrap();
+        assert!(integration_test_lease(&fixture, Some(parent.lock.as_raw_fd())).is_err());
+        std::fs::remove_file(fixture.path.join("alias")).unwrap();
+        std::fs::rename(&lock, fixture.path.join("old-lock")).unwrap();
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&lock)
+            .unwrap();
+        assert!(integration_test_lease(&fixture, Some(parent.lock.as_raw_fd())).is_err());
+        std::fs::remove_file(&lock).unwrap();
+        std::os::unix::fs::symlink(fixture.path.join("old-lock"), &lock).unwrap();
+        assert!(integration_test_lease(&fixture, Some(parent.lock.as_raw_fd())).is_err());
+    }
+
+    #[test]
+    fn integration_directories_are_validated_before_creating_a_lock() {
+        for (name, mode) in [("", 0o700), ("control", 0o755)] {
+            let fixture = integration_fixture();
+            std::fs::set_permissions(
+                fixture.path.join(name),
+                std::fs::Permissions::from_mode(mode),
+            )
+            .unwrap();
+            assert!(integration_test_lease(&fixture, None).is_err());
+            assert!(!fixture.path.join("control/lock").exists());
+        }
+        let fixture = integration_fixture();
+        for (owner, group) in [
+            (
+                fixture.owner + 1,
+                fixture.directory.metadata().unwrap().gid(),
+            ),
+            (
+                fixture.owner,
+                fixture.directory.metadata().unwrap().gid() + 1,
+            ),
+        ] {
+            assert!(
+                IntegrationLease::open_with(
+                    fixture.path.to_str().unwrap(),
+                    None,
+                    owner,
+                    group,
+                    integration_test_open
+                )
+                .is_err()
+            );
+            assert!(!fixture.path.join("control/lock").exists());
+        }
+        let missing = fixture.path.join("missing");
+        assert!(
+            IntegrationLease::open_with(
+                missing.to_str().unwrap(),
+                None,
+                fixture.owner,
+                0,
+                integration_test_open
+            )
+            .unwrap()
+            .is_none()
+        );
+        assert!(
+            IntegrationLease::open_with(
+                missing.to_str().unwrap(),
+                Some(fixture.directory.as_raw_fd()),
+                fixture.owner,
+                0,
+                integration_test_open
+            )
+            .is_err()
+        );
+        std::fs::rename(
+            fixture.path.join("control"),
+            fixture.path.join("original-control"),
+        )
+        .unwrap();
+        std::os::unix::fs::symlink(
+            fixture.path.join("original-control"),
+            fixture.path.join("control"),
+        )
+        .unwrap();
+        assert!(integration_test_lease(&fixture, None).is_err());
+        assert!(!fixture.path.join("original-control/lock").exists());
+    }
+
+    #[test]
+    fn integration_lock_rechecks_fixed_paths_after_acquisition() {
+        let fixture = integration_fixture();
+        let calls = std::cell::Cell::new(0);
+        let result = IntegrationLease::open_with(
+            fixture.path.to_str().unwrap(),
+            None,
+            fixture.owner,
+            fixture.directory.metadata().unwrap().gid(),
+            |path| {
+                calls.set(calls.get() + 1);
+                if calls.get() == 7 {
+                    let lock = fixture.path.join("control/lock");
+                    std::fs::rename(&lock, fixture.path.join("retired-lock")).unwrap();
+                    std::fs::OpenOptions::new()
+                        .write(true)
+                        .create_new(true)
+                        .mode(0o600)
+                        .open(lock)
+                        .unwrap();
+                }
+                integration_test_open(path)
+            },
+        );
+        assert!(matches!(result, Err(AccountError::Unavailable)));
+    }
+
+    #[test]
+    fn integration_lock_process_probe() {
+        let Some(path) = std::env::var_os("LOCALPIN_TEST_INTEGRATION_PATH") else {
+            return;
+        };
+        let path = std::path::Path::new(&path);
+        let metadata = std::fs::metadata(path).unwrap();
+        let inherited = std::env::var("LOCALPIN_TEST_INTEGRATION_FD")
+            .ok()
+            .map(|value| value.parse().unwrap());
+        let result = IntegrationLease::open_with(
+            path.to_str().unwrap(),
+            inherited,
+            metadata.uid(),
+            metadata.gid(),
+            integration_test_open,
+        );
+        if std::env::var("LOCALPIN_TEST_INTEGRATION_EXPECT").unwrap() == "busy" {
+            assert!(matches!(result, Err(AccountError::Busy)));
+        } else {
+            assert!(result.unwrap().is_some());
+        }
+    }
+
+    #[test]
+    fn integration_python_parent_hands_off_lock_and_direct_native_process_is_busy() {
+        let fixture = integration_fixture();
+        let script = r#"
+import fcntl, os, subprocess, sys
+binary, root = sys.argv[1:]
+def probe(expect, inherited=None):
+    env = dict(os.environ, LOCALPIN_TEST_INTEGRATION_PATH=root, LOCALPIN_TEST_INTEGRATION_EXPECT=expect)
+    env.pop('LOCALPIN_TEST_INTEGRATION_FD', None)
+    if inherited is not None:
+        env['LOCALPIN_TEST_INTEGRATION_FD'] = str(inherited)
+    result = subprocess.run([binary, '--exact', 'accounts::tests::integration_lock_process_probe', '--nocapture'], env=env,
+                            pass_fds=() if inherited is None else (inherited,), capture_output=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+fd = os.open(root + '/control/lock', os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)
+fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+probe('busy')
+probe('acquired', fd)
+probe('busy')
+os.close(fd)
+probe('acquired')
+"#;
+        let output = std::process::Command::new("/usr/bin/python3")
+            .arg("-c")
+            .arg(script)
+            .arg(std::env::current_exe().unwrap())
+            .arg(&fixture.path)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
     const PASSWD: &str = "alice:x:1000:1000:Alice:/home/alice:/bin/bash\n";
     const SHADOW: &str = "alice:$y$j9T$salt$hash:20000:0:99999:7:::42\n";
 

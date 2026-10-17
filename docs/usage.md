@@ -44,6 +44,10 @@ uncertain, setup checks state before offering another action. A healthy active
 installation is shown without repeating preparation. Incomplete transactions,
 suspended updates, incompatible state or corrupt authority require the runbook.
 
+If you previously disabled your own PIN while desktop integration remains
+active, `localpin setup` offers to create a new PIN. It keeps the active
+integration in place and uses fresh account-password verification.
+
 Run `localpin` without arguments in a terminal for a numbered menu covering
 setup/resume, status, diagnostics and credential management. Outside a terminal,
 it shows help without prompting. Output uses subtle colors when supported and

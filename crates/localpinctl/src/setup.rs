@@ -151,8 +151,22 @@ fn drive(host: &mut impl Host, ui: &mut impl Ui) -> Result<(), CliError> {
     ui.say("[1/5] Check your system")?;
     let mut report = inspect(host, ui)?;
     if report.phase == Phase::Active {
-        ui.say("Desktop integration is already active. Setup will preserve it; use the menu to change or disable your PIN.")?;
-        return Ok(());
+        if report.enrolled {
+            ui.say("Desktop integration is already active. Setup will preserve it; use the menu to change or disable your PIN.")?;
+            return Ok(());
+        }
+        ui.say("Desktop integration is already active, but this account has no PIN. Creating a new PIN preserves the active integration.")?;
+        if !ui.confirm("Create a new PIN for this account?")? {
+            return pause(ui);
+        }
+        let backend = menu::backend(ui)?;
+        host.enroll(backend)?;
+        report = inspect(host, ui)?;
+        if report.phase != Phase::Active || !report.enrolled {
+            return Err(CliError::SetupReport);
+        }
+        check_account(host, ui)?;
+        return ui.say("Your new PIN is ready. Desktop integration remains active. Lock your KDE session, enter your PIN and press Enter. Your full account password remains available under normal account policy.");
     }
     // This is explicitly an operator statement about earlier real testing,
     // never inferred from a disabled gate or a user-writable checkpoint.

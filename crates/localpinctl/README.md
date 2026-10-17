@@ -42,6 +42,10 @@ that the broker can establish an available enrollment for the current account
 and KDE session. Cancellation preserves completed stages and reports any
 remaining trial window.
 
+On an active installation without a PIN, setup offers fresh own-user enrollment
+without repeating preparation or activation. An active enrolled account remains
+a no-op.
+
 The wizard invokes only fixed installed helper operations through absolute
 `/usr/bin/sudo`, with closed arguments, a controlled environment and no shell.
 Sudo owns its administrator-password conversation. Enrollment still runs through
@@ -55,6 +59,11 @@ activation additionally use `--setup-trial` with the trial's opaque equality
 reference; the root transaction rechecks its live enrollment binding and exact
 reference before acting. The reference grants no authority. See
 [ADR 0019](../../docs/adr/0019-guided-setup-orchestration.md).
+
+Native account mutations acquire the same integration transaction lock before
+their account-registry lock. The helper passes a verified inherited lock
+descriptor to its fixed account tool so the scope check and native changes
+remain serialized without recursively locking the parent-held file.
 
 Enrollment, change, migration, and own-user disable require explicit confirmation
 and a fresh password-only worker conversation. New PINs must be six ASCII digits,
@@ -98,7 +107,9 @@ and preserves prior activation across compatible RPM updates without freezing
 `/etc` or opening a cache-maintenance window. M8's historical matrix passed for the restricted
 Fedora 44 x86_64 Btrfs appliance with SELinux enforcing; see the
 [M8 report](../../docs/development/m8-packaging-recovery.md). M9 review and
-physical TPM validation remain open; hosted CI is unverified.
+physical TPM validation remain open. The
+[M8.2 report](../../docs/development/m8.2-guided-setup.md) records source and
+hosted CI evidence with its revision scope.
 
 Status JSON has independent `schema_version: 1` and only closed nonsecret fields.
 `installed: "client-present"` proves the CLI is present; `broker_available` reports

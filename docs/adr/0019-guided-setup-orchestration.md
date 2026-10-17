@@ -47,6 +47,17 @@ account. A separate CLI preflight cannot supply this protection because state
 may change before mutation. Multiuser installations use manual administration.
 Existing manual operations remain available without the setup-specific guard.
 
+Native account administration shares that integration lock before acquiring
+the account-registry, native password-database and storage locks. A direct
+`localpin-account` mutation therefore cannot replace account scope between the
+wizard's check and its policy/account changes. When the integration helper
+already holds the lock, it passes its descriptor through the fixed internal
+`--integration-lock-fd N` interface. The native tool verifies the descriptor
+against the canonical root-owned lock and retains the same open-file
+description, avoiding recursive lock acquisition. The flag selects no path or
+program. Read-only `check-policy` does not create a lock; component operation
+without an integration installation remains supported.
+
 The readiness report supplies an opaque nullable `trial_ref` for a valid trial.
 It is an equality reference, not authorization. The wizard retains the reference
 covering its desktop-test confirmations and passes it as `--setup-trial` along
@@ -68,6 +79,11 @@ Before trial or activation, setup also requires the broker to establish an
 available enrollment for the current account and KDE session. Reading a
 protected credential pointer alone does not establish native account continuity
 or current session eligibility.
+
+An active installation with an enrolled PIN is a no-op for setup. If only the
+user's PIN was disabled, setup offers fresh own-user enrollment with an explicit
+backend choice and password verification. It verifies the active state and
+broker readiness afterward without preparation, a new trial or reactivation.
 
 The supported flow is readiness check, preparation preview and confirmation,
 explicit backend selection and private enrollment, bounded trial and actual

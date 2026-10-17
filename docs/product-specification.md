@@ -91,6 +91,13 @@ Use a pinned stable Rust toolchain, Rust 2024 edition, a declared minimum suppor
 7. Full-password fallback must remain available after a wrong PIN, during PIN cooldown, when the broker is stopped, and after backend or state failures.
 8. The user can inspect status, change the PIN, disable PIN unlocking, and restore the previous PAM configuration.
 
+Disabling only an own-user PIN leaves system integration active. Guided setup
+must offer fresh enrollment in that state without repeating system preparation
+or activation. Integration and direct native account administration share one
+transaction lock before account-registry/native-password/storage locks, so a
+concurrent account provisioner cannot invalidate setup's single-account scope
+check before a mutation.
+
 The stock KDE password field may continue to say “Password.” Explain this honestly rather than claiming a native KDE PIN control exists. Default integration must not patch distribution QML files. A future upstream UI integration may add a PIN/password selector, but it must use the same backend and preserve the tested stock-theme path.
 
 Keyboard acceptance includes top-row digits, numpad with Num Lock enabled, leading zeroes, USB keyboards, dock-attached keyboards, and normal keyboard layouts. Only ASCII digits 0–9 constitute a PIN. Unicode digit lookalikes must not be accepted as equivalent digits. Password input must remain arbitrary bytes according to PAM's supported conversation representation and must not be normalized as a PIN.

@@ -182,15 +182,101 @@ fn existing_root_recorded_tests_are_retained_only_during_the_same_live_trial() {
 }
 
 #[test]
-fn active_installation_is_a_no_op_even_after_own_user_pin_removal() {
-    for enrolled in [false, true] {
-        let mut host = Fake::new(report(Phase::Active, enrolled, false));
-        let mut ui = Script::new(&[0]);
-        drive(&mut host, &mut ui).unwrap();
+fn active_enrolled_installation_is_a_no_op() {
+    let mut host = Fake::new(report(Phase::Active, true, false));
+    let mut ui = Script::new(&[0]);
+    drive(&mut host, &mut ui).unwrap();
+    assert!(host.actions.is_empty());
+    assert!(host.backends.is_empty());
+    assert_eq!(host.inspections, 1);
+}
+
+#[test]
+fn active_unenrolled_installation_enrolls_without_changing_integration() {
+    let mut host = Fake::new(report(Phase::Active, false, false));
+    let mut ui = Script::new(&[0, 0, 1]);
+    drive(&mut host, &mut ui).unwrap();
+    assert!(host.actions.is_empty());
+    assert_eq!(host.backends, [BackendPreference::Software]);
+    assert_eq!(host.inspections, 2);
+    assert_eq!(host.state, report(Phase::Active, true, false));
+    assert!(ui.contains("Your new PIN is ready"));
+    assert!(ui.contains("Desktop integration remains active"));
+    assert!(ui.answers.is_empty());
+}
+
+#[test]
+fn declining_active_reenrollment_leaves_the_account_unchanged() {
+    let initial = report(Phase::Active, false, false);
+    let mut host = Fake::new(initial.clone());
+    let mut ui = Script::new(&[0, 1]);
+    drive(&mut host, &mut ui).unwrap();
+    assert_eq!(host.state, initial);
+    assert!(host.actions.is_empty());
+    assert!(host.backends.is_empty());
+    assert_eq!(host.inspections, 1);
+    assert!(!ui.contains("Your new PIN is ready"));
+    assert!(ui.answers.is_empty());
+}
+
+#[test]
+fn cancelled_active_reenrollment_does_not_start_enrollment() {
+    for confirmed in [false, true] {
+        let initial = report(Phase::Active, false, false);
+        let mut host = Fake::new(initial.clone());
+        let mut ui = Script::new(if confirmed { &[0, 0] } else { &[0] });
+        ui.answers.push_back(Err(CliError::Cancelled));
+        assert_eq!(drive(&mut host, &mut ui), Err(CliError::Cancelled));
+        assert_eq!(host.state, initial);
         assert!(host.actions.is_empty());
         assert!(host.backends.is_empty());
         assert_eq!(host.inspections, 1);
+        assert!(!ui.contains("Your new PIN is ready"));
+        assert!(ui.answers.is_empty());
     }
+}
+
+#[test]
+fn active_reenrollment_failure_does_not_retry_or_claim_success() {
+    let initial = report(Phase::Active, false, false);
+    let mut host = Fake::new(initial.clone());
+    host.enrollment_error = Some(CliError::Backend);
+    let mut ui = Script::new(&[0, 0, 0]);
+    assert_eq!(drive(&mut host, &mut ui), Err(CliError::Backend));
+    assert_eq!(host.state, initial);
+    assert!(host.actions.is_empty());
+    assert_eq!(host.backends, [BackendPreference::Tpm]);
+    assert_eq!(host.inspections, 1);
+    assert!(!ui.contains("Your new PIN is ready"));
+    assert!(ui.answers.is_empty());
+}
+
+#[test]
+fn active_reenrollment_requires_fresh_active_enrollment_and_broker_readiness() {
+    for changed in [
+        report(Phase::Prepared, true, false),
+        report(Phase::Active, false, false),
+    ] {
+        let mut host = Fake::new(report(Phase::Active, false, false));
+        host.change_on_inspection = Some((2, changed));
+        let mut ui = Script::new(&[0, 0, 1]);
+        assert_eq!(drive(&mut host, &mut ui), Err(CliError::SetupReport));
+        assert!(host.actions.is_empty());
+        assert_eq!(host.backends, [BackendPreference::Software]);
+        assert_eq!(host.inspections, 2);
+        assert!(!ui.contains("Your new PIN is ready"));
+        assert!(ui.answers.is_empty());
+    }
+
+    let mut host = Fake::new(report(Phase::Active, false, false));
+    host.account_error = Some(CliError::Service);
+    let mut ui = Script::new(&[0, 0, 1]);
+    assert_eq!(drive(&mut host, &mut ui), Err(CliError::Service));
+    assert!(host.actions.is_empty());
+    assert_eq!(host.backends, [BackendPreference::Software]);
+    assert_eq!(host.inspections, 2);
+    assert!(!ui.contains("Your new PIN is ready"));
+    assert!(ui.answers.is_empty());
 }
 
 #[test]

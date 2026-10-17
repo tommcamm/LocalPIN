@@ -137,6 +137,13 @@ experimental builds.
   desktop/locker tests, guarded clone tooling and final recovery evidence,
   completing M1 feasibility.
 
+### Fixed
+
+- Guided setup can enroll a new PIN after own-user disable while preserving
+  active desktop integration. Native account administration now shares the
+  integration transaction lock, preventing concurrent provisioning from
+  invalidating setup's single-account scope check before mutation.
+
 ### Changed
 
 - Report missing private signing material separately from mismatched public

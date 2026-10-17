@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import stat
+import subprocess
 import sys
 import tempfile
 import types
@@ -1070,6 +1071,92 @@ class SetupStatusTests(unittest.TestCase):
         self.load.side_effect = [first, changed]
         with self.assertRaises(integration.Refusal):
             integration.setup_status(1000)
+
+
+class IntegrationLockTests(FilesystemFixture):
+    def setUp(self):
+        self.actual_run = integration.run
+        super().setUp()
+        self.run.side_effect = None
+        self.run.return_value = types.SimpleNamespace(returncode=0, stdout=b'')
+
+    def test_only_fixed_account_mutations_inherit_the_verified_transaction_fd(self):
+        with mock.patch.object(integration, 'run', self.actual_run), \
+                mock.patch.object(integration.subprocess, 'run', return_value=self.run.return_value) as execute:
+            for operation in integration.ACCOUNT_MUTATIONS:
+                with self.subTest(operation=operation), self.assertRaises(integration.Refusal):
+                    integration.run([integration.ACCOUNT, operation])
+            execute.assert_not_called()
+            with integration.locked():
+                fd = integration._integration_lock_fd
+                self.assertFalse(os.get_inheritable(fd))
+                for operation in integration.ACCOUNT_MUTATIONS:
+                    integration.run([integration.ACCOUNT, operation])
+                    args, kwargs = execute.call_args
+                    self.assertEqual(args[0], [integration.ACCOUNT, operation, '--integration-lock-fd', str(fd)])
+                    self.assertEqual(kwargs['pass_fds'], (fd,))
+                    self.assertEqual(kwargs['env'], integration.ENV)
+                for command in ([integration.ACCOUNT, 'check-policy'], ['/usr/bin/systemctl', 'stop', 'localpin.service']):
+                    integration.run(command)
+                    args, kwargs = execute.call_args
+                    self.assertEqual(args[0], command)
+                    self.assertEqual(kwargs['pass_fds'], ())
+            self.assertIsNone(integration._integration_lock_fd)
+            with self.assertRaises(OSError):
+                os.fstat(fd)
+
+    def test_busy_transaction_refuses_before_restorecon_or_other_action(self):
+        path = self.control / 'lock'
+        fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)
+        try:
+            integration.fcntl.flock(fd, integration.fcntl.LOCK_EX | integration.fcntl.LOCK_NB)
+            with self.assertRaisesRegex(integration.Refusal, 'another integration operation'):
+                with integration.locked():
+                    self.fail('busy transaction entered')
+            self.run.assert_not_called()
+            self.assertIsNone(integration._integration_lock_fd)
+        finally:
+            os.close(fd)
+
+    def test_replaced_lock_is_refused_before_any_command_or_descriptor_forward(self):
+        actual_flock = integration.fcntl.flock
+        def replace(fd, flags):
+            actual_flock(fd, flags)
+            (self.control / 'lock').rename(self.control / 'retired-lock')
+            (self.control / 'lock').touch(mode=0o600)
+        with mock.patch.object(integration.fcntl, 'flock', side_effect=replace), \
+                self.assertRaisesRegex(integration.Refusal, 'replaced integration lock'):
+            with integration.locked():
+                self.fail('replaced lock entered')
+        self.run.assert_not_called()
+        with integration.locked():
+            (self.control / 'lock').rename(self.control / 'second-retired-lock')
+            (self.control / 'lock').touch(mode=0o600)
+            with mock.patch.object(integration.subprocess, 'run') as execute, \
+                    self.assertRaises(integration.Refusal):
+                self.actual_run([integration.ACCOUNT, 'begin-mutation'])
+            execute.assert_not_called()
+
+    def test_child_adoption_preserves_parent_lock_and_other_processes_cannot_cross_scope_guard(self):
+        script = """import fcntl, os, sys
+path, inherited = sys.argv[1:]
+fd = os.open(path, os.O_RDWR | os.O_CLOEXEC) if inherited == 'direct' else os.dup(int(inherited))
+try:
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    raise SystemExit(7)
+os.close(fd)
+"""
+        path = str(self.control / 'lock')
+        def child(inherited='direct', passed=()):
+            return subprocess.run([sys.executable, '-c', script, path, inherited], pass_fds=passed,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False).returncode
+        with integration.locked():
+            fd = integration._integration_lock_fd
+            self.assertEqual(child(), 7)
+            self.assertEqual(child(str(fd), (fd,)), 0)
+            self.assertEqual(child(), 7)
+        self.assertEqual(child(), 0)
 
 
 class SetupCommandTests(unittest.TestCase):

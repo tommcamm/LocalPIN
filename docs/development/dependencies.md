@@ -27,6 +27,16 @@ it never substitutes for a fresh authoritative report. The local locked
 refresh on 2026-10-17, with no policy exception. This is dependency-policy
 evidence, not independent review of the new orchestration boundary.
 
+The PR review follow-up adds no dependencies. The native account tool's
+integration-lock adapter has a narrowly scoped `fcntl` FFI boundary to validate
+and duplicate an inherited numeric descriptor, set close-on-exec, and transfer
+only the newly allocated descriptor into a Rust `File`. Invalid descriptors
+produce an error without creating a borrowed Rust descriptor from an unchecked
+integer. Canonical root-owned directories, lock metadata and inode identity are
+checked around nonblocking lock acquisition. The duplicate retains the parent's
+open-file description and is closed on drop without explicitly unlocking it.
+This boundary remains an input to independent human/native review.
+
 The current workspace has nine crates covering policy, IPC, protected storage,
 software and TPM credentials, the broker, password/eligibility workers, CLI, and
 PAM adapter. Native builds require TPM2-TSS 4.x and libdbus development libraries,
