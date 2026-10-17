@@ -251,15 +251,24 @@ checksum = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         source = f"https://github.com/tommcamm/LocalPIN/blob/{COMMIT}"
         for expected in ("experimental Fedora KDE 44 x86_64 prerelease", "six-digit PIN unlocking",
                          "Synthetic release change.", self.rpm.name, manifest["source_archive"],
-                         "SHA256SUMS.asc", "Every published experimental release requires verified RPM and checksum signatures.",
+                         "SHA256SUMS.asc", "Every published experimental release requires a verified embedded RPM signature.",
+                         "release-evidence-*", "artifact for 90 days", "release download covers only the RPM",
                          "separately trusted maintainer fingerprint", "There is no supported production release.",
                          "leaves PIN integration disabled", "hardware matrix remain unvalidated.",
+                         f"(https://raw.githubusercontent.com/tommcamm/LocalPIN/{COMMIT}/packaging/fedora/RPM-GPG-KEY-LocalPIN)",
                          f"({source}/CHANGELOG.md)", f"({source}/docs/integration-administration.md)",
                          f"({source}/docs/development/m9-release-readiness.md)",
                          f"({source}/docs/releasing.md#verify-and-test-a-download)",
                          f"({manifest['workflow_run_url']})"):
             with self.subTest(expected=expected):
                 self.assertIn(expected, notes)
+        downloads = notes.split("### Downloads\n", 1)[1].split("### Build evidence\n", 1)[0]
+        self.assertEqual([line for line in downloads.splitlines() if line.startswith("- ")],
+                         [f"- **`{self.rpm.name}`**: the signed installable Fedora 44 x86_64 package.",
+                          "- **`SHA256SUMS`**: the SHA256 checksum of that RPM."])
+        for evidence_file in (manifest["source_archive"], "RELEASE.json", "SBOM.spdx.json", "SHA256SUMS.asc"):
+            with self.subTest(evidence_file=evidence_file):
+                self.assertNotIn(evidence_file, downloads)
         self.assertEqual(manifest["workflow_run_url"], "https://github.com/tommcamm/LocalPIN/actions/runs/12345")
 
     def test_dirty_source_or_wrong_head_fails(self):

@@ -121,7 +121,21 @@ class PublicationTests(unittest.TestCase):
         return {"tagName": TAG, "name": f"LocalPIN {TAG} (experimental)",
                 "body": (self.output / "RELEASE-NOTES.md").read_text(), "isDraft": draft, "isPrerelease": True,
                 "url": f"https://github.com/synthetic/localpin/releases/tag/{TAG}",
-                "assets": [{"name": path.name} for path in sorted(self.output.iterdir())]}
+                "assets": [{"name": name} for name in (RPM, "SHA256SUMS")]}
+
+    def test_downloads_only_check_the_rpm_and_preserve_signed_evidence(self):
+        evidence = {path.name: path.read_bytes() for path in self.output.iterdir()}
+        with tempfile.TemporaryDirectory(prefix="localpin-download-tests-") as temporary:
+            downloads = Path(temporary)
+            assets = publish.prepare_downloads(self.output, downloads)
+            self.assertEqual({path.name for path in assets}, {RPM, "SHA256SUMS"})
+            self.assertEqual({path.name for path in downloads.iterdir()}, {RPM, "SHA256SUMS"})
+            self.assertEqual((downloads / RPM).read_bytes(), evidence[RPM])
+            # Ordinary sha256sum must succeed with only the two public downloads.
+            subprocess.run(["sha256sum", "--check", "SHA256SUMS"], cwd=downloads, check=True, capture_output=True)
+            self.assertEqual((downloads / "SHA256SUMS").read_text().splitlines(),
+                             [f"{self.manifest['rpm']['sha256']}  {RPM}"])
+        self.assertEqual({path.name: path.read_bytes() for path in self.output.iterdir()}, evidence)
 
     def test_changed_or_unchecked_assets_are_refused(self):
         (self.output / RPM).write_bytes(b"changed")
@@ -243,6 +257,9 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual(api.call_args_list[4].args[1]["sha"], "c" * 40)
             self.assertIn("--draft", gh.call_args_list[0].args[0])
             self.assertIn("--prerelease", gh.call_args_list[0].args[0])
+            uploaded = gh.call_args_list[0].args[0][4:gh.call_args_list[0].args[0].index("--repo")]
+            self.assertEqual({Path(path).name for path in uploaded}, {RPM, "SHA256SUMS"})
+            self.assertEqual(len(uploaded), 2)
             self.assertEqual(gh.call_args_list[1].args[0][:3], ["gh", "release", "view"])
             self.assertIn("--draft=false", gh.call_args_list[2].args[0])
             self.assertEqual(gh.call_args_list[3].args[0][:3], ["gh", "release", "view"])
@@ -250,7 +267,9 @@ class PublicationTests(unittest.TestCase):
             self.assertNotIn("--clobber", str(gh.call_args_list))
 
     def test_incomplete_or_wrong_draft_is_not_published(self):
-        for change in ({"body": "wrong description"}, {"assets": []}, {"isPrerelease": False}, {"isDraft": False}):
+        for change in ({"body": "wrong description"}, {"assets": []},
+                       {"assets": [{"name": name} for name in (RPM, "SHA256SUMS", "SBOM.spdx.json")]},
+                       {"isPrerelease": False}, {"isDraft": False}):
             release = {**self.github_release(draft=True), **change}
             with self.subTest(change=change), patch.object(publish, "api", side_effect=[None, None, {"status": "ahead"}, {"sha": "c" * 40}, {}]), patch.object(publish.subprocess, "run", side_effect=[subprocess.CompletedProcess([], 0), subprocess.CompletedProcess([], 0, json.dumps(release))]) as gh:
                 with self.assertRaisesRegex(ValueError, "description or uploaded assets"):

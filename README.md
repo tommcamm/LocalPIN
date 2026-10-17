@@ -116,9 +116,11 @@ establish installed desktop or physical hardware compatibility.
 
 ## Experimental installation
 
-Download an experimental, unsigned RPM from a successful Fedora CI job or build
-one yourself using the [Fedora packaging guide](packaging/fedora/README.md).
-CI artifacts are retained for 14 days and identify the tested commit.
+Download the signed experimental RPM and `SHA256SUMS` from
+[GitHub Releases](https://github.com/tommcamm/LocalPIN/releases) and follow the
+[verification instructions](docs/releasing.md#verify-and-test-a-download).
+Unsigned CI testing RPMs (retained for 14 days) and local builds are also covered
+by the [Fedora packaging guide](packaging/fedora/README.md).
 Installation starts no services and leaves PIN integration disabled.
 Preparation, enrollment, a timed trial, password/recovery tests, and explicit
 activation are separate steps in the
