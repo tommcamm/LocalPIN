@@ -1,7 +1,31 @@
 # Fedora KDE installation and recovery
 
-The current M8.1 implementation targets Fedora KDE 44 x86_64 with ordinary local
-files accounts and the distribution's local authselect profile. It uses
+Use this runbook to install, prepare, test, activate, update, or remove LocalPIN
+on Fedora KDE 44 x86_64 with ordinary local files accounts and the distribution's
+local authselect profile. Start in a disposable VM with SELinux enforcing and a
+recoverable snapshot. LocalPIN is experimental; there is no supported production
+release. See [everyday use](usage.md) for backend choices and user commands, or
+the [documentation index](README.md) for other guides.
+
+## Setup checklist
+
+1. [Download and verify the RPM](#install-without-activation), then install it in
+   the disposable VM. Installation leaves integration disabled.
+2. [Prepare persistent native accounting](#prepare-native-accounting-once) from
+   a maintenance console with other PAM authentication stopped. Preserve every
+   existing tally.
+3. [Prepare the selected accounts and enroll](#prepare-and-enroll) from each
+   user's foreground KDE terminal.
+4. [Start a trial and test](#test-and-activate) real PIN/password unlocking and
+   the applicable failure paths, keeping an administrator console available.
+5. [Rehearse console recovery](#console-recovery-and-removal), then prepare and
+   enroll again, start a new trial, and repeat the desktop tests with the final
+   enrollment.
+6. [Record the completed tests and activate](#test-and-activate) explicitly.
+
+## Compatibility and evidence
+
+The current implementation uses
 [shadow-record account markers](adr/0017-shadow-record-account-authority.md)
 and [KDE-specific native authentication accounting](adr/0018-kde-native-update-compatibility.md).
 It does not freeze `/etc` or require a reference VM's exact library build.
@@ -13,11 +37,29 @@ validation, and remaining release gates are still required before daily deployme
 
 ## Install without activation
 
-Build the RPM using [the packaging instructions](../packaging/fedora/README.md)
-and install it in a disposable enforcing Fedora KDE VM first. Installation
-copies the broker, workers, CLI, PAM module, four disabled private PAM services,
-reviewed templates, systemd units and SELinux policy. It does not enroll users,
-edit the KDE/authselect/faillock configuration, or start or enable the broker.
+Download the signed experimental RPM and `SHA256SUMS` from the intended tagged
+prerelease on [GitHub Releases](https://github.com/tommcamm/LocalPIN/releases).
+Follow [Verify and test a download](releasing.md#verify-and-test-a-download):
+check the signing key against a separately trusted fingerprint, check the
+checksum, and require a valid RPM signature from that key before installation.
+
+For unreleased changes, the
+[CI testing RPM instructions](../packaging/fedora/README.md#download-a-ci-testing-rpm)
+cover unsigned artifacts, their build metadata, and checksum checks. These
+artifacts expire after 14 days; checksums do not authenticate the publisher.
+Developers can also [build an RPM](../packaging/fedora/README.md#build-without-installing).
+
+After completing the verification for your chosen artifact, install it in the
+disposable Fedora KDE VM with SELinux enforcing, from the download directory:
+
+```sh
+sudo dnf install ./localpin-*.x86_64.rpm
+```
+
+Installation copies the broker, workers, CLI, PAM module, four disabled private
+PAM services, reviewed templates, systemd units and SELinux policy. It does not
+enroll users, edit the KDE/authselect/faillock configuration, or start or enable
+the broker.
 
 ```sh
 sudo /usr/libexec/localpin/localpin-integration status
