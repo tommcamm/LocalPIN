@@ -16,7 +16,12 @@ experimental builds.
   commands and status/doctor JSON stay compatible. Persistent accounting still
   requires an offline maintenance handoff and real recovery revokes enrollment.
   [ADR 0019](docs/adr/0019-guided-setup-orchestration.md) defines the boundary;
-  new installed onboarding acceptance and all M9 gates remain outstanding.
+  [targeted installed VM evidence](docs/development/m8.2-installed-acceptance.md)
+  is in progress; final onboarding acceptance and all M9 gates remain open.
+- Guarded M8.2 Konsole, accounting and real administrator-VT recovery fixtures,
+  with source/RPM-bound partial evidence from an enforcing Fedora KDE 44 VM and
+  private TPM emulator. Retained failures, native lockout/counter preservation
+  and incomplete final acceptance are recorded explicitly.
 - Isolated coverage-guided fuzz targets, native instrumentation harnesses,
   dependency policy and recorded component validation for M9. See the
   [review and validation report](docs/development/m9-review-validation.md) for
@@ -29,6 +34,10 @@ experimental builds.
   active desktop integration. Native account administration now shares the
   integration transaction lock, preventing concurrent provisioning from
   invalidating setup's single-account scope check before mutation.
+- Isolate three native/account lock-lifetime regressions in their own exact-test
+  child processes so parallel test forks cannot spuriously retain descriptors.
+  Production locking is unchanged; [source evidence](experiments/m82/results/lock-test-isolation.json)
+  distinguishes successful local reruns from the original hosted failure.
 
 ### Changed
 
@@ -47,6 +56,10 @@ experimental builds.
   full signed build evidence retained in the workflow artifact for 90 days.
 - Focus the README and setup documentation on installation, guided setup and
   everyday use, with explicit recovery and experimental-readiness limits.
+- Clarify explicit offline native-tally migration: back up original metadata,
+  preserve every counter byte and deliberately assign only new persistent
+  copies to root GID when a reviewed native primary-group tally requires it.
+  Provisioning and the wizard do not normalize existing counters or metadata.
 
 ## [0.1.0-alpha.1] - 2026-10-17
 

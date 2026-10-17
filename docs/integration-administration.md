@@ -9,7 +9,18 @@ the [documentation index](README.md) for other guides.
 
 ## Guided setup
 
-After verifying the RPM, the usual entry point is:
+This section describes the M8.2 guided CLI. The published `v0.1.0-alpha.1`
+predates it and provides `localpinctl` with the
+[manual setup checklist](#manual-setup-checklist). For that release, use
+`localpinctl` for manual commands shown as `localpin`; setup and the interactive
+menu are unavailable. For guided setup, choose a
+[CI testing RPM](../packaging/fedora/README.md#download-a-ci-testing-rpm) for the
+intended exact source commit containing M8.2, or a versioned release that
+explicitly includes this CLI. CI testing artifacts are unsigned and intended
+for disposable VM testing; versioned releases require trusted-signature
+verification below.
+
+After verifying that matching RPM, the entry point is:
 
 ```sh
 sudo dnf install ./localpin-*.x86_64.rpm
@@ -40,9 +51,10 @@ it preserves healthy active installations and does not automatically prepare
 them again.
 
 Run `localpin` for a menu, or use the commands below for the complete manual
-procedure. `localpinctl` remains a supported compatibility name. The guided flow
-has no new installed acceptance evidence yet; the historical results below do
-not certify it.
+procedure. `localpinctl` remains a supported compatibility name. The
+[new installed report](development/m8.2-installed-acceptance.md) separates actual
+guided-flow observations from pending completion; historical results retain
+their tested scope.
 
 ## Manual setup checklist
 
@@ -79,11 +91,15 @@ prerelease on [GitHub Releases](https://github.com/tommcamm/LocalPIN/releases).
 Follow [Verify and test a download](releasing.md#verify-and-test-a-download):
 check the signing key against a separately trusted fingerprint, check the
 checksum, and require a valid RPM signature from that key before installation.
+Use the [manual checklist](#manual-setup-checklist) for `v0.1.0-alpha.1`;
+downloading that release does not provide `localpin setup`.
 
 For unreleased changes, the
 [CI testing RPM instructions](../packaging/fedora/README.md#download-a-ci-testing-rpm)
 cover unsigned artifacts, their build metadata, and checksum checks. These
 artifacts expire after 14 days; checksums do not authenticate the publisher.
+Match `CI-BUILD.json` to the intended tested commit containing the guided CLI
+before following the guided procedure.
 Developers can also [build an RPM](../packaging/fedora/README.md#build-without-installing).
 
 After completing the verification for your chosen artifact, install it in the
@@ -126,11 +142,24 @@ Move from Fedora's default `/run/faillock` only from a maintenance console with
 all graphical, remote and other PAM authentication stopped. Stop `localpin.socket`
 and `localpin.service`, and revoke any existing domain with
 `sudo /usr/libexec/localpin/localpin-account begin-mutation`. Back up the
-original configuration and every native tally with its exact bytes, owner, mode and SELinux label. Copy all
-canonical native tallies to the persistent directory without overwriting an
-existing different destination. Synchronize each file and destination directory
-before atomically replacing the configuration, then restore distribution SELinux
-labels. Never reset or choose the smaller tally to resolve a conflict.
+original configuration and every native tally with its exact bytes, UID, GID,
+mode, timestamps, extended attributes and SELinux label. Installed tallies require
+the account's UID, root GID and mode 0660; production provisioning and eligibility
+do not normalize existing metadata. Ordinary native login or sudo can create a
+volatile tally with the account's primary GID. During this explicit offline
+migration, after reviewing that native owner/group and saving its exact backup,
+create the new persistent copy with GID 0. Preserve every counter byte, UID,
+mode and extended attribute, including its SELinux label; leave the original
+volatile file untouched. New-copy inode/ctime values necessarily differ; retain
+the original atime/mtime where possible. No other group conversion is accepted.
+
+Refuse symlinks, hardlinks, foreign groups, unexpected access/default ACLs,
+malformed native records and existing different destinations. A destination
+already identical to the reviewed canonical copy can remain unchanged; never
+overwrite a conflict or choose the smaller tally. Synchronize each file and
+destination directory before atomically replacing the configuration, then
+restore distribution SELinux labels. Never reset counters. This GID conversion
+is a deliberate maintenance action, never a live wizard/provisioning repair.
 
 This is a one-time offline setup requirement. The activation tool refuses a live
 copy while authenticators might be writing. Subsequent normal boots and package

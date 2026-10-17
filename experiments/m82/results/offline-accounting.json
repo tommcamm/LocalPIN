@@ -1,0 +1,26 @@
+{
+  "phase": "m82-offline-accounting",
+  "passed": true,
+  "selinux": "Enforcing",
+  "runner_sha256": "752f10ff086d41e26dfa7e3bec491f91498f60688309b6e40421087ff387ce30",
+  "observations": {
+    "source_tally_count": 1,
+    "new_persistent_copies": 1,
+    "nonempty_source_tally_count": 1,
+    "source_native_record_count": 1,
+    "existing_identical_tallies_retained": 0,
+    "native_tally_counter_bytes_uid_mode_xattrs_preserved": true,
+    "source_gid_and_tallies_unchanged": true,
+    "destination_gid_changes": 1,
+    "destination_gid_canonicalization_explicitly_requested": true,
+    "destination_group_is_root": true,
+    "persistent_btrfs": true,
+    "exact_configuration_atomically_installed": true,
+    "backup_and_destination_fsynced_before_configuration_switch": true,
+    "actual_sudo_from_active_tty3": true,
+    "other_authentication_quiesced": true,
+    "no_counter_reset_or_conflict_overwrite": true
+  },
+  "previously_active_access_display_units_restored": true,
+  "private_backups_and_snapshots_guest_root_only": true
+}

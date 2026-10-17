@@ -63,6 +63,32 @@ new variant: an administrator must review any existing native accounting during
 the one-time policy transition. Lost persistent state still requires explicit
 privileged recovery and fresh enrollment.
 
+### Explicit native-group migration
+
+Installed M8.2 acceptance exposed a gap in the offline instructions: an ordinary
+native login/sudo tally can have the account's primary GID, while LocalPIN's
+existing persistent accounting validator requires GID 0. Production validation
+remains strict; setup and provisioning do not silently change existing tallies.
+
+The explicit one-time offline migration may create a root-group persistent copy
+of a reviewed account-owned, mode-0660 native tally whose source GID is either
+root or that account's primary group. Stop authenticators and revoke existing
+LocalPIN authority first. Preserve an exact private backup including the source
+GID, then preserve every counter byte, UID, mode, extended attribute and SELinux
+label in the destination while deliberately setting only its GID to 0. Leave
+the volatile source unchanged. New inode/ctime values necessarily differ;
+preserve source atime/mtime where possible. Reject foreign groups, symlinks,
+hardlinks, unexpected access/default ACLs, malformed records and conflicting
+destinations; never reset or select a smaller tally. Synchronize copies before
+the atomic configuration switch and restore distribution labels.
+
+This is an administrator-reviewed maintenance step with interruption evidence,
+not an expansion of eligible production metadata or an automatic repair. The
+M8.2 fixture requires an explicit canonicalization option when a primary-group
+source needs conversion; its exact before/after snapshots remain guest-private.
+Successful source checks alone do not establish the new installed migration
+case, counter continuity or the remaining release gates.
+
 ## Native contract
 
 Linux-PAM v1.7.2's

@@ -1,0 +1,71 @@
+{
+  "schema": 1,
+  "date": "2026-10-17",
+  "passed": true,
+  "scope": "Offline comparison of the exact unsigned M8.2 RPM fixtures; this is not an installed PIN-unlock acceptance result.",
+  "source_commit": "578d94bc7670f0b951d18865d71e039259babd74",
+  "source_project_version": "0.1.0-alpha.1",
+  "integration_schema": 2,
+  "feature_graph": "workspace default production features",
+  "packages": [
+    {
+      "filename": "localpin-0.1.0-0.1.alpha1.vm82.1.fc44.x86_64.rpm",
+      "nevra": "localpin-0.1.0-0.1.alpha1.vm82.1.fc44.x86_64",
+      "sha256": "5164489025c78d1fda87dd80f2fe36022d1a60e82d6679f917643339ae039a2f",
+      "signed": false
+    },
+    {
+      "filename": "localpin-0.1.0-0.1.alpha1.vm82.2.fc44.x86_64.rpm",
+      "nevra": "localpin-0.1.0-0.1.alpha1.vm82.2.fc44.x86_64",
+      "sha256": "2878dcb9d54692d0691e9583bd9375aaf69de18f330fc444cc18e5c026b75e3f",
+      "signed": false
+    }
+  ],
+  "comparison": {
+    "different_entries": [],
+    "compared": [
+      "regular-file bytes",
+      "entry types",
+      "file and directory modes",
+      "symlink targets",
+      "RPM header file ownership",
+      "RPM header config/other file flags",
+      "RPM header file capabilities"
+    ],
+    "payload_inventory_sha256": "b6b4d7733e2d2cf6d77951cdde80643ec59e7558f6e395a1988cee1743fc611a",
+    "rpm_file_metadata_inventory_sha256": "5e61eb594ec6b6428a3295f3393eff4042e4b85181ef533211c4f4940444c40f",
+    "selinux_policy_sha256": "a25a8818147a6f7cfeab7221a5c09c2da9815cc41e8fd19d06c82c3f8eb03a99",
+    "embedded_build_inputs_equal": true,
+    "native_artifact_sha256": {
+      "localpind": "ed628c4c330e815a13772f92abc38089ef5718cff371588ab8a0e332538721e3",
+      "localpin-worker": "5f6591af271d03ac9d103fd0539326c84349fb0e3d24b7bbaa49d22a8dd34c96",
+      "localpin-auth-worker": "ba1b496ecf3d25f99772c97207f4c4710f01f11fc79c87c408675b8c7535b3f7",
+      "localpin-eligibility-worker": "7758190cffc97dd8821130b14933d7f640f6518315e8742b2fbbf13520392e37",
+      "localpin-account": "dddb3b87263eb2304594f303a37aae6b236b711e65e42b71a38a595aeff65d14",
+      "localpinctl": "edb7dc79cd215f8e2f503b9e9c1acb696478ada24a8e27a838efc1295822b6e6",
+      "liblocalpin_pam.so": "89dd0f40d564438b2b700560e6e55caf12436758a171817e1346f8047c1dad2d"
+    },
+    "scriptlets_equal_after_candidate_evr_normalization": true,
+    "transaction_file_triggers_equal": true,
+    "pretransaction_scriptlet_present": false,
+    "extracted_tree_entries": 70,
+    "extracted_entry_counts": {
+      "regular": 38,
+      "directory": 30,
+      "symlink": 2
+    },
+    "declared_rpm_file_entries": 51,
+    "implicit_extraction_parent_directories": 19,
+    "all_extracted_entries_equal": true
+  },
+  "source_inspection": {
+    "rejected_downgrade": "The preinstall script invokes candidate_check before package-suspend. candidate_check rejects a lower EVR before state loading, locking, service stop, gate changes, policy loading or file replacement.",
+    "successful_upgrade": "Suspension closes the gate and stops services. The same packaged SELinux policy is loaded; the transaction trigger checks preserved account/credential/throttle binding and restores prior services and active gate.",
+    "status_limit": "Available status checks account eligibility, storage and cooldown, but does not perform TPM unseal or prove remaining shared TPM dictionary-attack budget."
+  },
+  "limits": [
+    "Package headers, build metadata and installation timestamps are outside the payload-equality claim.",
+    "No guest, authentication, TPM, service, policy-load or package-install operations were performed for this comparison.",
+    "Post-upgrade PIN success, active reboot continuity and final erase/restored-password acceptance remain separate runtime cases."
+  ]
+}

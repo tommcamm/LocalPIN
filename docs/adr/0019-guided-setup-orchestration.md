@@ -1,7 +1,8 @@
 # ADR 0019: Guided terminal setup with fixed privileged operations
 
-Date: 2026-10-17. Status: accepted for development implementation; new installed
-Fedora KDE onboarding and compatible-update acceptance remain unperformed.
+Date: 2026-10-17. Status: accepted for development implementation;
+[new installed Fedora KDE acceptance](../development/m8.2-installed-acceptance.md)
+is in progress, with compatible-update and final completion still pending.
 M9 independent review and physical hardware gates remain open.
 
 ## Context

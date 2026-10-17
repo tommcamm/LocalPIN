@@ -1,0 +1,1071 @@
+{
+  "schema": 1,
+  "date": "2026-10-17",
+  "status": "in-progress",
+  "passed": null,
+  "scope": "Partial actual installed M8.2 guided-setup acceptance in the independently guarded enforcing Fedora KDE44 emulator clone; final acceptance and cleanup remain pending.",
+  "provenance": {
+    "production_source_commit": "578d94bc7670f0b951d18865d71e039259babd74",
+    "project_version": "0.1.0-alpha.1",
+    "integration_schema": 2,
+    "native_build_command": "cargo build --release --workspace --locked --offline",
+    "feature_graph": "workspace default production features; no simulator/test features",
+    "shared_source_native_tar_sha256": "caa81894214dc2bde546d5b6a079af232c631c5c32d5bb57b476b64adc1aace2",
+    "test_only_accounts_change_in_rpms": false,
+    "rpms": [
+      {
+        "filename": "localpin-0.1.0-0.1.alpha1.vm82.1.fc44.x86_64.rpm",
+        "sha256": "5164489025c78d1fda87dd80f2fe36022d1a60e82d6679f917643339ae039a2f",
+        "bytes": 1539010,
+        "signed": false
+      },
+      {
+        "filename": "localpin-0.1.0-0.1.alpha1.vm82.2.fc44.x86_64.rpm",
+        "sha256": "2878dcb9d54692d0691e9583bd9375aaf69de18f330fc444cc18e5c026b75e3f",
+        "bytes": 1539010,
+        "signed": false
+      }
+    ],
+    "native_build_inputs": {
+      "schema": 1,
+      "project_version": "0.1.0-alpha.1",
+      "architecture": "x86_64",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+      "cargo_lock_sha256": "a2b95b26eb652a02deb2301c64c6757d678e5c4af9784b04a85e886ac8da784f",
+      "native_artifact_sha256": {
+        "localpind": "ed628c4c330e815a13772f92abc38089ef5718cff371588ab8a0e332538721e3",
+        "localpin-worker": "5f6591af271d03ac9d103fd0539326c84349fb0e3d24b7bbaa49d22a8dd34c96",
+        "localpin-auth-worker": "ba1b496ecf3d25f99772c97207f4c4710f01f11fc79c87c408675b8c7535b3f7",
+        "localpin-eligibility-worker": "7758190cffc97dd8821130b14933d7f640f6518315e8742b2fbbf13520392e37",
+        "localpin-account": "dddb3b87263eb2304594f303a37aae6b236b711e65e42b71a38a595aeff65d14",
+        "localpinctl": "edb7dc79cd215f8e2f503b9e9c1acb696478ada24a8e27a838efc1295822b6e6",
+        "liblocalpin_pam.so": "89dd0f40d564438b2b700560e6e55caf12436758a171817e1346f8047c1dad2d"
+      },
+      "native_rpm_inputs": [
+        "pam-1.7.2-2.fc44.x86_64",
+        "dbus-libs-1.16.2-1.fc44.x86_64",
+        "dbus-libs-1.16.2-1.fc44.i686",
+        "tpm2-tss-4.1.3-9.fc44.x86_64",
+        "systemd-259.9-1.fc44.x86_64",
+        "selinux-policy-targeted-44.11-1.fc44.noarch"
+      ],
+      "build_command": "cargo build --release --workspace --locked --offline",
+      "signed": false
+    },
+    "hosted_ci_claimed_for_these_artifacts": false
+  },
+  "environment": {
+    "os": "Fedora KDE44 x86_64",
+    "virtualization": "KVM",
+    "selinux": "Enforcing",
+    "filesystem": "Btrfs",
+    "private_managed_tpm2_emulator": true,
+    "physical_tpm_touched": false,
+    "original_vm_off": true,
+    "independent_disk_without_backing": true,
+    "host_filesystem_shares": false,
+    "actual_kde_terminal_and_libvirt_keyboard": true,
+    "native_environment_at_install": {
+      "packages": {
+        "pam": "0:1.7.2-2.fc44.x86_64",
+        "systemd": "0:259.9-1.fc44.x86_64",
+        "authselect": "0:1.7.1-1.fc44.x86_64",
+        "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+        "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+        "glibc-common": "0:2.43-9.fc44.x86_64",
+        "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+      },
+      "kernel_release": "7.2.10-200.fc44.x86_64",
+      "authselect_profile": "local with-silent-lastlog with-mdns4 with-fingerprint with-faillock"
+    },
+    "vt_activation": "Actual keyboard hotkeys and, when their timing guard did not establish the requested VT, a separate topology-guarded SSH chvt operation; actual tty3 origin verified independently."
+  },
+  "clean_install": {
+    "package_installed": true,
+    "existing_kde_unchanged": true,
+    "no_enrollment": true,
+    "socket_inactive": true
+  },
+  "completed_wizard_cases": [
+    {
+      "case": "missing-accounting",
+      "program": "localpin",
+      "mode": "setup",
+      "passed": true,
+      "complete": true,
+      "exit_code": 1,
+      "secret_echo_absent": true,
+      "sudo_password_prompt_count": 1,
+      "account_password_prompt_count": 0,
+      "messages": {
+        "account_unavailable": false,
+        "accounting_handoff": true,
+        "activated": false,
+        "active_new_pin_ready": false,
+        "active_noop": false,
+        "administrator_recovery_required": false,
+        "console_recovery_handoff": false,
+        "enrollment_retained": false,
+        "paused": false,
+        "trial_changed": false
+      }
+    },
+    {
+      "case": "cancel-readiness",
+      "program": "localpin",
+      "mode": "setup",
+      "passed": true,
+      "complete": true,
+      "exit_code": 130,
+      "secret_echo_absent": true,
+      "sudo_password_prompt_count": 0,
+      "account_password_prompt_count": 0,
+      "messages": {
+        "account_unavailable": false,
+        "accounting_handoff": false,
+        "activated": false,
+        "active_new_pin_ready": false,
+        "active_noop": false,
+        "administrator_recovery_required": false,
+        "console_recovery_handoff": false,
+        "enrollment_retained": false,
+        "paused": true,
+        "trial_changed": false
+      }
+    },
+    {
+      "case": "menu-smoke",
+      "program": "localpin",
+      "mode": "menu",
+      "passed": true,
+      "complete": true,
+      "exit_code": 0,
+      "secret_echo_absent": true,
+      "sudo_password_prompt_count": 0,
+      "account_password_prompt_count": 0,
+      "messages": {
+        "account_unavailable": false,
+        "accounting_handoff": false,
+        "activated": false,
+        "active_new_pin_ready": false,
+        "active_noop": false,
+        "administrator_recovery_required": false,
+        "console_recovery_handoff": false,
+        "enrollment_retained": false,
+        "paused": false,
+        "trial_changed": false
+      }
+    },
+    {
+      "case": "cancel-preparation",
+      "program": "localpin",
+      "mode": "setup",
+      "passed": true,
+      "complete": true,
+      "exit_code": 0,
+      "secret_echo_absent": true,
+      "sudo_password_prompt_count": 1,
+      "account_password_prompt_count": 0,
+      "messages": {
+        "account_unavailable": false,
+        "accounting_handoff": false,
+        "activated": false,
+        "active_new_pin_ready": false,
+        "active_noop": false,
+        "administrator_recovery_required": false,
+        "console_recovery_handoff": false,
+        "enrollment_retained": false,
+        "paused": true,
+        "trial_changed": false
+      }
+    },
+    {
+      "case": "cancel-backend",
+      "program": "localpin",
+      "mode": "setup",
+      "passed": true,
+      "complete": true,
+      "exit_code": 130,
+      "secret_echo_absent": true,
+      "sudo_password_prompt_count": 1,
+      "account_password_prompt_count": 0,
+      "messages": {
+        "account_unavailable": false,
+        "accounting_handoff": false,
+        "activated": false,
+        "active_new_pin_ready": false,
+        "active_noop": false,
+        "administrator_recovery_required": false,
+        "console_recovery_handoff": false,
+        "enrollment_retained": false,
+        "paused": true,
+        "trial_changed": false
+      }
+    },
+    {
+      "case": "cancel-trial",
+      "program": "localpin",
+      "mode": "setup",
+      "passed": true,
+      "complete": true,
+      "exit_code": 0,
+      "secret_echo_absent": true,
+      "sudo_password_prompt_count": 1,
+      "account_password_prompt_count": 1,
+      "messages": {
+        "account_unavailable": false,
+        "accounting_handoff": false,
+        "activated": false,
+        "active_new_pin_ready": false,
+        "active_noop": false,
+        "administrator_recovery_required": false,
+        "console_recovery_handoff": false,
+        "enrollment_retained": false,
+        "paused": true,
+        "trial_changed": false
+      }
+    },
+    {
+      "case": "service-unavailable",
+      "program": "localpin",
+      "mode": "setup",
+      "passed": true,
+      "complete": true,
+      "exit_code": 1,
+      "secret_echo_absent": true,
+      "sudo_password_prompt_count": 1,
+      "account_password_prompt_count": 0,
+      "messages": {
+        "account_unavailable": true,
+        "accounting_handoff": false,
+        "activated": false,
+        "active_new_pin_ready": false,
+        "active_noop": false,
+        "administrator_recovery_required": false,
+        "console_recovery_handoff": false,
+        "enrollment_retained": true,
+        "paused": false,
+        "trial_changed": false
+      }
+    },
+    {
+      "case": "trial-before-reboot",
+      "program": "localpin",
+      "mode": "setup",
+      "passed": true,
+      "complete": true,
+      "exit_code": 0,
+      "secret_echo_absent": true,
+      "sudo_password_prompt_count": 1,
+      "account_password_prompt_count": 0,
+      "messages": {
+        "account_unavailable": false,
+        "accounting_handoff": false,
+        "activated": false,
+        "active_new_pin_ready": false,
+        "active_noop": false,
+        "administrator_recovery_required": false,
+        "console_recovery_handoff": false,
+        "enrollment_retained": true,
+        "paused": true,
+        "trial_changed": false
+      }
+    },
+    {
+      "case": "reboot-broker-stopped",
+      "program": "localpin",
+      "mode": "setup",
+      "passed": true,
+      "complete": true,
+      "exit_code": 1,
+      "secret_echo_absent": true,
+      "sudo_password_prompt_count": 1,
+      "account_password_prompt_count": 0,
+      "messages": {
+        "account_unavailable": true,
+        "accounting_handoff": false,
+        "activated": false,
+        "active_new_pin_ready": false,
+        "active_noop": false,
+        "administrator_recovery_required": false,
+        "console_recovery_handoff": false,
+        "enrollment_retained": true,
+        "paused": false,
+        "trial_changed": false
+      }
+    },
+    {
+      "case": "trial-after-reboot",
+      "program": "localpin",
+      "mode": "setup",
+      "passed": true,
+      "complete": true,
+      "exit_code": 0,
+      "secret_echo_absent": true,
+      "sudo_password_prompt_count": 1,
+      "account_password_prompt_count": 0,
+      "messages": {
+        "account_unavailable": false,
+        "accounting_handoff": false,
+        "activated": false,
+        "active_new_pin_ready": false,
+        "active_noop": false,
+        "administrator_recovery_required": false,
+        "console_recovery_handoff": true,
+        "enrollment_retained": true,
+        "paused": true,
+        "trial_changed": false
+      }
+    },
+    {
+      "case": "post-recovery-enroll",
+      "program": "localpin",
+      "mode": "setup",
+      "complete": true,
+      "exit_code": 130,
+      "secret_echo_absent": true,
+      "sudo_password_prompt_count": 6,
+      "account_password_prompt_count": 0,
+      "messages": {
+        "account_unavailable": false,
+        "accounting_handoff": false,
+        "activated": false,
+        "active_new_pin_ready": false,
+        "active_noop": false,
+        "administrator_recovery_required": false,
+        "console_recovery_handoff": false,
+        "enrollment_retained": false,
+        "paused": false,
+        "trial_changed": false
+      },
+      "fixture_completion_verified": true,
+      "intended_case_passed": false,
+      "outcome": "aborted-native-lockout"
+    },
+    {
+      "case": "compatible-alias-menu",
+      "program": "localpinctl",
+      "mode": "menu",
+      "passed": true,
+      "complete": true,
+      "exit_code": 0,
+      "secret_echo_absent": true,
+      "sudo_password_prompt_count": 0,
+      "account_password_prompt_count": 0,
+      "messages": {
+        "account_unavailable": false,
+        "accounting_handoff": false,
+        "activated": false,
+        "active_new_pin_ready": false,
+        "active_noop": false,
+        "administrator_recovery_required": false,
+        "console_recovery_handoff": false,
+        "enrollment_retained": false,
+        "paused": false,
+        "trial_changed": false
+      }
+    },
+    {
+      "case": "natural-cooldown-enroll",
+      "program": "localpin",
+      "mode": "setup",
+      "passed": true,
+      "complete": true,
+      "exit_code": 1,
+      "secret_echo_absent": true,
+      "sudo_password_prompt_count": 2,
+      "account_password_prompt_count": 1,
+      "messages": {
+        "account_unavailable": false,
+        "accounting_handoff": false,
+        "activated": false,
+        "active_new_pin_ready": false,
+        "active_noop": false,
+        "administrator_recovery_required": false,
+        "console_recovery_handoff": false,
+        "enrollment_retained": false,
+        "paused": false,
+        "trial_changed": true
+      },
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "observed_utc": "2026-10-17T20:20:51.068008+00:00",
+      "outcome": "stale-confirmation-refused-after-trial-replacement-during-sudo-reauthentication",
+      "isolated_deadline_only_refusal_claimed": false
+    },
+    {
+      "case": "final-activation",
+      "program": "localpin",
+      "mode": "setup",
+      "passed": true,
+      "complete": true,
+      "exit_code": 0,
+      "secret_echo_absent": true,
+      "sudo_password_prompt_count": 1,
+      "account_password_prompt_count": 0,
+      "messages": {
+        "account_unavailable": false,
+        "accounting_handoff": false,
+        "activated": true,
+        "active_new_pin_ready": false,
+        "active_noop": false,
+        "administrator_recovery_required": false,
+        "console_recovery_handoff": false,
+        "enrollment_retained": true,
+        "paused": false,
+        "trial_changed": false
+      },
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "observed_utc": "2026-10-17T20:21:58.665789+00:00"
+    },
+    {
+      "case": "active-noop",
+      "program": "localpin",
+      "mode": "setup",
+      "passed": true,
+      "complete": true,
+      "exit_code": 0,
+      "secret_echo_absent": true,
+      "sudo_password_prompt_count": 1,
+      "account_password_prompt_count": 0,
+      "messages": {
+        "account_unavailable": false,
+        "accounting_handoff": false,
+        "activated": false,
+        "active_new_pin_ready": false,
+        "active_noop": true,
+        "administrator_recovery_required": false,
+        "console_recovery_handoff": false,
+        "enrollment_retained": false,
+        "paused": false,
+        "trial_changed": false
+      },
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "observed_utc": "2026-10-17T20:22:20.094290+00:00"
+    },
+    {
+      "case": "active-noop-repeat",
+      "program": "localpin",
+      "mode": "setup",
+      "passed": true,
+      "complete": true,
+      "exit_code": 0,
+      "secret_echo_absent": true,
+      "sudo_password_prompt_count": 1,
+      "account_password_prompt_count": 0,
+      "messages": {
+        "account_unavailable": false,
+        "accounting_handoff": false,
+        "activated": false,
+        "active_new_pin_ready": false,
+        "active_noop": true,
+        "administrator_recovery_required": false,
+        "console_recovery_handoff": false,
+        "enrollment_retained": false,
+        "paused": false,
+        "trial_changed": false
+      },
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "observed_utc": "2026-10-17T20:23:15.371059+00:00"
+    },
+    {
+      "case": "own-pin-disable",
+      "program": "localpin",
+      "mode": "disable",
+      "passed": true,
+      "complete": true,
+      "exit_code": 0,
+      "secret_echo_absent": true,
+      "sudo_password_prompt_count": 0,
+      "account_password_prompt_count": 1,
+      "messages": {
+        "account_unavailable": false,
+        "accounting_handoff": false,
+        "activated": false,
+        "active_new_pin_ready": false,
+        "active_noop": false,
+        "administrator_recovery_required": false,
+        "console_recovery_handoff": false,
+        "enrollment_retained": false,
+        "paused": false,
+        "trial_changed": false
+      },
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "observed_utc": "2026-10-17T20:23:45.812657+00:00"
+    },
+    {
+      "case": "active-reenroll",
+      "program": "localpin",
+      "mode": "setup",
+      "passed": true,
+      "complete": true,
+      "exit_code": 0,
+      "secret_echo_absent": true,
+      "sudo_password_prompt_count": 1,
+      "account_password_prompt_count": 1,
+      "messages": {
+        "account_unavailable": false,
+        "accounting_handoff": false,
+        "activated": false,
+        "active_new_pin_ready": true,
+        "active_noop": false,
+        "administrator_recovery_required": false,
+        "console_recovery_handoff": false,
+        "enrollment_retained": false,
+        "paused": false,
+        "trial_changed": false
+      },
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "observed_utc": "2026-10-17T20:24:02.219598+00:00"
+    },
+    {
+      "case": "after-upgrade-noop",
+      "program": "localpin",
+      "mode": "setup",
+      "passed": true,
+      "complete": true,
+      "exit_code": 0,
+      "secret_echo_absent": true,
+      "sudo_password_prompt_count": 1,
+      "account_password_prompt_count": 0,
+      "messages": {
+        "account_unavailable": false,
+        "accounting_handoff": false,
+        "activated": false,
+        "active_new_pin_ready": false,
+        "active_noop": true,
+        "administrator_recovery_required": false,
+        "console_recovery_handoff": false,
+        "enrollment_retained": false,
+        "paused": false,
+        "trial_changed": false
+      },
+      "evr": "0.1.0-0.1.alpha1.vm82.2.fc44",
+      "observed_utc": "2026-10-17T20:28:23.822169+00:00"
+    }
+  ],
+  "actual_ui_cases": [
+    {
+      "case_file": "ui-baseline.json",
+      "phase": "baseline",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false
+      }
+    },
+    {
+      "case_file": "ui-trial-pin.json",
+      "phase": "pin",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "native_password_tally_unchanged": true
+      }
+    },
+    {
+      "case_file": "ui-trial-password.json",
+      "phase": "password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false
+      }
+    },
+    {
+      "case_file": "ui-missing-module-fallback.json",
+      "phase": "recovery",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false,
+        "wrong_candidate_denied": true,
+        "same_greeter_after_denial": true,
+        "gui_submissions": 2,
+        "native_failure_journal_greeter_verified": true
+      }
+    },
+    {
+      "case_file": "ui-after-trial-reboot-password.json",
+      "phase": "restored-password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false
+      }
+    },
+    {
+      "case_file": "ui-after-reboot-pin.json",
+      "phase": "pin",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "native_password_tally_unchanged": true
+      }
+    },
+    {
+      "case_file": "ui-after-reboot-password.json",
+      "phase": "password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false
+      }
+    },
+    {
+      "case_file": "ui-after-console-recovery-existing.json",
+      "phase": "unlock-existing",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false
+      }
+    },
+    {
+      "case_file": "ui-post-recovery-pin.json",
+      "phase": "pin",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "native_password_tally_unchanged": true
+      }
+    },
+    {
+      "case_file": "ui-post-recovery-password.json",
+      "phase": "password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false
+      }
+    },
+    {
+      "case_file": "ui-post-recovery-fallback.json",
+      "phase": "recovery",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false,
+        "wrong_candidate_denied": true,
+        "same_greeter_after_denial": true,
+        "gui_submissions": 2,
+        "native_failure_journal_greeter_verified": true
+      }
+    },
+    {
+      "case_file": "ui-final-trial-pin.json",
+      "phase": "pin",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "native_password_tally_unchanged": true
+      }
+    },
+    {
+      "case_file": "ui-final-trial-password.json",
+      "phase": "password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false
+      }
+    },
+    {
+      "case_file": "ui-final-trial-fallback.json",
+      "phase": "recovery",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false,
+        "wrong_candidate_denied": true,
+        "same_greeter_after_denial": true,
+        "gui_submissions": 2,
+        "native_failure_journal_greeter_verified": true
+      }
+    },
+    {
+      "case_file": "ui-active-reenroll-pin.json",
+      "phase": "pin",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "native_password_tally_unchanged": true
+      }
+    },
+    {
+      "case_file": "ui-tpm-reserve-password.json",
+      "phase": "unlock-existing",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false
+      }
+    }
+  ],
+  "installed_native_contention": {
+    "installed_native_mutations": [
+      {
+        "operation": "begin-mutation",
+        "busy": true,
+        "state_equal": true
+      },
+      {
+        "operation": "seal",
+        "busy": true,
+        "state_equal": true
+      },
+      {
+        "operation": "recover",
+        "busy": true,
+        "state_equal": true
+      },
+      {
+        "operation": "cache-window-begin",
+        "busy": true,
+        "state_equal": true
+      },
+      {
+        "operation": "cache-window-finish",
+        "busy": true,
+        "state_equal": true
+      }
+    ],
+    "production_locking_unchanged": true
+  },
+  "trial_reboot": {
+    "passed": true,
+    "boot_changed": true,
+    "same_registry_credentials_throttle_tally_policies": true,
+    "expired_trial_gate_closed": true,
+    "fresh_enrollment_performed": false,
+    "selinux": "Enforcing"
+  },
+  "preserved_failure_dispositions": [
+    {
+      "case": "native-primary-group-pre-copy-refusal",
+      "runner_sha256": "12eff7a6b81dbb9801a415decdd23d9956869d6083c66e3d059e6fa78ff5d591",
+      "disposition": "Stopped before backup/copy/configuration mutation; exact original metadata preserved; narrow reviewed retry added explicit destination-only group canonicalization."
+    },
+    {
+      "case": "lingering-graphical-worker-pre-copy-refusal",
+      "runner_sha256": "997dc89686ba36a1ca9b38cbb053cb5e3d549fa7b1885c14ee67605f41df7b29",
+      "disposition": "Stopped before copying; units restored; narrow reviewed retry explicitly stopped real KDE user graphical targets and retained quiet-state checks."
+    },
+    {
+      "case": "missing-gate-recovery-post-verifier",
+      "runner_sha256": "42b0b4e7feec09c9e6d609320d1384563c29cf8052ecf4ab2513b9c3a1344539",
+      "disposition": "Actual dry-run and recovery completed; observer wrongly required gate presence. Exact-source observation-only completion accepted absent/canonicaldisabled gate without repeating authentication or recovery."
+    },
+    {
+      "case": "post-recovery-password-unlocked-precondition",
+      "disposition": "Desktop was already locked; restored-password phase refused before input. Explicit unlock-existing phase then observed actual full-password success."
+    },
+    {
+      "case": "optional-pin-rotation",
+      "disposition": "Stopped before any write because broker was stopped; no secret or state changed. No successful PIN rotation claimed."
+    },
+    {
+      "case": "post-recovery-native-sudo-lockout",
+      "status": "natural-cooldown-observed-and-resolved-by-ordinary-authentication",
+      "disposition": "Native sudo respected three valid failure records after the original KDE graph retained history. Repeated test-driver prompts were stopped and the first wizard canceled130, preserving the tally. After natural waiting, latest record age622seconds exceeded the native600second unlock interval. One ordinary sudo authentication succeeded and its native account phase legitimately cleared the tally to0; no counter reset, factor disable or policy editing occurred. Fresh wizard preparation/TPM enrollment then succeeded."
+    },
+    {
+      "case": "premature-expiry-case-completion-check",
+      "disposition": "The controller requested finish while the expired-trial wizard was still waiting for ordinary sudo reauthentication. The fixture correctly refused incomplete evidence. A second wizard opened a fresh trial before the old case authenticated once; the old case then exited1 with trial_changed and no activation/attestation. Natural gate expiry was observed separately at606seconds. This does not isolate a deadline-only activation refusal branch."
+    },
+    {
+      "case": "first-active-noop-full-state-comparison",
+      "disposition": "The wizard exited0 as active_noop, but full comparison refused only native tally128bytes->0 through ordinary sudo native account success. All other recorded protected state/services were equal. The original refusal is retained; active-noop-repeat passed exact comparison on the legitimately empty tally. No reset command was used."
+    },
+    {
+      "case": "first-post-upgrade-correct-candidate-pin",
+      "status": "unresolved-awaiting-natural-tpm-recovery-and-actual-ui-retry",
+      "disposition": "The actual graphical correct-candidate attempt remained locked for15seconds and its empty result file is not a pass. Read-only TPM counter1/max3 leaves2attempts; source requires remaining>reserve2. This is a source-backed expected DA-reserve assessment, not a captured Error::Budget trace. Actual full-password unlock passed. No TPM reset/configuration change occurred; actual post-upgrade PIN success remains pending."
+    }
+  ],
+  "pending": [
+    "Actual post-upgrade PIN success after natural TPM budget recovery; the first locked observation is retained and is not a passing UI case.",
+    "Active reboot continuity, actual RPM erase and restored original password UI.",
+    "Final inspected evidence export and guarded clone/access cleanup."
+  ],
+  "limits": [
+    "This is an incomplete local installed run, not a passing complete acceptance record.",
+    "No physical TPM/fingerprint, wider hardware matrix or independent human/specialist review established.",
+    "Unsigned local RPMs do not establish published signature trust, hosted CI or a supported release.",
+    "Private credential/account/native tally bytes, snapshots, transcripts, keys and raw logs are excluded.",
+    "State checkpoint equality covers recorded file bytes/ownership/modes and service state; it is not directory/xattr/inode-flag equality.",
+    "The installed .vm82.1->.vm82.2 test changes RPM Release with an identical production payload; it does not establish a future application/integration-schema migration.",
+    "Natural trial gate expiry and stale confirmation after trial replacement during sudo reauthentication were observed separately; a deadline-only activation-refusal branch was not isolated.",
+    "The first post-upgrade PIN failure has a source-backed TPM reserve assessment, not a captured Error::Budget trace; public availability/cooldown does not establish TPM budget."
+  ],
+  "attached_results": {
+    "offline_accounting": {
+      "path": "offline-accounting.json",
+      "passed": true,
+      "runner_sha256": "752f10ff086d41e26dfa7e3bec491f91498f60688309b6e40421087ff387ce30",
+      "observations": {
+        "source_tally_count": 1,
+        "new_persistent_copies": 1,
+        "nonempty_source_tally_count": 1,
+        "source_native_record_count": 1,
+        "existing_identical_tallies_retained": 0,
+        "native_tally_counter_bytes_uid_mode_xattrs_preserved": true,
+        "source_gid_and_tallies_unchanged": true,
+        "destination_gid_changes": 1,
+        "destination_gid_canonicalization_explicitly_requested": true,
+        "destination_group_is_root": true,
+        "persistent_btrfs": true,
+        "exact_configuration_atomically_installed": true,
+        "backup_and_destination_fsynced_before_configuration_switch": true,
+        "actual_sudo_from_active_tty3": true,
+        "other_authentication_quiesced": true,
+        "no_counter_reset_or_conflict_overwrite": true
+      }
+    },
+    "actual_console_recovery": {
+      "path": "actual-console-recovery.json",
+      "passed": true,
+      "command_runner_sha256": "42b0b4e7feec09c9e6d609320d1384563c29cf8052ecf4ab2513b9c3a1344539",
+      "observer_runner_sha256": "e48d54646ac76b2e391b5957b17cabf3a696d7d266b91494abe709840bcf814f",
+      "actual_recovery_commands_repeated": false,
+      "observations": {
+        "actual_administrator_tty3_recovery": true,
+        "boot_unchanged": true,
+        "actual_recover_dry_run_unchanged": true,
+        "actual_recover_completed": true,
+        "original_kde_services_and_private_policies_restored": true,
+        "restored_policy_count": 6,
+        "account_authority_revoked": true,
+        "gate_and_manifest_disabled": true,
+        "native_counter_bytes_and_metadata_unchanged": true,
+        "gate_representation": "absent",
+        "broker_units_inactive": true,
+        "socket_boot_opt_in_disabled": true,
+        "service_not_boot_enabled": true,
+        "missing_module_fault_retained_for_password_ui": true,
+        "password_or_attestation_input_performed": false
+      }
+    },
+    "rpm_payload_comparison": {
+      "path": "rpm-payload-comparison.json",
+      "passed": true,
+      "extracted_entries": 70,
+      "all_extracted_entries_equal": true,
+      "selinux_policy_equal": true,
+      "installed_pin_acceptance_claimed_by_offline_comparison": false
+    }
+  },
+  "runtime_progress": {
+    "native_cooldown": {
+      "status": "passed",
+      "valid_native_records_before": 3,
+      "latest_record_age_seconds_before_ordinary_sudo": 622,
+      "native_unlock_interval_seconds": 600,
+      "ordinary_sudo_attempts_after_wait": 1,
+      "native_record_bytes_after_successful_account_phase": 0,
+      "counter_reset_or_factor_disable_performed": false
+    },
+    "post_recovery_enrollment": {
+      "status": "passed",
+      "fresh_wizard_preparation": true,
+      "explicit_backend": "tpm2-required",
+      "fresh_distinct_six_digit_pin_has_leading_zero": true,
+      "private_password_and_pin_prompts_used": true,
+      "actual_pin_password_and_missing_module_fallback_passed": true,
+      "exact_fault_repair_passed": true,
+      "pin_value_exported": false
+    },
+    "natural_trial_expiry": {
+      "status": "natural-gate-expiry-observed",
+      "wizard_case": "natural-cooldown-enroll",
+      "exact_trial_duration_seconds": 600,
+      "observed_elapsed_seconds": 606,
+      "same_exact_trial_and_boot_at_expiry_observation": true,
+      "gate_at_expiry_observation": "disabled",
+      "registry_credentials_throttle_tally_policies_unchanged_at_expiry_observation": true,
+      "clock_or_authoritative_state_edits_performed": false,
+      "activation_pass_claimed": false
+    },
+    "stale_activation_confirmation": {
+      "status": "refused-after-trial-replacement-during-reauthentication",
+      "wizard_case": "natural-cooldown-enroll",
+      "ordinary_sudo_reauthentication_required_after_timestamp_aged": true,
+      "replacement_trial_opened_while_old_case_waited_for_sudo": true,
+      "old_case_authenticated_once_after_surface_verified": true,
+      "exit_code": 1,
+      "trial_changed_message": true,
+      "activated": false,
+      "old_case_attestation_written": false,
+      "isolated_deadline_only_activation_branch_claimed": false
+    },
+    "fresh_final_activation_trial": {
+      "status": "passed",
+      "wizard_case": "final-activation",
+      "replaced_expired_trial": true,
+      "actual_pin_password_and_missing_module_fallback_repeated": true,
+      "exact_fault_repair_passed": true,
+      "actual_test_confirmations_recorded": 2,
+      "explicit_activation_confirmed": true,
+      "exit_code": 0,
+      "activated": true,
+      "enrollment_retained": true,
+      "account_password_prompt_count": 0,
+      "completed_utc": "2026-10-17T20:21:58.665789+00:00"
+    },
+    "active_setup_noop": {
+      "status": "passed-with-retained-first-comparison-refusal",
+      "first_wizard_functional_exit_code": 0,
+      "first_full_state_comparison_passed": false,
+      "only_first_comparison_difference": "native tally 128 bytes to 0 through ordinary sudo native account success",
+      "all_other_protected_bytes_metadata_services_equal": true,
+      "counter_reset_command_performed": false,
+      "repeat_case": "active-noop-repeat",
+      "repeat_full_recorded_state_equal": true
+    },
+    "active_own_pin_management": {
+      "status": "passed",
+      "own_pin_disable_used_fresh_account_password": true,
+      "disabled_enrollment_absent": true,
+      "fresh_enrollment_used_fresh_account_password": true,
+      "explicit_backend": "tpm2-required",
+      "fresh_tpm_enrollment": true,
+      "active_gate_registry_manifest_policies_boot_opt_in_preserved": true,
+      "new_preparation_trial_or_activation_performed": false,
+      "actual_reenrolled_pin_with_enter_passed": true
+    },
+    "package_upgrade": {
+      "passed": true,
+      "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+      "selinux": "Enforcing",
+      "observed_utc": "2026-10-17T20:24:28.892238+00:00",
+      "observations": {
+        "automatic_active_gate_preserved": true,
+        "compatible_upgrade_completed": true,
+        "explicit_downgrade_refused": false,
+        "same_enrollment_registry_throttle_tally_and_policies": true,
+        "version_after": "0.1.0-0.1.alpha1.vm82.2.fc44",
+        "version_before": "0.1.0-0.1.alpha1.vm82.1.fc44"
+      }
+    },
+    "downgrade_refusal": {
+      "passed": true,
+      "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+      "selinux": "Enforcing",
+      "observed_utc": "2026-10-17T20:24:29.782209+00:00",
+      "observations": {
+        "automatic_active_gate_preserved": true,
+        "compatible_upgrade_completed": false,
+        "explicit_downgrade_refused": true,
+        "same_enrollment_registry_throttle_tally_and_policies": true,
+        "version_after": "0.1.0-0.1.alpha1.vm82.2.fc44",
+        "version_before": "0.1.0-0.1.alpha1.vm82.2.fc44"
+      }
+    },
+    "pre_upgrade_native_history": {
+      "status": "passed",
+      "actual_native_kde_pam_wrong_pin_denied": true,
+      "native_record_count": 1,
+      "native_tally_nonempty": true,
+      "synthetic_counter_bytes_written": false,
+      "reset_or_counter_edit_performed": false
+    },
+    "after_upgrade_setup_noop": {
+      "status": "passed",
+      "wizard_case": "after-upgrade-noop",
+      "exit_code": 0,
+      "active_noop_message": true,
+      "full_recorded_state_equal": true,
+      "new_preparation_or_enrollment_performed": false
+    },
+    "post_upgrade_pin": {
+      "status": "pending-after-first-locked-observation",
+      "first_correct_candidate_remained_locked": true,
+      "first_observation_interval_seconds": 15,
+      "first_attempt_result_file_empty": true,
+      "first_attempt_counted_as_passing_ui_case": false,
+      "readonly_tpm_properties": {
+        "dictionary_attack_counter": 1,
+        "maximum_tries": 3,
+        "recovery_interval_seconds": 1000,
+        "lockout_recovery_seconds": 1000
+      },
+      "source_budget_rule": {
+        "reserve": 2,
+        "remaining_attempts_must_exceed_reserve": true,
+        "measured_remaining_attempts": 2
+      },
+      "assessment": "Source-backed expected dictionary-attack reserve refusal; no Error::Budget trace captured.",
+      "public_available_status_or_zero_cooldown_proves_tpm_budget": false,
+      "actual_existing_lock_full_password_unlock_passed": true,
+      "native_tally_cleared_by_ordinary_successful_password_authentication": true,
+      "tpm_reset_or_configuration_change_performed": false,
+      "natural_recovery_and_actual_pin_retry_pending": true,
+      "readonly_properties_observation": {
+        "phase": "m82-tpm-da-properties",
+        "passed": true,
+        "tpm_capability_tool_available": true,
+        "query_success": true,
+        "dictionary_attack_properties": {
+          "TPM2_PT_LOCKOUT_COUNTER": 1,
+          "TPM2_PT_MAX_AUTH_FAIL": 3,
+          "TPM2_PT_LOCKOUT_INTERVAL": 1000,
+          "TPM2_PT_LOCKOUT_RECOVERY": 1000
+        },
+        "in_lockout": false,
+        "authentication_attempt_performed": false,
+        "budget_reset_or_configuration_performed": false,
+        "observed_utc": "2026-10-17T20:29:19.540426+00:00"
+      },
+      "failed_ui_observation": {
+        "phase": "m82-post-upgrade-first-pin-attempt",
+        "passed": false,
+        "outcome": "desktop-remained-locked",
+        "error_category": "expected-unlock-not-observed-within-15-seconds",
+        "submitted_fixture_selector": "pin",
+        "native_valid_records_after": 2,
+        "assessment": "Consistent with DA reserve: TPM counter1/max3 leaves2; production requiresremaining>2. Source-backed inference, no captured Error::Budget trace.",
+        "protected_package_state_comparison_passed": true,
+        "public_broker_status_was_available": true,
+        "tpm_or_native_counter_reset_performed": false,
+        "followup": "Real full-password unlock passed; wait for natural TPM counter decay before another PIN attempt.",
+        "observed_utc": "2026-10-17T20:29:30.955071+00:00"
+      }
+    }
+  }
+}

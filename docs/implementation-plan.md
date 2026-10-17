@@ -435,8 +435,10 @@ The source change introduces [ADR 0019](adr/0019-guided-setup-orchestration.md)'
 `localpin` primary command and interactive menu, while preserving `localpinctl`
 and schema-version-1 status/doctor JSON. The
 [M8.2 validation report](development/m8.2-guided-setup.md) records passing local
-source, terminal and RPM checks. Installed acceptance of this guided flow is
-still outstanding; historical M8.1 results retain their recorded scope.
+source, terminal and RPM checks. The
+[new installed acceptance run](development/m8.2-installed-acceptance.md) is in
+progress with measured cases and explicit pending completion; historical M8.1
+results retain their recorded scope.
 
 - Offer `dnf install` followed by `localpin setup` for one desktop owner. Guide
   readiness checks, preparation preview/confirmation, explicit TPM or software
