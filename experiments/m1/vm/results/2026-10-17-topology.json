@@ -1,0 +1,147 @@
+{
+  "cases": [
+    {
+      "concurrent_observation_verified": true,
+      "desktops": [
+        {
+          "account_alias": "target",
+          "actual_locker_observed": true,
+          "alias": "desktop-a",
+          "gpu_alias": "gpu-a",
+          "independent_console_observed": true,
+          "input_alias": "input-a",
+          "input_route_verified": true,
+          "live_packaged_kwin": true,
+          "live_packaged_plasmashell": true,
+          "local_nonclosing_user_session": true,
+          "logind_and_process_mapping_verified": true,
+          "native_drm_compositor": true,
+          "one_entry_password_unlock_confirmed": true,
+          "seat_alias": "seat-a",
+          "unlocked_state_observed": true
+        },
+        {
+          "account_alias": "target",
+          "actual_locker_observed": false,
+          "alias": "desktop-b",
+          "gpu_alias": "gpu-a",
+          "independent_console_observed": true,
+          "input_alias": "input-a",
+          "input_route_verified": true,
+          "live_packaged_kwin": true,
+          "live_packaged_plasmashell": true,
+          "local_nonclosing_user_session": true,
+          "logind_and_process_mapping_verified": true,
+          "native_drm_compositor": true,
+          "one_entry_password_unlock_confirmed": false,
+          "seat_alias": "seat-a",
+          "unlocked_state_observed": false
+        }
+      ],
+      "failure_stage": "none",
+      "kind": "same-uid-two-desktops",
+      "launch_method": "reviewed-private-pam-launcher",
+      "routing": {
+        "candidate_source": "live-logind",
+        "decision": "unavailable",
+        "direct_mapping": "absent",
+        "observed_actual_greeter": true,
+        "own_uid_candidate_count": 2,
+        "same_entry_fallback_confirmed": true,
+        "user_manager_owner_matches": true
+      },
+      "status": "passed",
+      "stock_components_unmodified": true
+    },
+    {
+      "concurrent_observation_verified": true,
+      "desktops": [
+        {
+          "account_alias": "target",
+          "actual_locker_observed": true,
+          "alias": "desktop-a",
+          "gpu_alias": "gpu-a",
+          "independent_console_observed": true,
+          "input_alias": "input-a",
+          "input_route_verified": true,
+          "live_packaged_kwin": true,
+          "live_packaged_plasmashell": true,
+          "local_nonclosing_user_session": true,
+          "logind_and_process_mapping_verified": true,
+          "native_drm_compositor": true,
+          "one_entry_password_unlock_confirmed": true,
+          "seat_alias": "seat-a",
+          "unlocked_state_observed": true
+        },
+        {
+          "account_alias": "other",
+          "actual_locker_observed": true,
+          "alias": "desktop-b",
+          "gpu_alias": "gpu-b",
+          "independent_console_observed": true,
+          "input_alias": "input-b",
+          "input_route_verified": true,
+          "live_packaged_kwin": true,
+          "live_packaged_plasmashell": true,
+          "local_nonclosing_user_session": true,
+          "logind_and_process_mapping_verified": true,
+          "native_drm_compositor": true,
+          "one_entry_password_unlock_confirmed": true,
+          "seat_alias": "seat-b",
+          "unlocked_state_observed": true
+        }
+      ],
+      "failure_stage": "none",
+      "kind": "independent-second-seat",
+      "launch_method": "stock-login-manager",
+      "routing": {
+        "candidate_source": "live-logind",
+        "decision": "unique-own-session",
+        "direct_mapping": "absent",
+        "observed_actual_greeter": true,
+        "own_uid_candidate_count": 1,
+        "same_entry_fallback_confirmed": true,
+        "user_manager_owner_matches": true
+      },
+      "status": "passed",
+      "stock_components_unmodified": true
+    }
+  ],
+  "claims": {
+    "m1_complete": false,
+    "production_authorization_proven": false,
+    "uid_lifecycle_solved": false
+  },
+  "component_versions": [
+    "plasma-login-manager-6.7.5-1.fc44",
+    "plasma-workspace-6.7.5-1.fc44",
+    "kwin-6.7.5-1.fc44",
+    "kscreenlocker-6.7.5-1.fc44",
+    "pam-1.7.2-2.fc44",
+    "systemd-259.9-1.fc44"
+  ],
+  "environment": {
+    "audit_enabled": true,
+    "audit_lost_after": 0,
+    "audit_lost_before": 0,
+    "audit_records_reviewed": true,
+    "clean_snapshot_verified": true,
+    "disposable_clone_verified": true,
+    "exact_vm_guard_verified": true,
+    "no_host_device_passthrough": true,
+    "selinux_enforcing_after": true,
+    "selinux_enforcing_before": true,
+    "unexpected_avcs_found": false
+  },
+  "fixture": "M1 genuine KDE topology observations",
+  "record_date": "2026-10-17",
+  "recovery": {
+    "clone_restored_or_discarded": true,
+    "fixture_processes_gone": true,
+    "original_pam_account_and_profile_restored": true,
+    "owned_launch_units_and_scopes_stopped": true,
+    "temporary_access_keys_removed": true
+  },
+  "schema_version": 1,
+  "source_archive_sha256": "6ed7c3bbac1c79bc1a21c330923804aa6c3f720fafd6accb1a6a1fada684e84f"
+}

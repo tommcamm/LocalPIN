@@ -52,7 +52,8 @@ The original test locker's live greeter had matching real/effective target UID,
 UID, and SELinux type `unconfined_t`. These observations establish process and
 discovery behavior, not caller authenticity or a production broker decision.
 The test did not create two real desktops for the same UID or a second seat.
-Its export records `production_broker_authorization_tested=false` and
+Those separate cases subsequently passed in the [2026-10-17 topology lab](m1-vm-topology.md).
+The 2026-10-16 two-desktop export records `production_broker_authorization_tested=false` and
 `whole_vm_snapshot_restored=false`; final environment rollback is recorded
 separately from this per-run result.
 
@@ -137,11 +138,12 @@ contract. M5 still needs stable peer/process identity, PID reuse/exit, session
 replacement/disappearance during verification, generation fencing and actual
 broker responses under zero or ambiguous candidates.
 
-M1 still needs actual multiple-seat GUI behavior and two real KDE desktops for
-one UID, as well as fuller remote/TTY/foreign-ordinary-UID caller flows. The
-[multiple-seat gap assessment](m1-multiseat-gap.md) records the current hardware
-and stock login-manager limitations; the passed different-UID same-seat test does
-not close that gap. A production PIN route also still needs the supported account
+The subsequent [topology lab](m1-vm-topology.md) passed the actual multiple-seat
+GUI and same-UID two-desktop feasibility cases. The [historical gap assessment](m1-multiseat-gap.md)
+retains the original hardware/source findings and distinguishes the tested
+sequential greeter startup from unproved simultaneous cold-boot greeters.
+Fuller remote/TTY/foreign-ordinary-UID production caller flows remain later
+implementation work. A production PIN route also still needs the supported account
 eligibility implementation, broker/backend failure handling and reviewed
 integration. Neither candidate discovery nor passing metadata registrations is
 permission for everyday-host activation.

@@ -122,14 +122,16 @@ def label(path, reference=None):
     return actual
 
 
-def build(directory, contact_fixture=False):
+def build(directory, contact_fixture=False, routing_fixture=False):
     module = directory / "module.so"
     include = os.environ.get("LOCALPIN_PAM_INCLUDE", "/usr/include")
     definitions = ["-DLOCALPIN_M1_CONTACT_FIXTURE=1"] if contact_fixture else []
+    if routing_fixture:
+        definitions.append("-DLOCALPIN_M1_ROUTING_FIXTURE=1")
     run(["cc", *definitions, "-std=c11", "-O2", "-Wall", "-Wextra", "-Wpedantic", "-Werror",
          "-fstack-protector-strong", "-D_FORTIFY_SOURCE=3", "-fPIC", "-shared",
          "-isystem", include, "-Wl,-z,relro,-z,now", str(Path(__file__).with_name("module.c")),
-         "-o", str(module), "-l:libpam.so.0"])
+         "-o", str(module), "-l:libpam.so.0", *(["-l:libsystemd.so.0"] if routing_fixture else [])])
     return module.read_bytes()
 
 
@@ -153,7 +155,7 @@ def load():
     safe_file(STATE / "state.json")
     saved = json.loads((STATE / "state.json").read_text())
     require(saved.get("schema") == 1, "unknown M1 state schema")
-    require(saved.get("build_mode", "capture-only") in {"capture-only", "contact-fixture"}, "unknown M1 module build mode")
+    require(saved.get("build_mode", "capture-only") in {"capture-only", "contact-fixture", "routing-fixture"}, "unknown M1 module build mode")
     safe_file(STATE / "kde.original")
     safe_file(STATE / "module.so")
     original = (STATE / "kde.original").read_bytes()
@@ -164,7 +166,7 @@ def load():
     return saved, original, module
 
 
-def install(contact_fixture=False):
+def install(contact_fixture=False, routing_fixture=False):
     require(not STATE.exists() and not STATE.is_symlink(), "M1 state already exists; inspect/restore it first")
     require(not MODULE.exists() and not MODULE.is_symlink(), "experiment module path already exists")
     st = safe_file(PAM)
@@ -174,12 +176,12 @@ def install(contact_fixture=False):
     require(old_context == run(["matchpathcon", "-n", str(PAM)]).decode().strip(),
             "original PAM file has a nonstandard SELinux label")
     with tempfile.TemporaryDirectory(prefix="localpin-m1-kde-build-") as temporary:
-        module = build(Path(temporary), contact_fixture)
+        module = build(Path(temporary), contact_fixture, routing_fixture)
     STATE.mkdir(mode=0o700)
     sync_dir(STATE.parent)
     atomic(STATE / "kde.original", original, 0o600)
     atomic(STATE / "module.so", module, 0o600)
-    saved = {"schema": 1, "build_mode": "contact-fixture" if contact_fixture else "capture-only", "original_sha256": digest(original), "installed_sha256": digest(installed),
+    saved = {"schema": 1, "build_mode": "routing-fixture" if routing_fixture else "contact-fixture" if contact_fixture else "capture-only", "original_sha256": digest(original), "installed_sha256": digest(installed),
              "module_sha256": digest(module), "original_mode": stat.S_IMODE(st.st_mode), "original_context": old_context}
     atomic(STATE / "state.json", json.dumps(saved, indent=2).encode() + b"\n", 0o600)
     # The complete manifest and backup are durable before integration is changed.
@@ -250,16 +252,19 @@ def main():
     parser.add_argument("operation", choices=("compile-only", "check", "install", "status", "restore", "simulate-missing-module", "restore-module"))
     parser.add_argument("--snapshot-confirmed", action="store_true")
     parser.add_argument("--contact-fixture", action="store_true", help="optional fixed PING/PONG contact only; no candidate is transmitted")
+    parser.add_argument("--routing-fixture", action="store_true", help="observe actual sd-login membership and candidate count; never authorizes")
     args = parser.parse_args()
     os.umask(0o077)
     require(not args.contact_fixture or args.operation in {"compile-only", "install"}, "contact build flag applies only to compile/install")
+    require(not args.routing_fixture or args.operation in {"compile-only", "install"}, "routing build flag applies only to compile/install")
+    require(not (args.contact_fixture and args.routing_fixture), "choose one observation fixture")
     if args.operation == "compile-only":
         with tempfile.TemporaryDirectory(prefix="localpin-m1-kde-compile-") as temporary:
-            module = build(Path(temporary), args.contact_fixture)
+            module = build(Path(temporary), args.contact_fixture, args.routing_fixture)
         # Pure policy operations verify byte restoration and rejection of own block.
         original = b"# synthetic fixture\nauth substack password-auth\naccount include password-auth\n"
         require(plan(original).replace(BLOCK, b"", 1) == original, "policy insertion changed original bytes")
-        print(json.dumps({"compiled": True, "fallback_only": True, "build_mode": "contact-fixture" if args.contact_fixture else "capture-only", "module_bytes": len(module), "pure_policy_check": True}))
+        print(json.dumps({"compiled": True, "fallback_only": True, "build_mode": "routing-fixture" if args.routing_fixture else "contact-fixture" if args.contact_fixture else "capture-only", "module_bytes": len(module), "pure_policy_check": True}))
         return
     signal.signal(signal.SIGINT, interrupted)
     signal.signal(signal.SIGTERM, interrupted)
@@ -270,7 +275,7 @@ def main():
         result = {"guard_passed": True, "selinux": "Enforcing", "planned_sha256": digest(planned), "fallback_only": True}
     elif args.operation == "install":
         require(args.snapshot_confirmed, "a restorable clean VM snapshot must be confirmed")
-        result = install(args.contact_fixture)
+        result = install(args.contact_fixture, args.routing_fixture)
     elif args.operation == "restore":
         result = restore()
     elif args.operation in {"simulate-missing-module", "restore-module"}:

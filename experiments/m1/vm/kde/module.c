@@ -16,6 +16,9 @@
 #ifdef LOCALPIN_M1_CONTACT_FIXTURE
 #include "contact.h"
 #endif
+#ifdef LOCALPIN_M1_ROUTING_FIXTURE
+#include "routing.h"
+#endif
 
 PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **argv)
 {
@@ -35,6 +38,9 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
     if (getpwnam_r("localpintest", &entry, account_buffer, sizeof(account_buffer), &resolved) != 0 ||
         resolved == NULL || entry.pw_uid < 1000 || getuid() != entry.pw_uid || geteuid() != entry.pw_uid)
         return PAM_IGNORE;
+#ifdef LOCALPIN_M1_ROUTING_FIXTURE
+    localpin_m1_routing(pamh);
+#endif
 #ifdef LOCALPIN_M1_CONTACT_FIXTURE
     int contact_outcome = localpin_m1_contact();
     char observed_type[129];

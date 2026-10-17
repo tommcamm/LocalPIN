@@ -2,8 +2,9 @@
 
 These are disposable development experiments, outside the Rust workspace and
 release build. They are not installable PAM modules, enrollment tools or a
-working LocalPIN product. All authentication values in the harnesses are
-synthetic. Production implementation begins after the architecture gates.
+working LocalPIN product. Scripted harness values are synthetic; manual VM
+passwords stay inside the disposable accounts and are never exported.
+Production implementation follows the architecture gates.
 
 | Directory | Experiment | Run from repository root |
 | --- | --- | --- |
@@ -18,8 +19,9 @@ synthetic. Production implementation begins after the architecture gates.
 | `vm/eligibility/` | Password-free experimental lock/expiry/failure-counter preflight | Read [eligibility instructions](vm/eligibility/README.md) |
 | `vm/sessions/` | Real logind registration/exclusion/ambiguity metadata | Read [session instructions](vm/sessions/README.md) |
 | `vm/kde-contact/` | Bounded broker hold for actual locker contact/fallback | Read [contact instructions](vm/kde-contact/README.md) |
+| `vm/topology/` | Genuine same-UID native desktops, separate graphics/input seats and curated evidence checks | Read [topology instructions](vm/topology/README.md) |
 
-On Fedora the combined native prerequisites are `gcc python3 pam-devel swtpm
+On Fedora the combined native prerequisites are `gcc python3 pam-devel systemd-devel swtpm
 tpm2-tools libargon2`. PAM paths default to Fedora x86_64 and have documented
 overrides in `pam/run.sh`. The original isolated harnesses need no root access. Guarded real-account and
 SELinux fixtures under `vm/` require root inside the disposable VM.

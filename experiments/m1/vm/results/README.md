@@ -1,6 +1,6 @@
 # Reviewed disposable-VM evidence
 
-These JSON files contain sanitized observations from the 2026-10-16 Fedora 44
+These JSON files contain sanitized observations from the 2026-10-16 and 2026-10-17 Fedora 44
 KDE test VM. They are test records, not credentials or production configuration.
 No account hashes, passwords, remote-access keys, raw session IDs, VM addresses
 or guest UUID are included. Public fixture values remain in test source only.
@@ -25,13 +25,19 @@ or guest UUID are included. Public fixture values remain in test source only.
 - `cleanup`: final clean-snapshot restoration/restart and temporary-key removal.
 - `audit-coverage`: successful boundary/positive-worker reruns with unchanged
   audit-loss count. Earlier loss prevents claiming complete historical logs.
+- `2026-10-17-topology`: genuine same-UID ambiguous locker fallback and two
+  independent graphics/input seats, including manual password unlocks.
+- `2026-10-17-topology-cleanup`: exact PAM restoration, explicit temporary-key
+  removal and complete independent-clone disposal; the original VM stayed off.
 
 Per-run `whole_vm_snapshot_restored=false` records the state at report emission.
 It must not be rewritten later as though the test itself restored the whole VM.
 Final snapshot restoration is recorded in [cleanup](2026-10-16-cleanup.json). Likewise, false production
 completion and compatibility flags are intentional limits on the evidence.
+The topology record's false `m1_complete` claim means its consistency validator
+does not assess milestones; the separate feasibility report records that decision.
 
 See [the evidence report](../../../../docs/development/m1-feasibility.md) for
-interpretation, source/package inputs and outstanding gates. Raw logs and
+interpretation, source/package inputs and later production gates. Raw logs and
 operator access material stay in the ignored local cache and in the discarded
 VM snapshot lineage.

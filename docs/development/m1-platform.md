@@ -166,8 +166,12 @@ None installs a production PIN verifier. See each report for its precise scope.
 ## Coverage and remaining VM gates
 
 The linked reports above record the collected subset of this coverage matrix.
-Two genuine different-UID desktops on seat0 and the bounded experiments passed;
-same-UID two-real-desktop and actual second-seat coverage remain open.
+The subsequent [topology lab](m1-vm-topology.md) closes the M1 feasibility GUI
+cases: genuine same-UID desktops with an actual ambiguous locker/password
+fallback, and two independently routed native seats with both stock lockers
+unlocked after one password entry each. Final clone recovery is complete.
+The matrix also includes later production caller, policy, lifecycle and race
+requirements; those are not marked implemented by feasibility observations.
 
 Use a dedicated local test account with no reused personal password and a
 snapshot that can be discarded. Before any experiment, require `Enforcing` and

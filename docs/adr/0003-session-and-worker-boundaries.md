@@ -16,8 +16,9 @@ eligible discovery candidate. The guest also passed bounded root-declared
 logind metadata registrations, including an ambiguous two-candidate inventory;
 a separate manual login established two real different-UID KDE desktops on seat0.
 The inactive locked test desktop remained its UID's single candidate while the
-active foreign desktop was excluded. Two real desktops for one UID and actual
-multiple-seat GUI behavior remain untested. A claimed PAM service, PID, desktop
+active foreign desktop was excluded. A subsequent genuine topology lab passed
+same-UID ambiguity/password fallback and independently routed two-seat GUI
+checks, as detailed below. A claimed PAM service, PID, desktop
 or session from the client is not authoritative. Same-UID malware can impersonate
 a locker request, as already stated in the specification.
 
@@ -129,11 +130,20 @@ success does not establish password-free PIN eligibility, enrollment grant
 binding or production service confinement. These experiments do not authorize a
 production PIN path.
 
-M1 must still exercise multiple-seat GUI behavior and two real KDE desktops for
-one UID. The [gap assessment](../development/m1-multiseat-gap.md) records the
-current hardware and stock login-manager limitations. Root-declared metadata,
-a private PTY and the passed different-UID same-seat desktops do not replace
-those cases or complete remote/TTY/foreign-ordinary-UID caller flows.
+The subsequent [topology lab](../development/m1-vm-topology.md) ran two genuine
+native KDE desktops for one UID: a normal shared-user-manager desktop and a
+private-PAM classic desktop with its own direct session. The actual first
+locker's fallback-only diagnostic observed two eligible candidates and reported
+unavailable; one ordinary password entry still unlocked it while both desktops
+survived. A separate two-GPU, independently routed keyboard/tablet configuration
+produced two usable stock-login-manager desktops on different seats. Both actual
+stock lockers unlocked after one password entry each. Final guest cleanup and
+independent clone disposal completed. The [historical gap assessment](../development/m1-multiseat-gap.md)
+retains the packaged greeter architecture findings: sequential seat introduction
+passed, while simultaneous cold-boot greeters remain unproved. These actual GUI
+cases close M1's feasibility coverage; earlier metadata registrations never
+stood in for them. They do not complete remote/TTY/foreign-ordinary-UID caller
+flows or establish caller authenticity.
 Production caller routing, supported account restrictions and the complete
 broker-contact/password-worker contract remain implementation gates; each
 experiment report states its narrower observations. Whole-VM snapshot

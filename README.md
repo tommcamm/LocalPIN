@@ -6,11 +6,12 @@ It is intended to become useful, reviewable open-source software.
 
 Repository: [tommcamm/LocalPIN](https://github.com/tommcamm/LocalPIN).
 
-**Development status: M1 feasibility experiments.** This repository contains the
+**Development status: M1 feasibility complete; M2 implementation next.** This repository contains the
 specification, implementation roadmap, initial Rust workspace, and isolated
 PAM/TPM/platform experiments and guarded Fedora KDE VM tests under enforcing
 SELinux. Actual password fallback, account restrictions and a confined worker
-have evidence; M1's complete session/seat gate remains open.
+have evidence, including real same-UID desktops, ambiguous locker fallback and
+independently routed KDE seats. See the [M1 report](docs/development/m1-feasibility.md).
 It does not yet provide a production PIN verifier, broker, PAM module, CLI, or
 installable package. There is no supported production release.
 

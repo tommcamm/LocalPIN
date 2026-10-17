@@ -136,3 +136,27 @@ credential result. The root-peer baseline is namespace UID 0; the bad-peer case
 is a deliberate `getsockopt` test injection, not a second real host UID. Every
 received request is checked to contain only the fixed `PING` marker. Namespace
 unavailability exits 77.
+
+## Optional live session-routing observation
+
+The separate `--routing-fixture` build links libsystemd and observes the actual
+greeter's own sd-login membership and current eligible own-UID session count.
+It requires systemd development headers and cannot be combined with the contact
+build. Use the same guarded `compile-only` or snapshot-confirmed `install`
+commands with this flag; restoration retains the original-byte checks above.
+
+The fixed journal event reports only numeric direct/owner API results, owner
+agreement, enumeration completeness, candidate count and a diagnostic decision:
+0 unavailable, 1 directly mapped eligible session, or 2 unique eligible session
+for the verified user-manager owner. An ineligible direct mapping refuses.
+Absent direct mapping requires `-ENODATA`, owner agreement and exactly one live
+candidate; zero/multiple candidates refuse. A property-query error makes the
+enumeration incomplete, logs count -1 and suppresses the unique-session result.
+No session IDs, UIDs, PIDs or candidate bytes enter this event.
+
+These observations exercise the discovery proposal in the actual locker. They
+are not broker authentication, a race-proof snapshot or a production routing
+contract. Every decision continues candidate capture and returns `PAM_IGNORE`.
+Correlate the event's kernel journal identity with the independently observed
+greeter and an actual one-entry normal-password unlock. The
+[topology checklist](../topology/README.md) defines the concurrent-desktop proof.

@@ -1,7 +1,7 @@
 # LocalPIN implementation plan
 
-- Date: 2026-10-16
-- Status: Accepted roadmap; M0 implemented locally; M1 isolated and guarded enforcing-VM experiments delivered, same-UID desktop and second-seat exit gates pending. Hosted M1 CI execution remains unverified.
+- Date: 2026-10-17
+- Status: Accepted roadmap; M0 implemented locally; M1 feasibility complete after the 2026-10-17 enforcing-VM topology tests and recovery. M2 implementation is next. Hosted M1 CI execution remains unverified.
 - Source of requirements: [product-specification.md](product-specification.md), version 1.1. M1 clarifies six-digit password/PIN failure accounting in section 11 and ADR 0001.
 
 This plan turns the specification into independently reviewable changes and evidence gates. The specification remains authoritative. An unresolved design question below must be resolved in an architecture decision record (ADR), with a specification amendment if necessary, rather than silently changing the requirements.
@@ -85,18 +85,21 @@ Exit gate: checked-in experiment results and ADRs resolve the early platform/des
 The [M1 evidence report](development/m1-feasibility.md) records the isolated PAM,
 TPM, platform and native-worker experiments. It now includes actual stock KDE fallback, real-account restrictions/failure
 counters, user-manager discovery, root-declared logind registrations and separate
-enforcing broker/worker boundaries. The complete actual session/seat and
-production integration matrix remains explicitly open. Follow the
+enforcing broker/worker boundaries. The [genuine topology tests](development/m1-vm-topology.md)
+also passed same-UID ambiguity/password fallback and independent second-seat
+desktop/locker checks, followed by complete clone disposal. This closes M1's
+feasibility gate; production integration remains assigned to later milestones. Follow the
 [VM setup instructions](development/m1-vm-setup.md) to reproduce the tests.
 
 ### M2 — Implement policy models and stable contracts
 
 Implement `localpin-core` and `localpin-protocol`, with narrow interfaces for storage, clocks, randomness, session eligibility, and credential verification.
 
-Sequencing review, 2026-10-17: M2's pure policy/model and bounded-parser work may
-begin while M1's same-UID desktop and second-seat tests remain open. Use simulated
-eligibility, storage and backend inputs; keep platform-facing contracts provisional.
-This overlap does not close M1 or authorize production authentication/activation.
+Sequencing review, 2026-10-17: M1's same-UID desktop and second-seat feasibility
+tests have now passed, with recovery completed. Proceed with M2's pure
+policy/model and bounded-parser work using simulated eligibility, storage and
+backend inputs. Platform-facing contracts remain provisional until M2's own
+decisions and tests settle them; M1 does not authorize production activation.
 Resolve fifth-attempt behavior, conservative reboot throttling, revocation fences
 and the UID-reuse lifecycle during M2. Do not stabilize a persisted account-identity
 schema around UID/name/home equality. M3/M4 work may follow once its relevant M2
@@ -254,15 +257,13 @@ Each milestone records three things: delivered changes, evidence actually collec
 
 Use deterministic unit/property tests for policy; fault-injected filesystem tests for persistence; socket tests for IPC; simulator tests for TPM; permit/deny-baselined PAM harnesses for the adapter; enforcing Fedora VMs for packaging/desktop flows; and physical hardware for the final usability/performance matrix. Add regression tests when a discovered failure threatens authentication, persistence or recovery.
 
-M1's isolated harnesses, guarded enforcing-VM tests and ADRs are delivered.
-The evidence report distinguishes actual KDE fallback and account/helper checks
-from root-declared session metadata and synthetic controls. The remaining actual
-same-UID two-real-desktop/second-seat and complete integration matrix stays
-visible. The everyday authentication setup
-remains separate throughout development. Do not mark M1 complete or present M2
-contracts as settled while those platform dependencies remain unproved. The
-bounded M2 foundation work described above can proceed in parallel without
-waiving those gates.
+M1's isolated harnesses, guarded enforcing-VM tests and ADRs are delivered, and
+its feasibility exit gate is complete. The evidence report distinguishes actual
+same-UID/second-seat KDE fallback and account/helper checks from root-declared
+metadata and synthetic controls. Production caller, lifecycle, persistence and
+integration requirements retain their later milestone gates. The everyday
+authentication setup remains separate throughout development. M2 contracts are
+not settled merely by the feasibility result.
 
 No calendar estimate is committed before the feasibility work. Subsequent estimates should use measured test infrastructure effort and availability of independent review/hardware, with review and recovery work included in the schedule.
 

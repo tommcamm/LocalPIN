@@ -19,8 +19,10 @@ Changes will be recorded here before versioned releases. There are no releases y
   instructions and an isolated-experiment CI job.
 - Guarded real-account/password-free eligibility, actual KDE fallback/contact,
   logind registration and
-  enforcing SELinux broker/worker experiments with sanitized VM reports. The
-  complete M1 session/seat gate remains open.
+  enforcing SELinux broker/worker experiments with sanitized VM reports.
+- Genuine same-UID KDE ambiguity/fallback and independently routed second-seat
+  desktop/locker tests, guarded clone tooling and final recovery evidence,
+  completing M1 feasibility.
 
 ### Changed
 

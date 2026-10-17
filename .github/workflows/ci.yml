@@ -102,7 +102,7 @@ jobs:
       image: fedora:44
     steps:
       - name: Install experiment tools in the disposable container
-        run: dnf install -y gcc git python3 pam-devel swtpm tpm2-tools libargon2
+        run: dnf install -y gcc git python3 pam-devel systemd-devel swtpm tpm2-tools libargon2
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -116,9 +116,12 @@ jobs:
           python3 -m unittest discover -s experiments/m1/vm/kde-contact -p 'test_*.py' -v
           python3 -m unittest discover -s experiments/m1/vm/sessions -p 'test_*.py' -v
           python3 -m unittest discover -s experiments/m1/vm/eligibility -p 'test_*.py' -v
+          python3 -m unittest discover -s experiments/m1/vm/topology -p 'test_*.py' -v
           python3 experiments/m1/vm/pam/run.py --compile-only
           python3 experiments/m1/vm/kde/manage.py compile-only
           python3 experiments/m1/vm/kde/manage.py compile-only --contact-fixture
+          python3 experiments/m1/vm/kde/manage.py compile-only --routing-fixture
+          python3 experiments/m1/vm/topology/launch.py compile-only
           python3 experiments/m1/vm/sessions/run.py --compile-only
           python3 experiments/m1/vm/eligibility/run.py --compile-only
           gcc -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror experiments/m1/vm/eligibility/test_format.c -lpam -o /tmp/localpin-m1-format-only

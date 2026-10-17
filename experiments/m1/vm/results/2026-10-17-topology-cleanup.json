@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "fixture": "M1 genuine KDE topology final recovery",
+  "record_date": "2026-10-17",
+  "native_fixture_units_scopes_and_tagged_processes_gone": true,
+  "original_kde_pam_bytes_mode_and_label_restored": true,
+  "original_kde_pam_sha256": "7d91b3ad73a998e8b10f9edccd74ba04179a778c4a5e61d9176872f43c7bbac3",
+  "fallback_only_module_removed": true,
+  "authselect_configuration_valid": true,
+  "account_password_write_operations_used": false,
+  "selinux_enforcing_after_tests": true,
+  "audit_lost_before": 0,
+  "audit_lost_after": 0,
+  "avc_search_no_matches": true,
+  "temporary_guest_key_explicitly_removed": true,
+  "temporary_local_key_pair_removed": true,
+  "independent_clone_shut_down_undefined_and_disk_removed": true,
+  "owned_viewers_and_vnc_listeners_gone": true,
+  "source_vm_left_off_and_xml_unchanged": true,
+  "host_authentication_modified": false,
+  "host_tpm_modified": false,
+  "production_activation_authorized": false
+}

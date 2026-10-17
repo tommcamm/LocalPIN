@@ -1,4 +1,14 @@
-# M1 multiple-seat GUI evidence gap
+# M1 multiple-seat GUI evidence gap: historical assessment
+
+**2026-10-17 closure:** the [subsequent topology lab](m1-vm-topology.md) passed the
+actual second-seat case in an independent disposable clone with two emulated
+GPUs and independently routed input. Sequential stock-greeter introduction
+produced two usable native desktops, and both stock lockers unlocked after one
+ordinary password entry each. A separate private-PAM native launcher established
+the same-UID two-desktop ambiguity/fallback case. Final clone cleanup and
+disposal are complete. Simultaneous cold-boot greeters remain unproved. The
+assessment below records what was known on 2026-10-16; its source findings and
+unexecuted hypotheses are preserved as historical evidence.
 
 Date: 2026-10-16. Status: read-only feasibility assessment; the actual second-seat
 KDE GUI gate remains open. This assessment inspected the guest's installed login
