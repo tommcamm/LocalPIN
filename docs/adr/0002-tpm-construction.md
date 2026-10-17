@@ -1,7 +1,7 @@
 # ADR 0002: transient parent and PIN-authenticated sealed data
 
 - Date: 2026-10-16.
-- Status: Proposed for the M4 backend; simulator feasibility demonstrated. Independent TPM review is required before release.
+- Status: Implemented as the M4 candidate; native simulator evidence is recorded in the [M4 report](../development/m4-credential-backends.md). Independent TPM review is required before release.
 - Requirements: specification sections 8, 9, 11 and 12; M1/M4/M5/M9.
 - Evidence: [TPM experiment report](../development/m1-tpm.md), [executable fixture](../../experiments/m1/tpm/run.py).
 
@@ -35,7 +35,7 @@ The fixture demonstrates identical primary public/Name after clean simulator res
 
 This baseline has no PCR/measured-boot policy. A changed storage seed, parent mismatch, TPM replacement/reset or unavailable hierarchy makes the enrolled PIN unavailable; recovery is the existing account password followed by fresh enrollment. Do not select software mode automatically. Removing credential files does not promise revocation of a copied blob against a privileged attacker on the original TPM.
 
-M4 must implement and test this construction through `tss-esapi` and a real resource-manager connection. M5 must test the broker's complete deadlines, worker bounds and generation fences. M9 must obtain independent TPM review and hardware/firmware evidence. Clean simulator restart is not power-loss or suspend certification. This ADR selects a candidate for implementation; it does not close those gates or authorize modifying the everyday TPM.
+M4 implements this construction through `tss-esapi`; its [payload and context contract](0009-bounded-credential-payloads.md) specifies the native ownership boundary. A physical resource-manager connection remains unverified. M5 must test the broker's complete deadlines, worker bounds and generation fences. M9 must obtain independent TPM review and hardware/firmware evidence. Clean simulator restart is not power-loss or suspend certification. This ADR selects a candidate; it does not close those gates or authorize modifying the everyday TPM.
 
 ## Alternatives
 

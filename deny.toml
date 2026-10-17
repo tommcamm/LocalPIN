@@ -17,9 +17,22 @@ confidence-threshold = 0.95
 [licenses.private]
 ignore = false
 
+# Reviewed M4 transitive/direct license terms; keep these crate/version scoped.
+[[licenses.exceptions]]
+name = "target-lexicon"
+version = "=0.12.16"
+allow = ["Apache-2.0 WITH LLVM-exception"]
+
+[[licenses.exceptions]]
+name = "unicode-ident"
+version = "=1.0.27"
+allow = ["Unicode-3.0"]
+
 [bans]
 multiple-versions = "deny"
 wildcards = "deny"
+# TPM upstream derive macros still require syn 2; others require syn 3.
+skip = [{ name = "syn", version = "=2.0.119" }]
 
 [sources]
 unknown-registry = "deny"

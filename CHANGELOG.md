@@ -6,6 +6,14 @@ Changes will be recorded here before versioned releases. There are no releases y
 
 ### Added
 
+- M4 `localpin-credentials` with bounded canonical Argon2id-v19 PHC records,
+  OS entropy, charged and zeroizing KDF memory, fixed vectors and a local benchmark.
+- `localpin-tpm` with the pinned `tss-esapi` construction, validated public
+  identities, protected sessions, shared DA-budget admission and disposable
+  simulator tests; backend outcomes retain M2's durable completion boundary.
+- Real software/backend storage tests for staged enrollment, reservation and
+  success persistence failures, rotation and revocation; dependency review and
+  [M4 evidence report](docs/development/m4-credential-backends.md).
 - M3 `localpin-storage` crate with protected descriptor-relative Linux files,
   stable broker/per-UID locks, durable M2 throttle updates, staged credential
   generations, atomic revocation pointers and bounded generation recovery.
@@ -42,6 +50,10 @@ Changes will be recorded here before versioned releases. There are no releases y
 
 ### Changed
 
+- Separate M4 review replaced cached dynamic TPM capability values with fresh
+  bounded reads and added counter/policy/lockout/recovery simulator regressions;
+  the native test runner also bounds its post-SIGKILL wait. See the
+  [review report](docs/development/m4-review.md).
 - Specification 1.2 settles throttle boundaries and explicitly restricts
   production account support pending an enforcing lifecycle authority.
 - Separate M2 review hardened backend jobs against reservation/permit reuse and
@@ -52,5 +64,5 @@ Changes will be recorded here before versioned releases. There are no releases y
 - Specification 1.1 clarifies that six-digit account passwords can consume a PIN
   attempt before fallback and that forwarded failures retain password accounting.
 
-Production authentication, account lifecycle enforcement, credential backends,
-enrollment, PAM/TPM integration, packaging, and activation remain unimplemented.
+Production authentication, account lifecycle enforcement, supervised backend
+workers, enrollment CLI, PAM integration, packaging and activation remain unimplemented.

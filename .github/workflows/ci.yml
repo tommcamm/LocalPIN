@@ -30,6 +30,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Install native TPM build inputs
+        run: sudo apt-get update && sudo apt-get install -y libtss2-dev pkg-config
       - name: Install the pinned Rust toolchain
         run: |
           LOCALPIN_TOOLCHAIN=$(python3 -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
@@ -71,7 +73,7 @@ jobs:
       image: fedora:44
     steps:
       - name: Install build tools in the disposable container
-        run: dnf install -y ca-certificates gcc git python3 rustup
+        run: dnf install -y ca-certificates gcc git python3 rustup pkgconf-pkg-config tpm2-tss-devel swtpm tpm2-tools
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -86,13 +88,17 @@ jobs:
       - name: Record Fedora build inputs
         run: |
           cat /etc/os-release
-          rpm -q gcc glibc git rustup
+          rpm -q gcc glibc git rustup tpm2-tss-devel swtpm libtpms tpm2-tools
           rustc --version --verbose
           cargo --version --verbose
       - name: Build with the committed lockfile
         run: cargo build --workspace --all-features --release --locked --target x86_64-unknown-linux-gnu
       - name: Run tests on Fedora
         run: cargo test --workspace --all-features --locked --target x86_64-unknown-linux-gnu
+      - name: Verify M4 against disposable TPM simulators
+        run: CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu python3 crates/localpin-tpm/tests/run_simulator.py
+      - name: Verify durable storage with the native TPM backend
+        run: cargo test -p localpin-storage --features tpm-simulator-tests --locked --target x86_64-unknown-linux-gnu -- --ignored
 
   feasibility:
     name: Isolated M1 experiments (Fedora 44)

@@ -213,3 +213,83 @@ also receive updates. Exact toolchains and lockfiles constrain the Rust inputs;
 M0 does not claim hermetic or bit-for-bit reproducible builds. Release engineering
 will need stronger image/package provenance and an explicit reproducibility
 check before making either claim.
+
+## M4 credential backend dependencies
+
+The exact direct versions are `argon2 0.6.0`, `base64ct 1.8.3`, `ctutils 0.4.3`,
+`getrandom 0.4.3`, `sha2 0.11.1`, `tss-esapi 7.7.0` and build-only
+`pkg-config 0.3.34`. They use the existing `zeroize 1.9.1`. The complete
+[locked inventory](m4-dependency-inventory.md) records registry versions,
+manifest-declared Rust minimums and license expressions, including target-only
+entries. All declared minimums fit Rust 1.99.1; undeclared minimums are covered
+only by actual builds. Checksums are committed in `Cargo.lock`.
+
+RustCrypto's [Argon2 0.6.0](https://docs.rs/argon2/0.6.0/argon2/) implements
+Argon2id v19 and provides the explicit mutable work-memory API. Defaults are
+disabled; only `zeroize` is enabled, allowing LocalPIN to clear its owned
+`Vec<Block>` and the crate's internal intermediate buffers. No generic PHC
+verifier or library allocation/default work policy is used. The same maintained
+RustCrypto dependency family supplies [Base64](https://docs.rs/base64ct/1.8.3/base64ct/),
+[constant-time equality](https://docs.rs/ctutils/0.4.3/ctutils/) and
+[SHA-256](https://docs.rs/sha2/0.11.1/sha2/). SHA-256 processes only public TPM
+Names. `ctutils` was selected from the existing Argon2 dependency graph rather
+than adding another comparison implementation. LocalPIN implements format
+validation, not a new KDF or comparison algorithm.
+
+[`getrandom::fill`](https://docs.rs/getrandom/0.4.3/getrandom/fn.fill.html)
+provides OS cryptographic entropy, with errors propagated and partial secret
+buffers zeroized. No predictable entropy fallback is permitted. Randomness
+injection is a trusted testing boundary, not an IPC option. On the tested Linux
+build the dependency uses the native OS interface through libc. Target-only
+`r-efi` remains in the lockfile but is not part of Linux runtime code.
+
+[`tss-esapi 7.7.0`](https://docs.rs/tss-esapi/7.7.0/tss_esapi/) is the maintained
+Parsec Rust wrapper, Apache-2.0, with declared Rust minimum 1.85. Its default
+features are disabled. The transitive `tss-esapi-sys 0.6.0` uses published
+x86_64 Linux bindings; `generate-bindings` and bindgen are not enabled. The
+wrapper brings ASN.1/serde, enum/bitfield/procedural-macro and regex support even
+though this backend uses only its low-level TPM operations. The inventory
+retains them rather than describing the native boundary as dependency-free.
+The dependency's `Auth`, `SensitiveData` and `Private` buffer wrappers own
+zeroizing heap storage. FFI conversions and TPM2-TSS have additional native
+allocations; Rust wrappers do not prove erasure of every native copy. This
+remains in the independent native/security review scope. `Context::drop` logs
+cleanup failures, so LocalPIN explicitly flushes its own handles and checks
+success before accepting a native match.
+
+LocalPIN's build script requires matching versions of `tss2-sys`, `tss2-esys`,
+`tss2-tctildr` and `tss2-mu` in the pinned ABI range **>=4.0.0,<5.0.0**. Upstream's
+sys crate accepts >=2.4.6; LocalPIN deliberately supports a narrower family.
+The local test used Fedora `tpm2-tss-4.1.3-9.fc44.x86_64`. Its matching development
+RPM was downloaded and extracted under ignored `.local/m4/native/`, without
+installing host packages. SHA-256:
+`eeed3d8b4a6553645acbaf03e42b50299e9e75dc89590e964d2d6dff8c49b436`.
+The local pkg-config metadata points at those extracted development linker
+names and the already installed matching runtime. CI installs the distro
+development package normally in disposable runners. This is a tested build
+input, not a claim that every 4.x firmware/native combination is certified.
+
+Build scripts in this graph configure target/compiler capabilities, generate
+Rust metadata or discover native libraries through pkg-config. In particular,
+`tss-esapi-sys` does not download or compile a bundled TPM stack. Normal build
+scripts and procedural macros execute trusted dependency code during the
+build; all remain in the audit scope. Project code still forbids unsafe code;
+the TPM wrapper/sys/native stack, OS entropy/libc and selected cryptography
+own their respective unsafe/FFI boundaries. RustCrypto CPU feature detection
+selects supported optimizations, not a different PIN policy.
+
+`deny.toml` preserves the default MIT/Apache license allowlist and adds only two
+exact-version exceptions after reviewing their bundled terms:
+`target-lexicon 0.12.16` uses Apache-2.0 WITH LLVM-exception, and
+`unicode-ident 1.0.27` additionally requires Unicode-3.0. Both permit
+redistribution with applicable notices; packaging must retain those notices.
+One exact duplicate exception permits `syn 2.0.119`, required by upstream derive
+macros alongside `syn 3.0.9`. No duplicate cryptography family exception was
+needed after selecting SHA-256 0.11.1. There are no advisory or source exceptions.
+
+The M4 dependency policy check passed advisories, bans, licenses and sources
+with `cargo-deny 0.20.2`, using refreshed RustSec commit
+`64f92cdc64401fab47baa10e2e11fe382aa57155` on 2026-10-17. The audit used the
+workspace-local writable Cargo cache and approved network access for refresh.
+CI must refresh and check again; this result is not a specialist cryptographic
+or native-library audit.

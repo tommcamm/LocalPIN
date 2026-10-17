@@ -1,0 +1,24 @@
+[package]
+name = "localpin-tpm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+# Deliberate opt-in; production construction only supports /dev/tpmrm0.
+simulator = []
+
+[dependencies]
+localpin-core.workspace = true
+localpin-credentials = { path = "../localpin-credentials", version = "=0.1.0-alpha.1" }
+zeroize.workspace = true
+sha2 = { version = "=0.11.1", default-features = false }
+tss-esapi = { version = "=7.7.0", default-features = false }
+
+[build-dependencies]
+pkg-config = "=0.3.34"
+
+[lints]
+workspace = true

@@ -1,7 +1,7 @@
 # LocalPIN implementation plan
 
 - Date: 2026-10-17
-- Status: Accepted roadmap; M0 implemented locally; M1 feasibility complete; M2 pure policy/protocol contracts and M3 protected Linux storage implemented locally. Hosted CI execution remains unverified. Permanent account records remain gated on production lifecycle support.
+- Status: Accepted roadmap; M0 implemented locally; M1 feasibility complete; M2 pure policy/protocol contracts, M3 protected Linux storage and M4 credential backend primitives implemented locally. M4 physical resource-manager evidence and later worker/hardware review gates remain open. Hosted CI execution remains unverified. Permanent account records remain gated on production lifecycle support.
 - Source of requirements: [product-specification.md](product-specification.md), version 1.2. M1 clarifies password/PIN accounting; M2 settles time boundaries and narrows lifecycle support explicitly.
 
 This plan turns the specification into independently reviewable changes and evidence gates. The specification remains authoritative. An unresolved design question below must be resolved in an architecture decision record (ADR), with a specification amendment if necessary, rather than silently changing the requirements.
@@ -154,6 +154,13 @@ TPM backend:
 Pin the enrolled backend. `auto` prefers a demonstrated usable TPM and requires explicit software acceptance when unavailable. TPM errors never create or select a software credential automatically.
 
 Exit gate: software test vectors and bounded-parameter tests pass; simulator tests demonstrate the intended authorization path, hardware binding, DA reserve and failure handling; record inspection finds no shadow verifier; both backends obey identical durable reservation rules. The TPM design gets specialist review before being treated as fixed for release.
+
+The [M4 report](development/m4-credential-backends.md) records implemented software
+and native TPM worker primitives, backend/storage tests, simulator evidence,
+dependency review and measured KDF latency. [ADR 0009](adr/0009-bounded-credential-payloads.md)
+defines the new bounded backend payloads without changing the M2 envelope.
+Physical resource-manager use remains unverified; M5 still owns supervised
+native deadlines and process capacity, and M9 owns independent TPM/hardware review.
 
 ### M5 — Implement the bounded broker and session checks
 

@@ -1,7 +1,10 @@
 //! Shared hard resource limits. Permits remain charged until actual work ends.
 
 use crate::types::Uid;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
+};
 
 /// Maximum complete protocol frame, including the length prefix.
 pub const MAX_FRAME_BYTES: usize = 4096;
@@ -115,6 +118,7 @@ impl ResourceBudget {
             uid,
             parameters,
             kind,
+            deriving: AtomicBool::new(false),
         })
     }
 }
@@ -138,9 +142,21 @@ pub struct WorkPermit {
     uid: Uid,
     parameters: KdfParameters,
     kind: WorkKind,
+    deriving: AtomicBool,
 }
 
 impl WorkPermit {
+    /// Exclusively borrow this lease's KDF capacity for one derivation.
+    ///
+    /// A shared permit cannot charge several simultaneous allocations to one
+    /// reservation. Retain this guard until work memory has been erased.
+    pub fn try_derivation(&self) -> Result<DerivationPermit<'_>, CapacityError> {
+        self.deriving
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .map_err(|_| CapacityError)?;
+        Ok(DerivationPermit(&self.deriving))
+    }
+
     /// Work class, for sanitized operational accounting.
     pub const fn kind(&self) -> WorkKind {
         self.kind
@@ -159,6 +175,16 @@ impl WorkPermit {
     /// Check the exact job binding before allocating or invoking any KDF.
     pub fn covers(&self, uid: Uid, parameters: KdfParameters, kind: WorkKind) -> bool {
         self.uid == uid && self.parameters == parameters && self.kind == kind
+    }
+}
+
+/// Exclusive borrowed use of one charged KDF allocation. Cannot outlive its
+/// owning work lease and cannot be cloned to admit simultaneous derivations.
+pub struct DerivationPermit<'a>(&'a AtomicBool);
+
+impl Drop for DerivationPermit<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
     }
 }
 
@@ -277,5 +303,19 @@ mod tests {
             WorkKind::Verification
         ));
         assert!(!work.covers(uid(1), KdfParameters::ENROLLMENT, WorkKind::Enrollment));
+    }
+
+    #[test]
+    fn shared_lease_cannot_admit_concurrent_derivations() {
+        let budget = ResourceBudget::default();
+        let work = budget
+            .try_work(uid(1), KdfParameters::ENROLLMENT, WorkKind::Verification)
+            .unwrap();
+        let deriving = work.try_derivation().unwrap();
+        std::thread::scope(|scope| {
+            scope.spawn(|| assert!(work.try_derivation().is_err()));
+        });
+        drop(deriving);
+        assert!(work.try_derivation().is_ok());
     }
 }

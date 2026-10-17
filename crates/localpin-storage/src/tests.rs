@@ -1,6 +1,10 @@
-//! Synthetic filesystem/process evidence; no real credential or account is used.
+//! Disposable filesystem/process evidence with synthetic account authorities.
+//! The backend module exercises real KDFs with public, test-only PIN fixtures.
 
+mod backends;
 mod finalization;
+#[cfg(feature = "tpm-simulator-tests")]
+mod tpm_backend;
 
 use super::*;
 use localpin_core::{

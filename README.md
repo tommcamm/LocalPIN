@@ -6,14 +6,17 @@ It is intended to become useful, reviewable open-source software.
 
 Repository: [tommcamm/LocalPIN](https://github.com/tommcamm/LocalPIN).
 
-**Development status: M3 protected storage and M2 policy/protocol models implemented locally.**
+**Development status: M4 credential backend primitives, M3 protected storage and M2 policy/protocol models implemented locally.**
 This repository contains the specification, implementation roadmap, pure Rust
 state machines, bounded IPC parsers, protected Linux filesystem storage,
 isolated PAM/TPM/platform experiments and guarded Fedora KDE VM tests under
 enforcing SELinux. Actual password fallback, account restrictions and a confined
 worker have evidence, including real same-UID desktops, ambiguous locker fallback and
 independently routed KDE seats. See the [M1 report](docs/development/m1-feasibility.md).
-It does not yet provide a production PIN verifier, broker, PAM module, CLI, or
+It includes bounded RustCrypto software credentials and a native TPM backend
+for use inside supervised workers. See the [M4 report](docs/development/m4-credential-backends.md)
+for simulator evidence and remaining hardware and worker gates.
+It does not yet provide a production broker, PAM module, CLI, or
 installable package. There is no supported production release.
 
 ## Intended scope
@@ -39,8 +42,11 @@ revocation, resource budgets and durable throttling; `localpin-protocol` models
 bounded messages and connection ordering. `localpin-storage` implements
 descriptor-relative protected files, stable process locks, durable throttle
 updates and atomic credential generations. Its Linux `openat2` dependency is
-required at runtime; unsupported kernels fail closed. The direct external Rust
-dependencies are `zeroize` and `rustix`, reviewed in the
+required at runtime; unsupported kernels fail closed. `localpin-credentials`
+implements strict Argon2id PHC records and shared PIN derivation;
+`localpin-tpm` implements the pinned TPM construction using `tss-esapi`.
+Native builds require `pkg-config` and TPM2-TSS 4.x development libraries
+(`tpm2-tss-devel` on Fedora; `libtss2-dev` on Ubuntu). Dependencies are reviewed in the
 [build-input inventory](docs/development/dependencies.md).
 
 ```sh
@@ -50,13 +56,22 @@ cargo test --workspace --locked
 cargo build --workspace --locked
 ```
 
-These workspace checks cover the policy, protocol and storage crates.
+These workspace checks cover policy, protocol, storage and backend crates.
 Policy/protocol tests use simulated authorities and workers; storage tests use
 synthetic account identities and credentials with actual filesystem and process
 I/O, including persistence faults and contention. See the
 [M3 storage report](docs/development/m3-protected-storage.md)
 and [storage/recovery decision](docs/adr/0008-protected-storage-and-recovery.md)
-for evidence and limits. These checks do not validate production PAM, TPM,
+for evidence and limits. Native simulator tests are opt-in and start only
+disposable TPMs:
+
+```sh
+python3 crates/localpin-tpm/tests/run_simulator.py
+cargo run -p localpin-credentials --example benchmark --release --locked
+```
+
+The simulator test requires `swtpm` and `tpm2-tools`. The benchmark uses synthetic
+input and reports local KDF latency. These checks do not validate production PAM, physical TPMs,
 password fallback, or desktop integration. There are no installation or
 activation commands at this stage.
 
@@ -64,7 +79,7 @@ See the [M2 report](docs/development/m2-policy-contracts.md) for exact time and
 failure boundaries. Production account support requires a tested lifecycle
 authority that detects UID reuse; no production authority exists yet. The
 current models and storage adapter deliberately refuse unsupported lifecycle
-evidence. Production credential backends and account lifecycle enforcement
+evidence. Production worker integration and account lifecycle enforcement
 remain required before permanent account enrollment.
 
 ## Development

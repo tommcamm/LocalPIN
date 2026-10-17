@@ -264,6 +264,12 @@ impl<'a> VerificationJob<'a> {
         &self.pin
     }
 
+    /// Borrow the exact charged work lease while deriving credential material.
+    /// The job retains ownership until native work and cleanup have ended.
+    pub const fn work(&self) -> &crate::limits::WorkPermit {
+        &self.work
+    }
+
     /// Finish after all native work has exited and been reaped; erase the PIN.
     ///
     /// Cancellation of the response path does not permit calling this early.

@@ -1,8 +1,9 @@
 # Contributing to LocalPIN
 
 LocalPIN has completed isolated and guarded enforcing-VM M1 feasibility experiments
-and locally implements M2 pure policy/protocol models and M3 protected Linux
-storage. Production backends, PAM integration and account lifecycle gates remain
+and locally implements M2 pure policy/protocol models, M3 protected Linux
+storage and M4 credential backend primitives. Production worker integration,
+PAM integration and account lifecycle gates remain
 open. Read the
 [product specification](docs/product-specification.md) and
 [implementation plan](docs/implementation-plan.md) before proposing implementation
@@ -55,6 +56,14 @@ report their container results as real KDE or SELinux evidence.
 New dependencies need a documented purpose, maintenance and advisory review,
 license review, MSRV compatibility, and any native-library requirements. Keep the
 dependency set small and pin reproducible release inputs.
+
+Native backend builds require TPM2-TSS 4.x development libraries and pkg-config.
+Run `python3 crates/localpin-tpm/tests/run_simulator.py` with
+`swtpm` and `tpm2-tools` for the explicit disposable simulator suite. Ordinary
+workspace tests never open a TPM device. Read the
+[M4 report](docs/development/m4-credential-backends.md) before changing cryptographic
+payloads or session templates; the native primitives require M5's supervised
+worker boundary before they can be exposed by a broker.
 
 ## Authentication experiments
 
