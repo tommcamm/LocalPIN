@@ -1,7 +1,7 @@
 # BEGIN LOCALPIN
 auth [success=done default=ignore] /usr/lib64/security/pam_localpin.so
 # END LOCALPIN
-auth        substack      password-auth
+auth        substack      localpin-kde-password
 auth        include       postlogin
 
 account     required      pam_nologin.so

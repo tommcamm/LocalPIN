@@ -1,257 +1,224 @@
 # Managed account administration
 
-This runbook describes the implemented M6.1 component domain. Acceptance and
-actual validation are recorded separately in
-[the M6.1 evidence report](development/m6.1-account-authorities.md).
-[ADR 0012](adr/0012-immutable-appliance-account-authority.md) defines its
-enforcement and trust boundary. These commands are for the explicitly
-provisioned disposable Fedora KDE appliance; the everyday host is not a target.
-M7 records its required desktop acceptance. M8 installation, staged root
-activation/recovery, packaging and confinement passed the recorded installed
-matrix on the restricted Fedora 44 x86_64 Btrfs appliance with SELinux enforcing;
-see the [M8 report](development/m8-packaging-recovery.md). The
-[integration runbook](integration-administration.md),
-[ADR 0014](adr/0014-persistent-faillock.md),
-[ADR 0015](adr/0015-m8-activation-and-rpm.md) and
-[ADR 0016](adr/0016-package-cache-window.md) govern installed desktop use and
-compatible RPM maintenance. M9 and physical hardware gates remain open.
+M8.1 replaces the frozen appliance authority with a marker in each managed
+account's native shadow record. The target is ordinary Fedora KDE 44 x86_64
+with local accounts and SELinux enforcing, including routine `dnf upgrade`.
+[ADR 0017](adr/0017-shadow-record-account-authority.md) defines the new lifecycle
+contract. The [M8.1 report](development/m8.1-desktop-compatibility.md) records the
+targeted native and installed acceptance for this architecture; M9 independent
+review and physical hardware validation remain separate. The earlier
+[M6.1](development/m6.1-account-authorities.md) and
+[M8](development/m8-packaging-recovery.md) reports certify their historical
+appliance implementation only. Use disposable guests for development and
+acceptance, and follow the [integration runbook](integration-administration.md)
+for installed desktop preparation and recovery.
 
-## Supported account domain
+## Account domain
 
-The implementation supports the measured x86_64 Fedora 44 KDE policy on Btrfs.
-It requires successful immutable-inode ioctls and kernel read leases, protected root-owned state, and
-the exact reviewed PAM graph and native modules. Ordinary unmanaged accounts,
-other filesystems, other PAM layouts, network identities and systemd-homed
-remain unavailable.
+A managed account requires a unique local passwd/shadow mapping agreeing with
+NSS, UID 1000–59999, a name of at most 32 ASCII characters matching
+`[a-z_][a-z0-9_-]*`, home `/home/<name>`, and shell `/bin/bash` or
+`/usr/bin/bash`. The NSS adapter permits `files`, stock `files systemd`, and the
+stock `files [SUCCESS=merge] systemd` group entry. The selected account must
+still be a local files account; network identities and systemd-homed are
+unsupported. Other NSS action rules require a reviewed extension.
 
-Account eligibility additionally requires:
+The root-only authority stores an independently random 128-bit incarnation and
+a nonzero 32-bit record marker. It writes the marker as canonical decimal in
+that account's reserved ninth shadow field. Ordinary user deletion removes the
+marker; recreation, including identical UID/name/home and an imported password
+hash, cannot inherit the old PIN. A missing, changed or ambiguous marker makes
+PIN unavailable. Using a changed login name or UID requires fresh provisioning.
+Reverting the same native record to its original login/UID can restore the
+original binding if its marker remained continuous. Normal
+password/aging/group changes and unrelated service-account additions can retain
+the native record and its marker, subject to current eligibility checks.
 
-- UID from 1000 through 59999; exactly one local passwd record and matching
-  local shadow record, agreeing with NSS.
-- A name of at most 32 ASCII characters matching
-  `[a-z_][a-z0-9_-]*`, home `/home/<name>`, and shell `/bin/bash` or
-  `/usr/bin/bash`.
-- Exactly one `files` source for each of `passwd`, `group` and `shadow` in
-  `nsswitch.conf`. The stock `files systemd` entries require an explicit
-  administrator change while the domain is revoked.
-- An unlocked, nonempty supported password hash, valid account/password aging,
-  no forced password change, no applicable nologin restriction, and healthy
-  applicable faillock state. Hash support is strict SHA512-crypt, including
-  canonical supported `rounds=`, and Fedora's default yescrypt `$y$j9T$` with
-  22-character salt and 43-character digest. Other formats or parameter sets
-  are unavailable.
+No new immutable flags are set. Native account tools and distribution updates
+can rewrite `/etc`, passwd/shadow, authselect and PAM packages. Each live broker
+operation retains a shared OFD read lock on `/etc/.pwd.lock` through actual
+response delivery, conflicting with the exclusive native locks used by
+shadow-utils and systemd-sysusers. This serializes ordinary mutation with
+LocalPIN operations. Registry administration also uses a separate global lease.
+Contention refuses the operation or reports Busy; there is no indefinite wait.
 
-Sealing freezes `/etc/passwd`, `/etc/shadow`, `/etc/group`, `/etc/gshadow`,
-the relied-on PAM/authselect, NSS and environment files, and their parent
-directories, including `/etc`. The complete fixed path list is in
-[the lifecycle authority](../crates/localpind/src/accounts.rs). Existing
-account tools, password-changing tools, AccountsService and policy/package
-administration cannot update these protected files while the domain is active.
-This affects every account on the appliance, including accounts without a PIN.
-Sealing also refuses any protected file with a preexisting writable descriptor
-or shared writable mapping. A successful kernel read lease proves those writers
-have drained after immutable flags prevent new write opens. Close the writer
-and retry privileged recovery; an unsuccessful seal leaves the domain revoked.
-Registry format `LPACCT02` requires this barrier. Earlier experimental registries
-are unavailable and require fresh privileged provisioning and re-enrollment.
+Direct privileged editing or reconstruction of account databases requires
+`begin-mutation` first, including edits through `vipw` or `vigr` that respect the
+native lock. The lock serializes an edit with live operations; it does not
+revoke a retained record marker. Reconstructing a passwd entry against an orphan
+shadow row can reconnect that old marker. After direct editing, provision and
+enroll fresh identities. The same rule applies to replacing the lock inode,
+copying markers, alternate-root/prefix mutation of live databases and restoring
+old snapshots. Ordinary native account creation, deletion, password, aging and
+group tools remain supported under the native-record contract. Root recovery
+never imports old verifiers or claims continuity from copied UID/name/home
+metadata.
 
-The trust boundary excludes deliberate root flag clearing, writable aliases or
-mount replacement, replacement of the trusted registry, kernel compromise and
-deliberate snapshot rollback. An administrator must not use these to retain an
-incarnation across an account change. The kernel flags enforce the supported
-administration procedure; the snapshot comparison is not a detector for a
-completed privileged clear/change/restore bypass.
+## Provisioning and migration
 
-## Provisioning prerequisites
+The non-setuid [localpin-account helper](../crates/localpind/src/bin/localpin-account.rs)
+requires both real and effective UID 0. It accepts fixed operations and numeric
+UIDs, with no shell, program, alternate root or secret input. The experimental
+RPM installs it as `/usr/libexec/localpin/localpin-account`.
 
-The non-setuid [localpin-account tool](../crates/localpind/src/bin/localpin-account.rs)
-requires real and effective UID 0. The M6.1 lab and M8 experimental RPM use
-`/usr/libexec/localpin/localpin-account`.
-There is no shell/program argument, alternate state root or secret input.
+Provision root:root 0700 `/var/lib/localpin-accounts` and `/var/lib/localpin`,
+the installed fixed helpers/private PAM policies, and the reviewed persistent
+password-accounting directory. Installed activation requires the exact
+`dir = /var/lib/faillock` variant; preserve existing native counters during its
+one-time offline transition. See the
+[persistent accounting procedure](integration-administration.md#prepare-native-accounting-once).
+Stop `localpin.socket` and `localpin.service` before provisioning because the
+broker retains storage's singleton lease.
 
-Before sealing, the privileged deployment must supply root:root 0700
-`/var/lib/localpin-accounts` and `/var/lib/localpin`, a root:root 0755 tally
-directory selected by the exact reviewed configuration, the fixed helpers and
-PAM services, and all required policy inputs. The legacy component policy
-selects `/run/faillock`; M8 activation requires `/var/lib/faillock` on persistent
-Btrfs with exactly `dir = /var/lib/faillock\n` in `faillock.conf`. Perform the
-one-time native-counter transition offline as described in the
-[integration runbook](integration-administration.md#prepare-persistent-accounting-once).
-The fixed services are
-[localpin-enroll](../crates/localpin-auth/policy/localpin-enroll.review-required)
-and
-[localpin-eligibility](../crates/localpin-auth/policy/localpin-eligibility.review-required).
-Their filenames ending in `review-required` identify source templates, not a
-general-purpose activation installer. The complete guarded lab setup is in
-[the M6.1 runner](../experiments/m61/run.py).
-
-Stop both socket activation and the broker before `seal` or lifecycle
-`recover`: the broker holds a separate storage singleton lease. In the
-disposable lab these units are `localpin-m61.socket` and
-`localpin-m61.service`. M8 packages `localpin.socket` and `localpin.service`;
-their installed confinement checks passed the recorded restricted appliance
-matrix. A successful `seal`
-establishes disabled baselines; it does not enroll a PIN or activate KDE
-integration.
-
-## Create, delete, rename or change an account
-
-Use this procedure for account creation/deletion, rename, UID/home/shell/group
-changes, password changes, locks, expiry, AccountsService operations and changes
-to the protected authentication policy:
-
-For an installed M8 desktop, first use the integration runbook's root
-`disable`/`recover` operation to close the gate and restore owned policy.
-After administration, repeat its prepare/enroll/trial/test/activate sequence.
-The component procedure below must not be used to carry an old desktop
-activation or test attestation across fresh account incarnations.
-
-1. As root, run:
-
-   ```sh
-   /usr/libexec/localpin/localpin-account begin-mutation
-   ```
-
-   This takes the exclusive global lifecycle lease, durably revokes **every**
-   managed incarnation, and only then removes the immutable flags. `Busy`
-   means a bounded broker operation still owns a lease; wait and retry.
-
-2. Perform the required normal Fedora administration. A failed or interrupted
-   mutation leaves the domain revoked. It does not restore any previous PIN.
-
-3. Stop socket activation and the broker. As root, reseal with the complete
-   numeric UID list to support, for example:
-
-   ```sh
-   /usr/libexec/localpin/localpin-account seal --uid 21061 --uid 21062
-   ```
-
-   Use the appliance's actual selected UIDs. Every `seal` first revokes the
-   previous registry again, creates fresh random incarnations, quarantines old
-   credential state and durably provisions disabled baselines. It publishes an
-   active registry only after successful validation and synchronization.
-
-4. Start the broker and its socket. From each account's eligible local KDE
-   session, use the ordinary foreground-terminal flow:
-
-   ```sh
-   localpinctl doctor
-   localpinctl enroll --backend software
-   ```
-
-   Software enrollment is explicit. Use `tpm2-required` only in its separately
-   validated deployment; the M6.1 account tests do not spend the everyday host's
-   physical TPM guess budget. Enrollment verifies the existing account password
-   through the separate password-only worker.
-
-Every reseal requires fresh enrollment for all listed accounts. Renaming an
-account grants no incarnation continuity. An identical UID/name/home recreation
-receives a fresh identity and cannot inherit the former PIN or password grant.
-Changes to an unrelated account also revoke all managed identities because the
-protected account databases are shared.
-
-## PIN changes, disable and recovery
-
-Within a healthy sealed domain, an own-user `localpinctl change` or
-`localpinctl disable` requires fresh existing-password verification. These
-operations change the credential generation under the existing lifecycle
-lease. They do not create or repair lifecycle state.
-
-`localpinctl recover --user <account>` is a separate root-only broker operation
-that revokes credential state for an existing authoritative account. It does
-not repair an unavailable lifecycle registry or prove a new incarnation.
-
-For lifecycle crash recovery, missing/corrupt required state, or explicit
-re-provisioning, stop socket activation and the broker and invoke the root
-lifecycle command with the complete supported UID list:
+For a fresh account with an empty reserved field, use the complete UID list:
 
 ```sh
-/usr/libexec/localpin/localpin-account recover --uid 21061 --uid 21062
+sudo /usr/libexec/localpin/localpin-account seal --uid 1000
 ```
 
-This runs the same fresh provisioning path as `seal`. It never adopts pending
-or old identities. After success, restart the broker and enroll again.
-An error can leave the domain revoked or its inputs frozen; correct the
-underlying supported-state problem and repeat privileged recovery. Own-user
-enrollment cannot turn a successful password check into authority to repair
-missing, corrupt or unsupported lifecycle/storage state.
+`seal` closes the desktop gate and durably revokes previous bindings before
+writing anything to the account databases. It accepts an empty reserved field
+or a marker matching its existing valid registry, and refuses unknown reserved
+state. It rotates markers/incarnations, atomically updates shadow while
+preserving its owner/mode/SELinux label, quarantines old credential/throttle
+state, provisions disabled baselines, and publishes only after durable
+validation. Unknown extended attributes refuse provisioning rather than being
+discarded. It creates no PIN and opens no desktop gate.
 
-Old UID state is moved into protected
-`/var/lib/localpin/retired/<uid>/<new-incarnation>/` quarantine, preserving crash
-evidence and preventing reuse. At most sixteen retained entries per UID are
-allowed; further provisioning refuses. Review and remove obsolete entries only
-through explicit offline administrator maintenance with the broker stopped.
-Do not move an old quarantined enrollment back into the active users directory.
-No forensic erasure of snapshots/backups is claimed.
+After successful preparation through the integration tool, start the broker and
+enroll from each account's eligible local KDE session:
 
-## Password eligibility and accounting
+```sh
+localpinctl doctor
+localpinctl enroll --backend software
+```
 
-The supervised [eligibility worker](../crates/localpin-auth/src/eligibility.rs)
-supplies no password or alternative factor to PAM and refuses every conversation
-request. Its private policy preserves `pam_env` and `pam_faildelay`, performs
-explicit `pam_faillock preauth silent`, and runs `pam_unix` and `pam_nologin`
-account checks. It never calls faillock `authfail`, `authsucc` or its resetting
-account hook. Exact policy/native hashes and all input checks are recorded in
-[ADR 0012](adr/0012-immutable-appliance-account-authority.md#password-free-eligibility-contract).
+Software enrollment requires explicit acceptance. Select `tpm2-required` only
+with the separately validated TPM deployment. Enrollment verifies the existing
+account password in the fixed password-only worker; it cannot provision or
+repair lifecycle authority. Complete actual PIN/password/console tests and
+staged activation through the integration runbook.
 
-A tally must already be a canonical regular single-link file owned by the
-target UID and group root, mode 0660, with bounded canonical records in the
-root-controlled directory selected by the exact reviewed configuration. The
-legacy all-comment variant selects `/run/faillock`; the exact M8 persistent
-variant selects `/var/lib/faillock`. Unknown configurations and a missing
-persistent tally never select a fallback directory. The worker checks bytes and
-metadata before and after PAM. Missing, unreadable, changed, future-dated or
-noncanonical state makes PIN unavailable. Eligibility does not create, reset,
-normalize or add a failure record.
+`LPACCT01` and `LPACCT02` are refused. Migration durably revokes the old domain,
+invalidates old cache journals, removes its known immutable flags only with
+captured valid legacy-registry proof, and creates fresh disabled identities.
+It requires fresh enrollment and desktop tests; there is no silent import of
+old continuity.
 
-Privileged sealing may establish a missing empty tally only after the old
-incarnations are durably revoked. Existing canonical tallies are preserved;
-noncanonical existing tallies stop provisioning. With the legacy volatile
-variant, reboot can lose the tally and leave PIN unavailable until explicit
-privileged recovery and fresh enrollment. M8's persistent variant addresses
-ordinary reboot continuity without recreating counters. The recorded enforcing
-M8 matrix retained the same TPM enrollment through ordinary reboot and
-interrupted package-cache recovery using a private TPM emulator. Compatible
-upgrades use [ADR 0016](adr/0016-package-cache-window.md)'s bounded window;
-ordinary account or policy mutations still require fresh incarnations. Lost or
-corrupt persistent state still requires explicit privileged recovery and fresh
-enrollment. An ordinary password
-operation may create native accounting state according to its service policy,
-but own-user enrollment cannot repair lifecycle or disabled-storage baselines.
+An installed old appliance with a schema-1 activation manifest requires a
+one-time package migration: disable with the old tools, verify full-password
+recovery, retain offline backups, and remove the old experimental RPM. Install
+the new package, provision fresh identities and enroll again before repeating
+desktop tests and activation. The old RPM deliberately rejects an in-place
+schema-2 upgrade even when integration is disabled; do not bypass its scriptlets.
+See the [package migration runbook](integration-administration.md#updates)
+for the distinction from later compatible schema-2 upgrades.
 
-The existing password route retains its normal accounting. In particular,
-wrong password attempts can add faillock records and normal password success
-can reset them according to that service's policy. A PIN-format password can
-also consume a LocalPIN attempt in the integrated shared field. No counter
-is suppressed or reset to conceal that ambiguity.
+## Routine changes and explicit recovery
 
-Installed activation accepts only the measured default password-auth profile.
-The M7-observed `with-faillock`/parallel-fingerprint composition is refused;
-persisting accounting does not fix its accumulating native startup failures.
-Checks preserve each original service's applicable policy, including a default
-KDE password graph that does not itself invoke faillock.
+Use normal Fedora account creation/deletion, password, lock/expiry, group and
+service-account tools. Their native locks serialize supported record changes;
+LocalPIN still refuses a currently locked/expired/restricted account. Ordinary `dnf upgrade`
+needs no cache-maintenance window or account reseal. PAM changes outside the
+reviewed adapter can leave PIN unavailable while password recovery remains the
+route. Compatibility requires the installed upgrade acceptance matrix.
 
-## Diagnose an unavailable account
+For account deletion, the old binding becomes unusable when its native row is
+removed. A newly created user needs privileged fresh provisioning. To use a
+changed login name or UID, provision and enroll a fresh identity. Reversing a
+rename/UID change on the same surviving marked record can match the old binding;
+these edits are not recorded as permanent revocation. Account deletion removes
+the authoritative marker and does not have that continuity.
 
-Use `localpinctl doctor [--json]` or `localpinctl status [--json]` from the
-account's supported session. Output does not expose another account's state,
-shadow data, incarnation identifiers or authentication grants. The relevant
-sanitized reasons are:
+For planned direct account/policy maintenance, including lock-respecting
+`vipw`/`vigr` reconstruction, or desktop disable/reprepare, first use the
+integration runbook to close the gate and restore owned policy.
+Its lifecycle step is:
+
+```sh
+sudo /usr/libexec/localpin/localpin-account begin-mutation
+```
+
+This durably revokes every managed binding, removes legacy immutable flags only
+when a valid trusted old registry was captured before revocation, and clears
+only still-matching known managed markers under the native exclusive
+lock. Foreign/changed markers are untouched. Complete maintenance, stop the
+broker, run `seal` with the complete UID list, and enroll again. A crash after
+revocation can leave an old marker present; explicit lifecycle recovery handles
+that condition.
+
+Fresh, missing, unknown and current `LPACCT03` authority never authorize removing
+immutable flags from system inputs. Such custom hardening makes provisioning or
+maintenance unavailable while preserving those flags. Corrupt old-registry
+evidence, or a migration interrupted after revocation before flag removal,
+requires deliberate offline root review of the old deployment and its flags
+before fresh recovery. Neither `seal` nor `recover` guesses ownership of unknown
+immutable hardening.
+
+For missing/corrupt authority, interrupted provisioning or deliberate reserved
+field recovery, stop the broker and use:
+
+```sh
+sudo /usr/libexec/localpin/localpin-account recover --uid 1000
+```
+
+This is an explicit root decision to replace a nonempty reserved field. Review
+unknown native use of that field first. It rotates both marker and incarnation,
+quarantines old state and creates disabled baselines. It never adopts partial
+publication or retains the previous PIN. Errors leave authority revoked until
+successful privileged recovery and fresh enrollment.
+
+Own-user `localpinctl change` and `disable` require fresh password verification
+and retain a healthy authoritative incarnation. The separate root broker
+`localpinctl recover --user <account>` revokes credential state for an existing
+identity; it does not repair the lifecycle registry or reserved field.
+
+Old state stays under `/var/lib/localpin/retired/<uid>/<new-incarnation>/`.
+The bound is sixteen retained entries per UID. Further provisioning refuses
+until explicit offline maintenance reviews and removes obsolete entries. Never
+move a quarantined verifier back into the active directory; no forensic erasure
+of backups or snapshots is claimed.
+
+## Eligibility, accounting and diagnostics
+
+The supervised password-free eligibility worker checks current local records,
+password hash/aging, nologin restrictions and canonical native faillock state.
+It accepts the reviewed SHA512-crypt and Fedora default yescrypt forms, refuses
+PAM conversations, and never calls failure/success/reset hooks. It compares
+native inputs and tally bytes/metadata before and after each operation.
+Distribution-owned Linux-PAM is loaded through its stable x86_64 SONAME;
+individual build hashes are not a permanent platform allowlist.
+
+A tally must already be a bounded, single-link canonical file owned by the
+account and group root, mode 0660, under the reviewed root-controlled directory.
+Eligibility never creates, resets or normalizes it. Privileged fresh
+provisioning can establish a missing empty baseline after durable revocation;
+existing counters remain exact. Lost/corrupt persistent accounting requires
+explicit recovery. The legacy `/run/faillock` component policy can lose state at
+reboot and is not the installed activation configuration.
+
+[The KDE compatibility decision](adr/0018-kde-native-update-compatibility.md)
+defines the owned password/fingerprint substacks and native counter behavior.
+Unknown graphs remain refused. A PIN-format password can also consume a
+LocalPIN attempt in the shared field; no native counter is suppressed to hide
+that ambiguity.
+
+Use `localpinctl doctor [--json]` or `status [--json]` in the selected account's
+supported session. Diagnostics expose no shadow contents, marker, incarnation
+or authentication grant.
 
 | Reason | Action |
 | --- | --- |
-| `account-unsupported` | Ask the administrator to check the supported domain and explicitly provision a disabled baseline. |
-| `lifecycle-unavailable` | The domain is revoked, busy, unsealed, or required state is missing/corrupt; check the cause and perform privileged recovery/resealing with fresh enrollment when needed. |
-| `eligibility-unavailable` | Inspect the exact reviewed PAM/native policy, password format and canonical faillock state; an unknown policy or package update requires review. |
-| `account` | Inspect locks, expiry, required password changes and restrictions through the normal password/recovery administration procedure. |
-| `session` | Use the account's supported local KDE session; ambiguous or ineligible session routing refuses PIN use. |
-| `storage` | Inspect protected state ownership, permissions and consistency; own-user enrollment cannot initialize or repair it. |
-| `busy` | Wait for the current bounded operation to finish and retry. |
+| `account-unsupported` | Check the local account/NSS domain and privileged provisioning. |
+| `lifecycle-unavailable` | Check native-lock contention, registry/marker continuity and protected state; use explicit recovery when continuity is lost. |
+| `eligibility-unavailable` | Inspect supported PAM policy, native components, password form and canonical accounting. |
+| `account` | Check current locks, aging, forced changes and nologin restrictions. |
+| `session` | Use an unambiguous supported local KDE session. |
+| `storage` | Review protected ownership/consistency; own-user enrollment cannot repair it. |
+| `busy` | Retry after the current bounded operation or native account tool finishes. |
 
-The client distinguishes installation, enrollment, test evidence and integration
-activity. A bounded trial is separate from active integration, and
-`operator-attested` labels the administrator's recorded tests rather than
-automatic proof. Reaching the broker or enrolling a PIN does not establish a
-tested desktop unlock path. M8's recorded installed matrix passed only for the
-restricted appliance above; M9 independent review and physical hardware
-acceptance remain open, and hosted CI execution remains unverified.
+Enrollment, root operator attestation and desktop activation are distinct. A
+successful broker request does not certify real locker behavior. The
+[M8.1 report](development/m8.1-desktop-compatibility.md) records actual installed
+coverage and its limits. M9 independent review and physical hardware validation
+remain separate gates; hosted CI execution remains unverified.

@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-17",
+  "scope": "native account-tool marker and locking compatibility; isolated synthetic account files inside guarded Fedora KDE 44 KVM clone",
+  "clone_uuid": "1b79af25-0f40-4a3e-86dd-889e1bed0dfa",
+  "script_sha256": "8d1aa6fb9a514513b4a58d3f6eb10019aaffceb3e1843e0c2b68200e402f5c48",
+  "passed": true,
+  "versions": [
+    "shadow-utils-4.19.0-7.fc44.x86_64",
+    "glibc-2.43-9.fc44.x86_64",
+    "systemd-259.9-1.fc44.x86_64",
+    "accountsservice-23.13.9-16.fc44.x86_64"
+  ],
+  "isolated_mount_pid_namespaces": true,
+  "guarded_fedora44_kde_kvm": true,
+  "glibc_reserved_field_width": 32,
+  "glibc_unsigned_marker": true,
+  "marker_preserved": [
+    "usermod",
+    "chage",
+    "chpasswd/PAM",
+    "passwd",
+    "newusers",
+    "systemd-sysusers"
+  ],
+  "native_mutations_wait_for_ofd_readers": [
+    "usermod",
+    "systemd-sysusers",
+    "userdel"
+  ],
+  "ofd_readers_refuse_native_glibc_writer": true,
+  "identical_uid_name_home_password_hash_recreation_loses_marker": true,
+  "limitations": [
+    "AccountsService package version recorded; GUI/DBus path not executed in this component probe.",
+    "This probe does not establish installed broker, SELinux confinement, desktop UI or physical TPM acceptance."
+  ]
+}

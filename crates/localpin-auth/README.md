@@ -59,8 +59,9 @@ short-lived workers avoid retaining handles/tokens between authentications.
 
 M6.1 additionally supplies a separate `localpin-eligibility-worker` and shared
 `EligibilitySupervisor`. Its fixed password-free service never accepts a
-candidate or a conversation. It pins the measured Fedora graph and native
-modules, validates local identity, locks, aging, default yescrypt/SHA512 hashes,
+candidate or a conversation. It validates the supported Fedora KDE graph and
+safe root-owned native modules through the stable Linux-PAM SONAME, alongside
+local identity, locks, aging, default yescrypt/SHA512 hashes,
 nologin and canonical faillock state, and refuses unknown policy. It checks
 unchanged accounting around preauth/account PAM without authfail/authsucc or
 the resetting faillock account hook. Missing tallies are unavailable; this
@@ -76,6 +77,7 @@ Validation:
 ```sh
 cargo test -p localpin-auth
 python3 crates/localpin-auth/tests/isolated_pam.py
+python3 crates/localpin-auth/tests/kde_accounting.py
 ```
 
 The second command builds with `--locked` and discovers the Cargo executable,
@@ -95,3 +97,16 @@ ABI and policy references: [Linux-PAM public types](https://github.com/linux-pam
 [authentication](https://github.com/linux-pam/linux-pam/blob/v1.7.0/doc/man/pam_authenticate.3.xml),
 [account checks](https://github.com/linux-pam/linux-pam/blob/v1.7.0/doc/man/pam_acct_mgmt.3.xml),
 [failure accounting](https://github.com/linux-pam/linux-pam/blob/v1.7.0/modules/pam_faillock/pam_faillock.c).
+
+The KDE-specific password and fingerprint substacks implement native success
+accounting during authentication, since KDE omits the PAM account phase. Missing
+fingerprint devices/services deny without recording a false failure; genuine
+fingerprint rejection still counts. PIN success preserves all native history.
+The native KDE regression uses a real unavailable fprintd module and synthetic
+biometric return codes in private namespaces. See [ADR 0018](../../docs/adr/0018-kde-native-update-compatibility.md).
+
+An explicit noninteractive `pam_localpin.so policy` selector checks the live
+authselect graph before each corrected native authentication. Unknown additional
+factors or a missing selector module use the original native stack; they cannot
+fall through to direct password verification. The selector never grants a PIN or
+authenticates a user on its own.

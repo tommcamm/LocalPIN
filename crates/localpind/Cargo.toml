@@ -21,7 +21,7 @@ libc = "=0.2.191"
 getrandom = "=0.4.3"
 sha2 = { version = "=0.11.1", default-features = false }
 
-# Documented socket-pidfd and kernel-file-lease ABI exceptions are function-scoped.
+# Documented socket-pidfd and native OFD-lock ABI exceptions are function-scoped.
 # `forbid` cannot be narrowed there; all other production code retains `deny`.
 [lints.rust]
 unsafe_code = "deny"

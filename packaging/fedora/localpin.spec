@@ -9,7 +9,7 @@
 Name:           localpin
 Version:        0.1.0
 Release:        0.1.alpha1%{?dist}
-Summary:        Opt-in local PIN unlock for a reviewed Fedora KDE appliance
+Summary:        Opt-in local PIN unlock for Fedora KDE local accounts
 License:        MIT OR Apache-2.0
 Source0:        localpin-%{version}-native.tar.gz
 ExclusiveArch:  x86_64
@@ -40,7 +40,7 @@ Requires(postun): policycoreutils
 %description
 LocalPIN supplies a socket-activated native broker, bounded privileged workers,
 a PAM adapter, and explicit root administration for a reviewed Fedora 44 KDE
-immutable local-account appliance. Installation does not enroll users, start or
+local-account desktop. Installation does not enroll users, start or
 enable the broker, or edit KDE, authselect or faillock configuration. Activation
 is a separate guarded operation and requires a tested password recovery route.
 
@@ -66,6 +66,8 @@ install -D -m 0644 packaging/fedora/localpin.tmpfiles %{buildroot}%{_tmpfilesdir
 install -D -m 0644 packaging/fedora/software.conf %{buildroot}%{_datadir}/localpin/systemd/software.conf
 install -D -m 0644 crates/localpin-auth/policy/localpin-enroll.disabled %{buildroot}%{_sysconfdir}/pam.d/localpin-enroll
 install -D -m 0644 packaging/fedora/localpin-eligibility.disabled %{buildroot}%{_sysconfdir}/pam.d/localpin-eligibility
+install -D -m 0644 packaging/fedora/localpin-eligibility.disabled %{buildroot}%{_sysconfdir}/pam.d/localpin-kde-password
+install -D -m 0644 packaging/fedora/localpin-eligibility.disabled %{buildroot}%{_sysconfdir}/pam.d/localpin-kde-fingerprint
 install -d %{buildroot}%{_datadir}/localpin/policy
 install -m 0644 crates/localpin-auth/policy/*.review-required %{buildroot}%{_datadir}/localpin/policy/
 install -D -m 0644 policy-build/localpin.pp %{buildroot}%{_datadir}/selinux/packages/localpin.pp
@@ -79,15 +81,14 @@ python3 packaging/fedora/test_packaging.py
 %pre
 # OLD tool checks schema/policy before replacing files or closing an active gate.
 if [ -x %{_libexecdir}/localpin/localpin-integration ]; then
-    %{_libexecdir}/localpin/localpin-integration package-check --candidate-evr '0:%{version}-%{release}' --candidate-schema 1 || exit 1
+    %{_libexecdir}/localpin/localpin-integration package-check --candidate-evr '0:%{version}-%{release}' --candidate-schema 2 || exit 1
     %{_libexecdir}/localpin/localpin-integration package-suspend || exit 1
-    %{_libexecdir}/localpin/localpin-integration package-cache-begin || exit 1
 fi
 
 %post
 # A failed upgrade leaves the activation gate closed for console recovery.
 /usr/sbin/semodule -i %{_datadir}/selinux/packages/localpin.pp || exit 1
-/usr/sbin/restorecon -R %{_libexecdir}/localpin %{_sharedstatedir}/localpin %{_sharedstatedir}/localpin-accounts %{_sharedstatedir}/localpin-integration %{_sharedstatedir}/faillock %{_sysconfdir}/pam.d/localpin-enroll %{_sysconfdir}/pam.d/localpin-eligibility || exit 1
+/usr/sbin/restorecon -R %{_libexecdir}/localpin %{_sharedstatedir}/localpin %{_sharedstatedir}/localpin-accounts %{_sharedstatedir}/localpin-integration %{_sharedstatedir}/faillock %{_sysconfdir}/pam.d/localpin-enroll %{_sysconfdir}/pam.d/localpin-eligibility %{_sysconfdir}/pam.d/localpin-kde-password %{_sysconfdir}/pam.d/localpin-kde-fingerprint || exit 1
 /usr/bin/systemd-tmpfiles --create %{_tmpfilesdir}/localpin.conf || exit 1
 /usr/bin/systemctl daemon-reload || exit 1
 # Resumption must wait for the distribution's real ldconfig file triggers.
@@ -112,9 +113,8 @@ fi
 # RPM6 runs the new package's transaction trigger after the installed-package
 # transaction-in and transaction-postun triggers, including both glibc ldconfig
 # triggers. Initial/disabled installs have no pending window and start nothing.
-# Failure keeps the PIN gate closed; an interrupted native window stays revoked
-# until validated finish. Later binding/service failures may retain that exact
-# restored registry and still require explicit recovery.
+# Failure keeps the PIN gate closed. Account markers and all stored credentials
+# and throttles must match the suspended binding before prior activation resumes.
 %{_libexecdir}/localpin/localpin-integration package-resume || exit 1
 
 %files
@@ -126,6 +126,8 @@ fi
 %doc docs/adr/0014-persistent-faillock.md
 %doc docs/adr/0015-m8-activation-and-rpm.md
 %doc docs/adr/0016-package-cache-window.md
+%doc docs/adr/0017-shadow-record-account-authority.md
+%doc docs/adr/0018-kde-native-update-compatibility.md
 %{_bindir}/localpinctl
 %{_sbindir}/localpin-integration
 %{_libexecdir}/localpin/
@@ -138,6 +140,8 @@ fi
 %{_datadir}/selinux/packages/localpin.pp
 %config(noreplace) %{_sysconfdir}/pam.d/localpin-enroll
 %config(noreplace) %{_sysconfdir}/pam.d/localpin-eligibility
+%config(noreplace) %{_sysconfdir}/pam.d/localpin-kde-password
+%config(noreplace) %{_sysconfdir}/pam.d/localpin-kde-fingerprint
 %dir %attr(0700,root,root) %{_sharedstatedir}/localpin
 %dir %attr(0700,root,root) %{_sharedstatedir}/localpin-accounts
 %dir %attr(0755,root,root) %{_sharedstatedir}/localpin-integration

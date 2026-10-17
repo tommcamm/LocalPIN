@@ -1,0 +1,16 @@
+{
+  "runner_sha256": "b3a577b3d39b216a01674290ca77aceda47011f859032bbce7d278c2f0b2f967",
+  "passed_phases": [
+    "dnf-upgrade",
+    "native-pam-reinstall",
+    "systemd-sysusers",
+    "authselect-regeneration"
+  ],
+  "actual_dnf_update_count": 26,
+  "upgrade_was_noop": false,
+  "same_tpm_enrollment_retained_without_reenrollment": true,
+  "raw_native_logs_and_exact_snapshots": "guest root only; not exported",
+  "evidence_scope": "guarded disposable Fedora44 KDE x86_64 with SELinux enforcing and a private TPM emulator; future unseen policy changes and physical hardware remain separate gates",
+  "additional_kernel_rpm_installations": 5,
+  "localpin_evr": "0.1.0-0.6.alpha1.fc44"
+}

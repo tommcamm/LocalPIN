@@ -50,9 +50,10 @@ prepare/trial/desktop-test steps; `integration disable` prints the tool's
 `disable` command. Neither invokes sudo or changes integration.
 `integration status` reads the sanitized local root gate without a broker or
 terminal. See the [integration runbook](../../docs/integration-administration.md)
-and [ADR 0015](../../docs/adr/0015-m8-activation-and-rpm.md). Compatible RPM
-upgrades use [ADR 0016](../../docs/adr/0016-package-cache-window.md)'s bounded
-authority window. M8's recorded installed matrix passed for the restricted
+and [ADR 0018](../../docs/adr/0018-kde-native-update-compatibility.md). M8.1
+uses [native account markers](../../docs/adr/0017-shadow-record-account-authority.md)
+and preserves prior activation across compatible RPM updates without freezing
+`/etc` or opening a cache-maintenance window. M8's historical matrix passed for the restricted
 Fedora 44 x86_64 Btrfs appliance with SELinux enforcing; see the
 [M8 report](../../docs/development/m8-packaging-recovery.md). M9 review and
 physical TPM validation remain open; hosted CI is unverified.

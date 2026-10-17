@@ -13,7 +13,8 @@ mod supervisor;
 
 pub use eligibility::{
     EligibilitySupervisor, PERSISTENT_FAILLOCK_CONFIG, PERSISTENT_FAILLOCK_DIRECTORY,
-    reviewed_faillock_directory, serve_eligibility_worker,
+    kde_native_policy_compatible, kde_native_policy_supported, reviewed_faillock_directory,
+    serve_eligibility_worker,
 };
 pub use supervisor::{BoundPasswordWorker, PasswordSupervisor};
 

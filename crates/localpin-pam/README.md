@@ -2,11 +2,12 @@
 
 `localpin-pam` builds `liblocalpin_pam.so`; the reviewed installed module name is
 `/usr/lib64/security/pam_localpin.so`. This crate does not install or activate
-it. It supports only Linux-PAM's `kde` service, without module arguments, for an
+it. Its PIN mode supports Linux-PAM's `kde` service, without module arguments, for an
 existing unique local account whose nonzero UID equals both the process's real
 and effective UIDs. Target binding reads a bounded root-owned regular
 `/etc/passwd` directly, avoiding NSS callbacks. The broker independently
-enforces ADR 0012's narrower supported account and session domain.
+enforces the managed local-account generation and session domain in
+[ADR 0017](../../docs/adr/0017-shadow-record-account-authority.md).
 The regular-file size/allocation bounds and `O_NONBLOCK` reject oversized input
 and special files; they do not impose a deadline on kernel filesystem I/O.
 
@@ -79,6 +80,17 @@ recorded 49-case installed matrix on the restricted Fedora 44 x86_64 Btrfs
 appliance with SELinux enforcing; see the
 [M8 report](../../docs/development/m8-packaging-recovery.md). Activation
 requires [ADR 0014](../../docs/adr/0014-persistent-faillock.md)'s persistent
-accounting variant and refuses the known fingerprint/faillock composition.
+accounting variant. [ADR 0018](../../docs/adr/0018-kde-native-update-compatibility.md)
+supersedes the historical fingerprint/faillock refusal with corrected KDE-native
+authentication substacks.
 Unit/native harnesses alone do not authorize everyday-host activation. M9
 independent review and physical TPM validation remain open; hosted CI is unverified.
+
+Exactly one module argument, `policy`, selects a separate noninteractive guard
+for `kde` and `kde-fingerprint`. It validates the live native authselect graph and
+returns success only to select a corrected accounting branch that still verifies
+the password or biometric. It never captures a candidate, contacts the broker,
+changes a token/tally, or authenticates the user. Unknown native authentication
+factors or a missing guard module run the original native substack. The supplied
+permit/deny barrier prevents a failed original stack reaching direct password or
+fingerprint verification. Other arguments remain unsupported.

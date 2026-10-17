@@ -1,10 +1,10 @@
 # LocalPIN product specification
 
-**Specification version:** 1.4
+**Specification version:** 1.5
 
 **Date:** 2026-10-17
 
-**Status:** Implementation specification; M2–M8 implemented locally, with M6.1, M7 and M8 acceptance complete only for the restricted domain below. M8's recorded 49-case installed matrix passed on Fedora 44 x86_64 Btrfs with SELinux enforcing and a private TPM emulator; see the [M8 report](development/m8-packaging-recovery.md). M9 independent review and physical hardware gates remain open; hosted CI execution remains unverified. The [M7 report](development/m7-pam-integration.md) retains its historical native accounting and TPM recovery limits.
+**Status:** M8.1 final source checks and targeted installed RPM acceptance passed for ordinary Fedora KDE 44 x86_64 with SELinux enforcing and a private TPM emulator; see the [M8.1 report](development/m8.1-desktop-compatibility.md) for evidence and each installed case's build scope. Historical M6.1–M8 evidence retains its earlier appliance scope. GUI/DBus AccountsService, full old-TPM-credential migration and physical hardware remain unvalidated. M9 independent review and release gates remain open; hosted CI execution remains unverified.
 **Initial deployment:** Fedora Linux, KDE Plasma, local user accounts.  
 **Working component names:** `pam_localpin.so`, `localpind`, `localpinctl`.
 
@@ -24,38 +24,53 @@ The inspected machine reported Fedora 44 KDE, Plasma/kscreenlocker 6.7.5, Rust 1
 
 The initial supported platform is Fedora KDE with local, non-root users and a verified screen-lock PAM service. Target x86_64 initially; aarch64 support requires equivalent CI, packages, and hardware integration testing. Network identities, systemd-homed accounts, non-KDE desktops, immutable Fedora variants, and other distributions must be reported as unsupported until adapters and tests exist. Unsupported configurations must not receive guessed PAM edits.
 
-Account support additionally requires an enforcing, tested lifecycle authority
-that distinguishes account incarnations and revokes enrollment before UID reuse.
-Ordinary unmanaged Unix accounts remain unsupported for production activation.
-UID/name/home equality is insufficient. See
-[ADR 0006](adr/0006-account-incarnation-support.md).
+Account support requires a trusted lifecycle authority that distinguishes
+account incarnations and serializes account mutation with authorization delivery.
+UID/name/home equality is insufficient; accounts without privileged provisioning
+remain unavailable. [ADR 0017](adr/0017-shadow-record-account-authority.md)
+implements the local-files contract with a random root-owned marker in each
+managed shadow record, an independent random 128-bit incarnation, and a retained
+shared OFD lock on the native `/etc/.pwd.lock`. Ordinary account tools use the
+conflicting exclusive lock. Deletion/recreation removes the marker, while normal
+password updates and unrelated service-account creation can preserve it.
+Direct root editing outside native locking, copying markers into recreated
+accounts and restoring authority snapshots are deliberate trusted-administrator
+changes requiring prior revocation and fresh provisioning.
 
-Implementation note, 2026-10-17: M6.1 supplies production authorities only for
-the explicitly provisioned Fedora 44 x86_64 Btrfs appliance domain in
-[ADR 0012](adr/0012-immutable-appliance-account-authority.md). It requires local
-files-only NSS, the exact reviewed PAM graph/binaries and supported local-account
-and password-hash forms. Kernel immutable inputs and a writer-drain barrier
-protect active incarnations. Administrative account, password and policy changes
-must durably revoke the whole domain first; every reseal provisions fresh
-disabled incarnations and requires enrollment again. Own-user enrollment cannot
-establish or repair continuity. Missing authoritative state makes PIN unavailable.
-The legacy volatile component variant can lose `/run/faillock` on reboot;
-M8 activation requires the exact persistent `/var/lib/faillock` variant in
-[ADR 0014](adr/0014-persistent-faillock.md). Its one-time offline policy
-transition preserves native counters and requires fresh enrollment. Missing
-persistent accounting is also refused, never recreated by eligibility. This
-restriction does not describe general-purpose Fedora account support or
-authorize deployment.
-M6.1's component gate is complete for this domain. See the
-[component evidence](development/m6.1-account-authorities.md),
-[sanitized results](../experiments/m61/results/2026-10-17-account-authorities.json) and
-[account administration contract](account-administration.md). The
-[integration runbook](integration-administration.md) and
-[ADR 0015](adr/0015-m8-activation-and-rpm.md) define staged activation, the
-fingerprint/faillock refusal and package recovery.
-[ADR 0016](adr/0016-package-cache-window.md) defines the narrow compatible-upgrade
-authority window. M8 acceptance passed for the recorded appliance matrix;
-M9 release gates still apply.
+M8.1 targets ordinary Fedora KDE 44 x86_64 with SELinux enforcing and stock
+local `files systemd` NSS layouts. It sets no new immutable flags, pins no
+filesystem type or individual PAM build hashes, and loads distribution-owned
+Linux-PAM through its stable SONAME. PAM account restrictions, trusted native
+metadata and unchanged operation inputs remain fail-closed checks. The reviewed
+[KDE adapter](adr/0018-kde-native-update-compatibility.md) owns separate password
+and fingerprint authentication substacks while preserving the other verified
+service sections and native accounting. Unknown graphs remain unsupported.
+
+The installed route requires reviewed persistent `/var/lib/faillock` accounting;
+its offline transition preserves native counters. Eligibility never recreates
+missing persistent state or repairs account authority. `LPACCT01`/`LPACCT02`
+migration durably revokes before fresh provisioning/enrollment. It removes
+legacy immutable flags only with valid captured old-registry proof; unknown
+administrator hardening remains intact and unavailable.
+[Account administration](account-administration.md) and
+[integration administration](integration-administration.md) define these steps.
+[ADR 0006](adr/0006-account-incarnation-support.md)'s lifecycle security intent
+continues under ADR 0017's explicit local-tool trust contract.
+
+The earlier [M6.1](development/m6.1-account-authorities.md),
+[M7](development/m7-pam-integration.md) and
+[M8](development/m8-packaging-recovery.md) acceptance applies to their historical
+immutable appliance. The [M8.1 report](development/m8.1-desktop-compatibility.md)
+records targeted account-tool, KDE/fingerprint, SELinux, RPM, reboot and actual
+[DNF upgrade](../experiments/m81/results/dnf-upgrade.json) cases that passed.
+Native PAM/authselect runtime replacement was exercised by
+[real reinstallation](../experiments/m81/results/native-pam-reinstall.json).
+Final source checks and the compatible `.5` → `.6` installed RPM upgrade also
+passed; earlier cases retain their individual recorded build scope.
+GUI/DBus AccountsService and full old-TPM-credential migration were not exercised;
+physical sensors/TPMs, alternate filesystems and the full hardware matrix retain
+separate gates. Source/model checks and operator attestations are not substitutes
+for those missing observations or independent M9 review.
 
 The current Linux broker requires `openat2`, procfs and Linux 6.5+
 `SO_PEERPIDFD` support, with a system bus and logind for live session routing.
@@ -140,9 +155,9 @@ Set bounded connection, read, write, queue, and backend deadlines. Initial targe
 
 ## 7. PAM integration and password fallback
 
-The package ships a documented Fedora KDE adapter. Activation modifies only the verified screen-lock service, normally `/etc/pam.d/kde`. It must preserve existing account, password, and session sections and the order of the original password authentication stack. It must not edit authselect-generated `system-auth` or `password-auth`, SDDM, plasmalogin, sudo, SSH, or polkit services.
+The package ships a documented Fedora KDE adapter. Activation modifies only the verified KDE screen-lock services and their LocalPIN-owned authentication substacks. It must preserve existing account, password, and session sections. Replacing the original authentication substack requires an explicit reviewed compatibility decision that preserves its required factor/accounting behavior, protected backups, and installed acceptance for the password and fingerprint routes. It must not edit authselect-generated `system-auth` or `password-auth`, SDDM, plasmalogin, sudo, SSH, or polkit services.
 
-The adapter runs before the existing password stack with a control rule that short-circuits only on positive PIN success and otherwise continues to the original stack. Existing required checks that precede it must not be skipped. The installer must reject unfamiliar layouts that cannot preserve required account/authorization restrictions. KDE's actual use of PAM account management must be established per supported version; where KDE only calls authentication, the adapter must explicitly preserve supported lock/expiry eligibility checks rather than assuming a later account phase occurs.
+The adapter runs before the reviewed password substack with a control rule that short-circuits only on positive PIN success and otherwise continues to password authentication. Existing required checks that precede it must not be skipped. The installer must reject unfamiliar layouts that cannot preserve required account/authorization restrictions. KDE's actual use of PAM account management must be established per supported version; where KDE only calls authentication, the adapter must explicitly preserve supported lock/expiry eligibility checks rather than assuming a later account phase occurs.
 
 Return behavior:
 
@@ -250,7 +265,7 @@ Proposed layout:
 | `/usr/libexec/localpin/` | Broker and narrowly scoped privileged worker executables |
 | `/var/lib/localpin-integration/control/` | Installed M8 root-only original PAM files, manifests and package/version metadata, mode 0700 |
 | `/var/lib/localpin-integration/gate` | Root-written public desktop gate, mode 0644 beneath a mode-0755 directory |
-| `/var/lib/localpin-accounts/` | Root-only lifecycle registry and bounded package-cache journal, mode 0700 |
+| `/var/lib/localpin-accounts/` | Root-only versioned lifecycle registry and permanent serialization lock, mode 0700 |
 
 Use numeric UIDs for internal paths, never raw usernames. Detect UID reuse and require re-enrollment when the account identity no longer matches the recorded local-account identity. Renaming an account must not accidentally authorize a new account with an unrelated UID.
 
@@ -261,12 +276,16 @@ contract, not a frozen permanent identity schema. Permanent account records and
 production activation remain blocked until the authority's deletion/recreation,
 crash and concurrency guarantees have evidence.
 
-Implementation note, 2026-10-17: the M6.1 `LPACCT02` lifecycle registry records
-the sealed-domain proof defined by ADR 0012. Earlier experimental registry state
-is refused and privileged recovery creates fresh identities; it never adopts
-development incarnations. Permanent records are limited to the domain covered
-by the M6.1 evidence report. This does not lift the lifecycle requirement for
-other accounts or the separate production activation gates.
+Implementation note, 2026-10-17: current `LPACCT03` binds UID/login and a
+root shadow-record marker to an independent random incarnation. Native locking
+is retained through actual authorization delivery. The earlier `LPACCT01` and
+`LPACCT02` formats are refused; privileged recovery rotates both identities and
+quarantines old credential/throttle state. New publication requires durable
+shadow and disabled baselines before the active registry. Recorded
+[M8.1 account evidence](../experiments/m81/results/account-tools.json) and
+[installed-helper flag tests](../experiments/m81/results/legacy-flags.json)
+validate the targeted lifecycle cases; the report preserves untested paths and
+independent review limits. They do not authorize a production claim.
 
 Open relative to trusted directory descriptors using no-follow/beneath restrictions where available. Reject symlinks, unsafe ownership/modes, unexpected file types, and oversized records. Do not rely on an `lstat` followed by an unrestricted `open`. Credential records are bounded to 64 KiB; configuration to 64 KiB; throttle records to 16 KiB. Unknown versions fail the PIN route safely.
 
@@ -326,25 +345,37 @@ Do not stack `pam_localpin` and the temporary `pam_pinlock` installation. First
 verify password/console recovery, durably back up the exact known legacy block,
 revoke the old account domain and remove that block. Verify stock password
 recovery before preparing, freshly enrolling, trial-testing and activating
-LocalPIN. Removing protected PAM bytes invalidates the whole immutable account
-domain, so enrollment under the old graph cannot survive migration. Import no
+LocalPIN. Migration explicitly revokes the old account bindings and provisions
+fresh identities, so enrollment under the old graph cannot survive migration. Import no
 old verifier or weaker software parameters. See the
 [migration runbook](integration-administration.md#migrate-the-temporary-pin-block).
 
 Upgrades preserve committed enrollment and throttle state. State migrations are versioned, transactional, tested in both directions where supported, and run before enabling the new code. Unsupported downgrades must leave the password route usable and explain how to disable integration. Kernel, Plasma, PAM, and authselect upgrades are part of the compatibility matrix.
 
-The implemented M8 path supports compatible schema-1 RPM release upgrades
-within version 0.1.0. It durably suspends integration, stops the broker, binds
-registry/credential/throttle state, and checks those bindings before resuming
-the previous services. [ADR 0016](adr/0016-package-cache-window.md)'s bounded
-native cache window retains account incarnations while real distribution
-`ldconfig` triggers run. New binaries invalidate test attestation and require a
-fresh trial and activation while preserving enrollment. Other transitions
-require a separately reviewed migration. Initial installation does not start or
-enable the socket or change KDE/authselect/faillock policy. The recorded M8
-matrix proved compatible upgrade preservation, downgrade refusal and interrupted
-cache-window reboot recovery without fresh enrollment. This does not establish
-compatibility with arbitrary distribution upgrades.
+M8.1 removes the immutable appliance/cache-window requirement. Routine Fedora
+44 `dnf upgrade` must preserve native account markers, registry incarnations,
+committed enrollment and durable throttles across Linux-PAM/authselect/Plasma
+updates and unrelated service-account creation. An operation overlapping a
+native replacement can become unavailable and use password recovery; later
+operations may use the updated trusted native components without a build-hash
+allowlist. Unknown PAM graphs still require an explicit compatibility decision.
+No package hook may recreate a missing marker or silently accept a new identity.
+
+LocalPIN RPM upgrades separately close the gate, quiesce the broker, validate
+versioned registry/credential/throttle bindings and preserve compatible state.
+Compatible schema-2 upgrades validate bound policy/state and can retain prior
+activation; disabled/trial installations remain unactivated. Unsupported
+transitions and downgrades refuse safely. Initial
+installation starts no socket and changes no KDE/authselect/faillock policy.
+The historical M8 matrix demonstrated the earlier restricted cache-window
+upgrade. The [M8.1 installed evidence](development/m8.1-desktop-compatibility.md)
+records actual DNF updates, native runtime reinstallation, compatible schema-2
+RPM upgrades through `.1` → `.3` → `.4`, ordinary reboot and interrupted-upgrade
+reboot/resume while preserving enrollment. Final source checks and the installed
+`.5` → `.6` upgrade passed with exact enrollment, registry, throttle, native tally
+and policy preservation and automatic restoration of prior activation. Earlier
+cases retain their recorded build scope. These are targeted Fedora 44 cases, not a promise about
+arbitrary future ABI/policy changes or physical hardware.
 
 Uninstall/rollback must remove LocalPIN's integration before removing the module or broker. If the PAM file changed after activation, remove only the exact owned block or stop for an explicit reviewed merge; do not overwrite unrelated administrator/package updates. Preserve protected backups until verified restoration. A broken broker or missing module must not cause a blank-password path.
 

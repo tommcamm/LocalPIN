@@ -1,0 +1,13 @@
+# Select the accounting correction only for a supported native authselect policy.
+# Unknown policy or a missing guard module runs the original native substack.
+auth [success=3 default=ignore] /usr/lib64/security/pam_localpin.so policy
+auth substack fingerprint-auth
+auth sufficient pam_permit.so
+auth requisite pam_deny.so
+# No sensor, no enrolled prints, cancellation, timeout and service errors deny
+# without manufacturing an authentication failure. Real mismatches still count.
+auth required pam_env.so
+auth requisite pam_faillock.so preauth silent
+auth [success=1 auth_err=bad maxtries=bad default=die] pam_fprintd.so
+auth [default=die] pam_faillock.so authfail
+auth required pam_faillock.so authsucc

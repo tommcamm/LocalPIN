@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-17",
+  "clone_uuid": "1b79af25-0f40-4a3e-86dd-889e1bed0dfa",
+  "scope": "initial disposable Fedora KDE 44 VM setup before LocalPIN package installation",
+  "bootstrap_sha256": "5b65d40f6ee9b3d16b0b90db39ce17b2d16c8c326e5620a7fa0286ffee077375",
+  "dedicated_accounts_created": true,
+  "password_secrets_guest_root_only": true,
+  "native_counter_files_copied_byte_for_byte": 0,
+  "persistent_faillock_on_btrfs": true,
+  "stock_files_systemd_nss": {
+    "passwd": [
+      "files",
+      "systemd"
+    ],
+    "group": [
+      "files",
+      "[SUCCESS=merge]",
+      "systemd"
+    ],
+    "shadow": [
+      "files",
+      "systemd"
+    ]
+  },
+  "fingerprint_and_faillock_features": true,
+  "actual_desktop_session": true,
+  "private_emulator": true,
+  "selinux": "Enforcing"
+}

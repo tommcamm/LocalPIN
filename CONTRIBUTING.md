@@ -1,27 +1,25 @@
 # Contributing to LocalPIN
 
-LocalPIN has completed isolated and guarded enforcing-VM M1 feasibility experiments
-and locally implements M2 pure policy/protocol models, M3 protected Linux
-storage, M4 credential primitives, the M5 bounded broker, M6 trusted enrollment
-worker/CLI. M6.1's account-authority component gate is complete for the restricted
-Fedora appliance domain in [ADR 0012](docs/adr/0012-immutable-appliance-account-authority.md).
-The [M6.1 report](docs/development/m6.1-account-authorities.md) and
-[sanitized results](experiments/m61/results/2026-10-17-account-authorities.json)
-record the real-account evidence. Ordinary unmanaged accounts remain unsupported.
-M7's production PAM adapter, isolated native tests and required enforcing-KDE
-acceptance cases passed for this domain. Its
-[report](docs/development/m7-pam-integration.md) records evidence and native
-accounting/TPM recovery limits.
-M8 packaging, confinement definitions, staged root activation/recovery and exact
-persistent accounting passed the recorded 49-case installed matrix on the
-restricted Fedora 44 x86_64 Btrfs appliance with SELinux enforcing. See the
-[M8 report](docs/development/m8-packaging-recovery.md) and
-[sanitized results](experiments/m8/results/2026-10-17-fedora44-rpm-recovery.json).
-M9 independent human/specialist review and physical hardware validation remain
-open; hosted CI execution remains unverified. Read the
-[product specification](docs/product-specification.md) and
-[implementation plan](docs/implementation-plan.md) before proposing implementation
-changes. Authentication behavior needs evidence appropriate to its risk, including
+LocalPIN implements the core policy, storage, credentials, bounded broker,
+trusted enrollment CLI, PAM adapter and Fedora packaging. Earlier M6.1–M8
+acceptance passed for the historical immutable Fedora 44 x86_64 Btrfs appliance;
+see the [M8 report](docs/development/m8-packaging-recovery.md). M8.1 changes the
+account authority, KDE fingerprint/password composition and distribution-update
+contract for an ordinary Fedora KDE 44 x86_64 desktop. Its recorded
+[targeted installed cases](docs/development/m8.1-desktop-compatibility.md) passed
+with SELinux enforcing and a private TPM emulator, including actual
+[KDE/RPM/reboot continuity](experiments/m81/results/installed-desktop-and-continuity.json)
+and [DNF updates](experiments/m81/results/dnf-upgrade.json). Final source checks
+and the compatible `.5` → `.6` RPM upgrade passed with exact protected-state
+preservation and automatic restoration of prior activation. The report keeps
+each earlier installed case's build scope explicit. GUI/DBus
+AccountsService, full old-TPM-credential migration, physical devices and the full
+hardware matrix remain unvalidated. M9 independent human/specialist review and
+release gates remain open; hosted CI execution remains unverified.
+
+Read the [product specification](docs/product-specification.md) and
+[implementation plan](docs/implementation-plan.md) before implementation changes.
+Authentication behavior needs evidence appropriate to its risk, including
 failure and recovery paths.
 
 ## Workflow
@@ -96,29 +94,38 @@ python3 crates/localpind/tests/run_enrollment_broker.py
 python3 crates/localpin-auth/tests/isolated_pam.py
 ```
 
-Changes to production account support also require
-[ADR 0012](docs/adr/0012-immutable-appliance-account-authority.md), the
-[account administration contract](docs/account-administration.md) and the
-[M6.1 evidence report](docs/development/m6.1-account-authorities.md). The supported
-domain uses immutable account/policy inputs plus a kernel writer-drain barrier;
-root administration durably revokes all incarnations before changing them.
-Do not substitute UID/name/home equality, a synthetic authority or successful
-password authentication for this proof. Own-user operations must not create or
-repair required state. Repeat the guarded real-account matrix in an independent
-disposable Fedora KDE VM with SELinux enforcing; ordinary workspace tests cannot
-establish those guarantees. Lifecycle provisioning changes global VM account
-administration and is never a host-side test setup step.
+Changes to production account support require
+[ADR 0017](docs/adr/0017-shadow-record-account-authority.md) and the
+[account administration contract](docs/account-administration.md). Managed
+identity uses a random root-owned marker in the native shadow record, a separate
+random 128-bit incarnation and retained native account locks through delivery.
+Test delete/recreate with identical UID/name/home/imported hash, retained home,
+normal passwd/chage/usermod and AccountsService, systemd-sysusers additions,
+concurrent mutation, restart, migration and crash recovery. Refuse legacy
+registries; never infer continuity from UID/name/home or successful password
+verification. Own-user operations cannot create/repair required state. Use
+isolated native account-tool harnesses and disposable enforcing Fedora guests;
+ordinary workspace tests cannot establish the full installed guarantee.
 
 Activation/package changes also require the
 [integration administration contract](docs/integration-administration.md),
-[ADR 0014](docs/adr/0014-persistent-faillock.md),
-[ADR 0015](docs/adr/0015-m8-activation-and-rpm.md) and
-[ADR 0016](docs/adr/0016-package-cache-window.md). Keep the exact legacy volatile
-component policy separate from M8's required persistent variant. Activation
-refuses the known fingerprint/faillock composition; tests must preserve native
-counters. Synthetic tool/fault tests do not complete the installed enforcing-VM
-RPM, desktop, reboot and console-recovery acceptance matrix. A root-recorded
-test attestation is explicitly operator supplied, not automated desktop proof.
+[persistent accounting decision](docs/adr/0014-persistent-faillock.md), and
+current M8.1 compatibility ADRs. Keep historical ADRs/reports distinguishable
+from current implementation. The new authority sets no immutable flags and
+requires no package-cache window. Prove native marker/incarnation/enrollment and
+throttle preservation through real `dnf upgrade`, including package replacements
+and service-account creation. Verify KDE password/fingerprint behavior with
+persistent counters and no device, wrong/right factor, broker outage and normal
+password success. Never reset existing counters or disable a factor to conceal
+an incompatible graph. Unknown graphs remain refused.
+
+Synthetic tests, root operator attestations and package builds do not complete
+the installed enforcing KDE/RPM/reboot/console matrix. The
+[M8.1 report](docs/development/m8.1-desktop-compatibility.md) links the targeted
+cases that passed, including final source and targeted final RPM validation. Repeat
+affected installed cases when changing these boundaries; do not extend that
+result to unseen policies, untested account administration paths or physical
+devices. M9 independent review and hardware/release gates remain separate.
 
 ## Authentication experiments
 

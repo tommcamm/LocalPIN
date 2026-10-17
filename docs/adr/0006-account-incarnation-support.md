@@ -1,5 +1,17 @@
 # ADR 0006: Require authoritative account lifecycle support
 
+Current implementation note, 2026-10-17: [ADR 0017](0017-shadow-record-account-authority.md)
+supersedes the appliance-specific implementation below for newly provisioned
+`LPACCT03` accounts. The account's authoritative marker lives in its root shadow
+record, so native deletion removes that authority as part of the account
+transaction; retained native locks prevent the transaction crossing LocalPIN
+finalization/delivery. It explicitly defines ordinary local account tools as
+the supported administration contract. Direct root editing outside that lock
+or copying/restoring markers is trusted authority administration requiring
+prior revocation. UID/name/home equality and own-user password authentication
+still cannot create continuity. Historical M6.1 evidence below does not certify
+this changed mechanism; M8.1 installed acceptance is required before M9.
+
 Date: 2026-10-17. Status: accepted fail-closed support restriction.
 Original M2 implementation status: production
 account lifecycle adapter remains unimplemented.

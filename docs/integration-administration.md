@@ -1,218 +1,171 @@
-# Fedora appliance installation and recovery
+# Fedora KDE installation and recovery
 
-The M8 tools target only the provisioned Fedora 44 x86_64 Btrfs appliance in
-[ADR 0012](adr/0012-immutable-appliance-account-authority.md). They do not adopt
-an everyday Fedora account automatically. Installed validation and remaining
-gates are recorded in the [M8 report](development/m8-packaging-recovery.md).
-Physical hardware and independent specialist review remain M9 work.
+The current M8.1 implementation targets Fedora KDE 44 x86_64 with ordinary local
+files accounts and the distribution's local authselect profile. It uses
+[shadow-record account markers](adr/0017-shadow-record-account-authority.md)
+and [KDE-specific native authentication accounting](adr/0018-kde-native-update-compatibility.md).
+It does not freeze `/etc` or require a reference VM's exact library build.
+The earlier [M8 report](development/m8-packaging-recovery.md) describes the
+superseded appliance implementation. Updated installed acceptance and independent
+review remain requirements before M9 or daily deployment.
 
-## Install without activating
+## Install without activation
 
-Build the native RPM using [the packaging instructions](../packaging/fedora/README.md).
-Use the resulting RPM in the disposable enforcing VM first. Installation copies
-the broker, workers, CLI, PAM adapter, disabled private PAM services, systemd
-units and SELinux policy. It does not enroll an account, change KDE/authselect or
-faillock configuration, or enable/start the broker.
-
-The administrative tool is non-setuid and has fixed paths:
+Build the RPM using [the packaging instructions](../packaging/fedora/README.md)
+and install it in a disposable enforcing Fedora KDE VM first. Installation
+copies the broker, workers, CLI, PAM module, four disabled private PAM services,
+reviewed templates, systemd units and SELinux policy. It does not enroll users,
+edit the KDE/authselect/faillock configuration, or start or enable the broker.
 
 ```sh
 sudo /usr/libexec/localpin/localpin-integration status
 ```
 
-Its JSON distinguishes prepared, timed trial, active and disabled states.
-The public activation gate is separate from protected backups and manifests.
-Missing, unsafe, malformed or expired gates permit only the existing password
-route. Enrollment and broker PIN verification do not open the desktop gate.
+The root-only, non-setuid integration tool uses fixed paths. Missing, unsafe,
+malformed and expired activation gates leave the existing password route.
+Enrollment alone never opens the desktop PIN gate.
 
-## Prepare persistent accounting once
+## Prepare native accounting once
 
-The original `/run/faillock` policy remains supported for older component
-experiments. M8 activation requires the exact persistent configuration:
+Installed activation requires persistent native password accounting:
 
 ```text
 dir = /var/lib/faillock
 ```
 
-The directory must be root:root 0755 on the reviewed persistent Btrfs filesystem.
-This changes the native tally location for every PAM consumer of the global
-configuration, including ordinary passwords. It preserves the configured
-thresholds, failure interval and unlock time. It does not change authselect.
+The directory must be root:root 0755 on persistent local Btrfs, ext4 or XFS
+storage. Fedora KDE's default Btrfs is the principal installed test target;
+accepting another local filesystem is not physical durability certification.
+Only the exact configuration above, ending in a newline, is currently accepted.
+Custom thresholds or extra PAM restrictions require explicit compatibility work.
 
-Perform the transition from a maintenance console with graphical logins,
-remote logins and other PAM authentication stopped. Durably revoke any existing
-managed domain with `localpin-account begin-mutation` first, and stop both
-`localpin.socket` and `localpin.service`. Preserve the original configuration
-and **all existing canonical native tally bytes, ownership, modes and SELinux
-labels** in root-protected offline backups. Move those records to the persistent
-directory without replacing or resetting an existing destination. A mismatching
-destination requires an administrator decision; never select the smaller tally.
-Synchronize each file and its destination directory before atomically replacing
-the configuration. Restore the distribution's correct SELinux labels.
+Move from Fedora's default `/run/faillock` only from a maintenance console with
+all graphical, remote and other PAM authentication stopped. Stop `localpin.socket`
+and `localpin.service`, and revoke any existing domain with
+`localpin-account begin-mutation`. Back up the original configuration and every
+native tally with its exact bytes, owner, mode and SELinux label. Copy all
+canonical native tallies to the persistent directory without overwriting an
+existing different destination. Synchronize each file and destination directory
+before atomically replacing the configuration, then restore distribution SELinux
+labels. Never reset or choose the smaller tally to resolve a conflict.
 
-The activation tool deliberately refuses the volatile configuration; it does
-not attempt a live tally copy while native authenticators may be writing. A lost
-old tally is unavailable state, rather than an empty counter that can be guessed
-or reconstructed. Provisioning after this policy change creates fresh account
-incarnations and requires enrollment once. Subsequent normal boots use the same
-persistent state and enrollment. [ADR 0014](adr/0014-persistent-faillock.md)
-describes the contract and native regression evidence.
+This is a one-time offline setup requirement. The activation tool refuses a live
+copy while authenticators might be writing. Subsequent normal boots and package
+updates retain the persistent tallies and enrollment. Missing accounting requires
+explicit recovery, not automatic reconstruction. See [ADR 0014](adr/0014-persistent-faillock.md).
 
-## Prepare, enroll, test and activate
+## Prepare and enroll
 
-Prerequisites include files-only NSS, the exact reviewed native PAM inputs,
-SELinux enforcing, the original measured KDE service and the supported account
-lifecycle setup. The tool refuses the known `with-faillock`/parallel-fingerprint
-combination before making changes. It never clears native counters or disables
-another authenticator to conceal that incompatibility.
+Use SELinux enforcing, the stock KDE services and supported local authselect
+policy. `files systemd` NSS and Fedora's group `files [SUCCESS=merge] systemd`
+form are supported. Network identities, systemd-homed, unknown NSS action clauses
+and custom authentication restrictions remain outside this domain. Ordinary
+`with-fingerprint` and `with-faillock` may be enabled together.
+PIN also supports Fedora's disabled-fingerprint profile and keeps it disabled.
 
-Inspect the proposed exact KDE change first, using all UIDs to support:
+Inspect changes, selecting the numeric UIDs of accounts to support:
 
 ```sh
-sudo /usr/libexec/localpin/localpin-integration prepare --uid 21061 --dry-run
-sudo /usr/libexec/localpin/localpin-integration prepare --uid 21061
+sudo /usr/libexec/localpin/localpin-integration prepare --uid 1000 --dry-run
+sudo /usr/libexec/localpin/localpin-integration prepare --uid 1000
 ```
 
-Substitute the appliance's selected numeric UID. Preparing first makes durable
-protected backups and a recovery journal, closes the gate, stops the broker,
-revokes the whole account domain, installs the reviewed private policies and
-exact KDE block, and seals fresh disabled incarnations. It then starts the
-broker. A failed preparation leaves the gate closed and retains its recovery
-intent. Unknown policies and existing incomplete transactions are refused.
+Preparation durably backs up both KDE services and all four private services,
+records recovery intent, closes the gate, stops the broker, revokes old managed
+incarnations and installs the owned policies. It changes only the two KDE auth
+substack references and adds the PIN prefix to `kde`; their other directives and
+source formatting are retained. It provisions fresh disabled account markers
+under the native account lock, then starts the broker. Unknown policy and
+incomplete transactions are refused. No global immutable flags are added.
 
-From each selected account's foreground terminal in its eligible local KDE
-session, enroll explicitly:
+From each selected user's foreground terminal in a local KDE session:
 
 ```sh
 localpinctl doctor
 localpinctl enroll --backend software
 ```
 
-Use `--backend tpm2-required` for the emulator test or a separately validated
-physical deployment. The CLI asks for the existing account password and new PIN
-interactively. Do not pass secrets in arguments, environment variables or stdin.
+Choose `--backend tpm2-required` for a validated TPM deployment. The CLI obtains
+the existing password and new PIN interactively; do not put them in arguments,
+environment variables or pipes. See [account administration](account-administration.md)
+for marker ownership, ordinary account changes and recovery.
 
-Open a ten-minute trial as root:
+## Test and activate
 
 ```sh
 sudo /usr/libexec/localpin/localpin-integration trial
 ```
 
-Every selected account must be enrolled. The trial expires on suspend-inclusive
-boot time and cannot survive reboot. Test PIN unlock, the existing full-password
-route, and administrative recovery after a component failure on the actual
-locker. Retain an administrator console throughout. If the trial expires, the
-ordinary password route remains available. Start another trial for another test.
+The trial lasts ten minutes on suspend-inclusive boot time and expires at
+reboot. Test actual PIN unlock, password unlock, unavailable fingerprint sensor,
+a genuine failed biometric match where hardware is available, lockout handling,
+and console recovery after a component failure. Keep an administrator console.
+An expired trial leaves the password route available.
 
-Exercise the root console-recovery procedure below before final activation. It
-revokes the test enrollment. Prepare and enroll again afterward, then repeat
-the current PIN and password tests with the same installed package. Successful
-password fallback with a missing module is a separate check; it does not by
-itself test root recovery.
-
-After completing the real desktop tests, the administrator records them and
-activates the tested enrollment:
+Exercise `recover` below before final activation, then prepare, enroll and repeat
+the desktop tests with the final enrollment. After real tests pass:
 
 ```sh
 sudo /usr/libexec/localpin/localpin-integration record-tests --pin --password --recovery
 sudo /usr/libexec/localpin/localpin-integration activate
 ```
 
-These flags are an **administrator attestation**, not automated proof that a
-desktop test ran. The recorded evidence is tied to the current boot, trial,
-account/credential generations, protected policy inputs and installed binaries.
-Activation refuses missing, stale or changed bindings. The M8 experiment runner
-performs the actual UI tests separately before recording the attestation.
-Successful activation explicitly enables the socket for future boots.
-Preparation and trial alone leave boot startup disabled; recovery disables it.
+These flags record an administrator attestation, not an automated desktop test.
+The attestation binds the boot, live trial, enrollment and installed policies and
+binaries. Activation explicitly enables socket startup on later boots. A PIN
+success never resets the native password/biometric tally. A successful password
+or biometric match resets it through native `pam_faillock authsucc`; an unavailable
+sensor or service error adds no false failure. Native preauth still denies a
+locked account.
 
-## Recover a failed graphical unlock
+## Updates
 
-Use the verified appliance keyboard shortcut to reach a text console. Console
-switch/return keys depend on the deployed keyboard and compositor; verify them
-in the VM before relying on PIN. Authenticate with the existing administrator
-password and run:
+Use ordinary `sudo dnf upgrade` for Fedora 44 updates. Native PAM is loaded through
+its stable SONAME; per-operation checks replace fixed build hashes. No `/etc`
+cache window, thawing or account resealing is required for ordinary distribution
+updates. Stock KDE files are distribution `%config(noreplace)` files, while the
+four private services are LocalPIN `%config(noreplace)` files. Review `.rpmnew`
+files when an upstream service graph changes; unknown authentication semantics
+must not be merged automatically.
+
+A compatible LocalPIN RPM upgrade verifies its version/schema, durably suspends
+integration, closes the gate and stops services before replacement. After native
+RPM file triggers finish, it checks the exact account registry, credentials and
+throttles, refreshes only the LocalPIN binary binding and restores previous
+service/activation state. A prepared or disabled installation stays unactivated.
+Failures retain password recovery and a closed gate. `package-resume` retries a
+suspended compatible transaction. Unsupported schema changes and downgrades
+require explicit disable/migration; they never silently reset state.
+
+The old LPACCT01/LPACCT02 appliance registry and schema-1 activation cannot be
+adopted as live desktop identity. Disable with the old tools, verify password
+recovery, retain offline backups, and remove the old experimental RPM before
+installing the new package and freshly provisioning/enrolling. The old RPM tool
+deliberately rejects a schema-2 in-place upgrade, even when disabled. Do not
+bypass its scriptlets. Legacy immutable flags are removed only after durable
+privileged revocation. This one-time development migration differs from later
+compatible schema-2 updates, which preserve the enrollment.
+
+## Console recovery and removal
+
+Verify the VM/hardware's console-switch and return keys before relying on PIN.
+Authenticate to a text console with the full administrator password:
 
 ```sh
 sudo /usr/libexec/localpin/localpin-integration recover --dry-run
 sudo /usr/libexec/localpin/localpin-integration recover
 ```
 
-The real operation closes the PIN gate, stops socket activation and the broker,
-durably revokes all managed incarnations, removes only the exact owned leading
-KDE block and restores known private policies from protected backups. It does
-not need a working PAM adapter or backend worker. It preserves subsequent
-administrator KDE edits and persistent native accounting. No reboot or OS
-reinstallation is required. `disable` runs the same recovery operation.
+`disable` performs the same operation. It closes the gate, stops/disables broker
+startup, durably revokes account identity, removes only the owned PIN block and
+auth substack substitutions, and restores known private policies from protected
+backups. Subsequent unrelated administrator suffix edits are retained. Native
+tallies remain intact. No working broker, TPM or PIN module is required.
 
-If the owned block itself changed or a backup is missing/corrupt, recovery
-closes the gate and refuses to guess a PAM merge. From the console, inspect
-`/var/lib/localpin-integration/control/manifest.json` and its named backup.
-Verify the original KDE digest against `7d91b3ad73a998e8b10f9edccd74ba04179a778c4a5e61d9176872f43c7bbac3`
-before using that backup. Preserve the changed file for review. If the lifecycle
-helper is missing, restore the matching package/helper from the console before
-revoking/unfreezing the managed domain. Do not clear immutable flags while
-claiming the old enrollment remains valid.
-
-## Upgrade, downgrade and uninstall
-
-Compatible RPM release upgrades use schema 1 and unchanged reviewed policy.
-Run upgrades as a LocalPIN-only maintenance transaction, with other account and
-policy administration quiescent. General system upgrades are outside this
-continuity procedure; revoke the domain before that maintenance and provision
-fresh incarnations afterward.
-The old tool checks candidate EVR with RPM's own version comparison, refuses
-downgrades/unknown transitions, and durably records suspension before stopping
-services. The upgrade closes the gate and preserves account incarnations,
-credential generations and throttle records. RPM preserves the locally enabled
-private `%config(noreplace)` policies. The new tool checks their exact bytes and
-metadata plus unchanged credential/throttle bindings before resuming the
-previous services. Desktop testing and activation must be repeated for the new
-binaries; enrollment is retained.
-
-Fedora's normal library-cache triggers run during this transaction. A fixed
-native helper first durably suspends account authority and releases only the
-`/etc` directory flag. Protected account files, PAM files and other protected
-directories remain immutable throughout. The final package trigger refreezes
-`/etc` and restores the original account incarnations only after exact input
-checks. Only `/etc` directory size and change timestamps may differ. No native
-RPM trigger is skipped, and no account or credential is silently resealed.
-See [ADR 0016](adr/0016-package-cache-window.md) for crash boundaries.
-
-An interrupted upgrade retains a suspended journal. After correcting the
-package/input problem, retry:
-
-```sh
-sudo /usr/libexec/localpin/localpin-integration package-resume
-```
-
-Unknown policy/schema migrations require a separately reviewed procedure.
-The tool does not import or silently reinterpret another version's state.
-
-Uninstall runs owned recovery while the module, workers and SELinux policy are
-still installed. It refuses to remove the package while any PAM service still
-references LocalPIN. It then stops/disables the socket before removing files
-and policy. Protected backups, retired state and persistent faillock records
-remain available for explicit administrator retention/cleanup; uninstall never
-deletes native password accounting.
-
-## Migrate the temporary PIN block
-
-The only recognized legacy prefix is the measured three-line
-`# BEGIN local screen-unlock PIN` block containing
-`auth sufficient pam_pinlock.so retries=1`, followed by the exact measured stock
-KDE service. Other legacy edits require manual review.
-
-First verify the existing full-password route and prepare a working console.
-Then inspect and remove that exact prefix:
-
-```sh
-sudo /usr/libexec/localpin/localpin-integration migrate-legacy --dry-run
-sudo /usr/libexec/localpin/localpin-integration migrate-legacy
-```
-
-The tool saves a durable protected original and journal before revocation or
-edits. It imports no old hash, PIN or credential. Verify stock password recovery,
-then follow prepare/enroll/trial/test/activate above. This ordering reflects the
-existing immutable-authority contract: replacing any protected PAM policy
-requires fresh account incarnations. The two PIN modules are never stacked.
+Changed owned directives, unsafe/missing backups or ambiguous references require
+a console review of `/var/lib/localpin-integration/control/manifest.json` and its
+named backup. Keep the package installed while reviewing; never guess a PAM
+merge or force erase with `--noscripts`. Final RPM erase runs recovery while the
+tool, module and policy remain installed, and refuses other PAM services still
+referencing any owned module or substack. Credential, throttle, registry, tally
+and backup data are retained for explicit administrator cleanup.

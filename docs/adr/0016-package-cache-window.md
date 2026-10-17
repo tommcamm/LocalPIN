@@ -1,5 +1,11 @@
 # ADR 0016: A bounded account-authority window for native package caches
 
+Historical implementation: [ADR 0017](0017-shadow-record-account-authority.md)
+supersedes this cache-window mechanism for current `LPACCT03` authority. New
+state does not freeze `/etc` or require a cache journal. The retained command
+names perform quiescent identity validation only; legacy journals cannot restore
+current identity. The M8 evidence below remains historical.
+
 Date: 2026-10-17. Status: implemented; installed package acceptance remains
 tracked in the [M8 report](../development/m8-packaging-recovery.md).
 

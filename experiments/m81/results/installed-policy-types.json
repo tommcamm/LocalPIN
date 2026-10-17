@@ -1,0 +1,97 @@
+{
+  "exact_original_bytes_and_profile_restored": true,
+  "localpin_evr": "0.1.0-0.6.alpha1.fc44",
+  "manual_tally_reset_performed": false,
+  "native_history_cleared_only_by_genuine_password_success": true,
+  "observations": {
+    "fingerprint-auth-nbsp_auth": {
+      "existing_pin_denied": true,
+      "native_factor_denied": true,
+      "native_failure_history_not_erased": true,
+      "pin_eligibility_refused": true,
+      "policy_check_refused": true
+    },
+    "fingerprint-auth-nbsp_comment": {
+      "existing_pin_denied": true,
+      "native_factor_denied": true,
+      "native_failure_history_not_erased": true,
+      "pin_eligibility_refused": true,
+      "policy_check_refused": true
+    },
+    "fingerprint-auth-unknown_type": {
+      "existing_pin_denied": true,
+      "native_factor_denied": true,
+      "native_failure_history_not_erased": true,
+      "pin_eligibility_refused": true,
+      "policy_check_refused": true
+    },
+    "fingerprint-auth-uppercase_auth": {
+      "existing_pin_denied": true,
+      "native_factor_denied": true,
+      "native_failure_history_not_erased": true,
+      "pin_eligibility_refused": true,
+      "policy_check_refused": true
+    },
+    "password-auth-nbsp_auth": {
+      "existing_pin_denied": true,
+      "native_factor_denied": true,
+      "native_failure_history_not_erased": true,
+      "pin_eligibility_refused": true,
+      "policy_check_refused": true
+    },
+    "password-auth-nbsp_comment": {
+      "existing_pin_denied": true,
+      "native_factor_denied": true,
+      "native_failure_history_not_erased": true,
+      "pin_eligibility_refused": true,
+      "policy_check_refused": true
+    },
+    "password-auth-unknown_type": {
+      "existing_pin_denied": true,
+      "native_factor_denied": true,
+      "native_failure_history_not_erased": true,
+      "pin_eligibility_refused": true,
+      "policy_check_refused": true
+    },
+    "password-auth-uppercase_auth": {
+      "existing_pin_denied": true,
+      "native_factor_denied": true,
+      "native_failure_history_not_erased": true,
+      "pin_eligibility_refused": true,
+      "policy_check_refused": true
+    },
+    "postlogin-nbsp_auth": {
+      "existing_pin_denied": true,
+      "native_factor_denied": true,
+      "native_failure_history_not_erased": true,
+      "pin_eligibility_refused": true,
+      "policy_check_refused": true
+    },
+    "postlogin-nbsp_comment": {
+      "existing_pin_denied": true,
+      "native_factor_denied": true,
+      "native_failure_history_not_erased": true,
+      "pin_eligibility_refused": true,
+      "policy_check_refused": true
+    },
+    "postlogin-unknown_type": {
+      "existing_pin_denied": true,
+      "native_factor_denied": true,
+      "native_failure_history_not_erased": true,
+      "pin_eligibility_refused": true,
+      "policy_check_refused": true
+    },
+    "postlogin-uppercase_auth": {
+      "existing_pin_denied": true,
+      "native_factor_denied": true,
+      "native_failure_history_not_erased": true,
+      "pin_eligibility_refused": true,
+      "policy_check_refused": true
+    }
+  },
+  "passed": true,
+  "raw_evidence_guest_root_only": true,
+  "runner_sha256": "8f2fe5f9f29c2c56eb3282c804be36f7e88574c8d26451e1ce6a0d9dc9c1f26d",
+  "same_existing_tpm_pin_verified": true,
+  "selinux": "Enforcing"
+}

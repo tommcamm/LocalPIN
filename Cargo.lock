@@ -312,6 +312,7 @@ name = "localpin-pam"
 version = "0.1.0-alpha.1"
 dependencies = [
  "libc",
+ "localpin-auth",
  "localpin-core",
  "localpin-protocol",
  "zeroize",

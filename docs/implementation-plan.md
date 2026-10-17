@@ -1,8 +1,9 @@
 # LocalPIN implementation plan
 
 - Date: 2026-10-17
-- Status: Accepted roadmap; M0 implemented locally; M1 feasibility complete; M2–M8 implemented locally, with M6.1, M7 and M8 acceptance complete only for ADR 0012's restricted appliance domain. M8's recorded 49-case installed matrix passed on Fedora 44 x86_64 Btrfs with SELinux enforcing and a private TPM emulator. M9 independent human/specialist review and physical hardware gates remain open. Hosted CI execution remains unverified; unmanaged accounts remain unsupported.
-- Source of requirements: [product-specification.md](product-specification.md), version 1.3. M1 clarifies password/PIN accounting; M2 settles time boundaries and restricts lifecycle support; M6.1 defines the narrow implemented account domain.
+- Status: M0–M8 implemented with historical appliance acceptance; M8.1 final source checks and targeted installed RPM acceptance passed on Fedora KDE 44 x86_64 with SELinux enforcing and a private TPM emulator. The [M8.1 report](development/m8.1-desktop-compatibility.md) records evidence and each installed case's build scope. GUI/DBus AccountsService, full old-TPM-credential migration and physical hardware remain unvalidated. M9 independent human/specialist review and release gates remain open; hosted CI execution remains unverified.
+- Source of requirements: [product-specification.md](product-specification.md), version 1.5. ADR 0017 replaces the frozen lifecycle domain with native shadow-record markers and locking; ADR 0018 defines KDE/native-update compatibility.
+
 
 This plan turns the specification into independently reviewable changes and evidence gates. The specification remains authoritative. An unresolved design question below must be resolved in an architecture decision record (ADR), with a specification amendment if necessary, rather than silently changing the requirements.
 
@@ -40,6 +41,7 @@ M0 repository foundation
   -> M6.1 production account lifecycle and eligibility
   -> M7 production PAM integration
   -> M8 Fedora packaging and recovery
+  -> M8.1 ordinary Fedora desktop and distribution-update acceptance
   -> M9 independent review and staged release
 ```
 
@@ -345,8 +347,9 @@ SELinux enforcing and a private TPM emulator. The
 own the installed evidence. [ADR 0014](adr/0014-persistent-faillock.md),
 [ADR 0015](adr/0015-m8-activation-and-rpm.md),
 [ADR 0016](adr/0016-package-cache-window.md) and the
-[administration runbook](integration-administration.md) define the current
-persistent accounting, staged gate, migration and RPM recovery contracts.
+[administration runbook](integration-administration.md) define the historical
+appliance contract. M8.1 below supersedes the frozen lifecycle, native build
+pins and KDE factor composition for the current implementation.
 
 - Ship systemd units, reviewed sandbox settings, SELinux policy and RPM packaging. Determine native dependency sourcing and the distinction between project-distributed RPMs and future Fedora repository inclusion.
 - Installation makes no enrollment or PAM activation change. Activation recognizes only verified layouts and has a dry-run diff, protected original backup, digests and transactional edits.
@@ -371,6 +374,60 @@ whole immutable account domain:
 
 Exit gate: Fedora RPM lifecycle and recovery matrix passes with SELinux enforcing; activation is opt-in and layout checked; migration and rollback have executable evidence. Changes to an everyday machine occur only as a later, deliberate rollout.
 
+### M8.1 — Ordinary Fedora KDE 44 and distribution-update compatibility
+
+Status, 2026-10-17: **final source checks and targeted installed RPM acceptance passed** on ordinary
+Fedora KDE 44 x86_64 with SELinux enforcing and a private TPM emulator. The
+[M8.1 report](development/m8.1-desktop-compatibility.md) links actual
+[KDE/RPM/reboot continuity](../experiments/m81/results/installed-desktop-and-continuity.json),
+[26-package DNF upgrade and new kernel](../experiments/m81/results/dnf-upgrade.json),
+[native PAM/authselect reinstallation](../experiments/m81/results/native-pam-reinstall.json),
+[disabled-fingerprint profile](../experiments/m81/results/without-fingerprint-profile.json)
+and [legacy flag isolation](../experiments/m81/results/legacy-flags.json).
+Final source checks and the compatible `.5` → `.6` RPM upgrade passed with exact
+protected-state preservation and automatic restoration of prior activation.
+Earlier installed cases retain their recorded build scope. Historical M8's 49-case
+appliance result is not substituted for these changes. GUI/DBus AccountsService
+and full old-TPM-credential migration remain untested; physical devices,
+alternate filesystems and the full hardware matrix retain M9/release gates.
+
+- Replace global immutable account/policy protection with
+  [ADR 0017](adr/0017-shadow-record-account-authority.md)'s root shadow-record
+  marker, independent random incarnation and native account-lock retention
+  through actual delivery. Refuse legacy registries and migrate only through
+  durable revocation and fresh provisioning/enrollment.
+- Permit stock local `files systemd` NSS, normal passwd/chage/usermod and
+  AccountsService changes, and systemd-sysusers service additions. Prove deleted
+  users cannot inherit old PINs after identical UID/name/home/hash recreation,
+  including retained home and broker downtime. Foreign reserved fields must not
+  be silently overwritten by normal provisioning.
+- Remove fixed filesystem and individual native PAM build hashes. Use the
+  distribution's stable ABI, trusted metadata and operation-local unchanged
+  checks. Preserve fail-closed policy/account restrictions and private worker
+  confinement under SELinux enforcing.
+- Implement [ADR 0018](adr/0018-kde-native-update-compatibility.md)'s reviewed KDE
+  password/fingerprint composition, retaining both factors and original native
+  counters. Test no-device startup, wrong/right factors, persistent lockout,
+  counter preservation and normal password success without assuming a later KDE
+  account phase. Unknown compositions remain refused.
+- Remove immutable package-cache windows from the current installed workflow.
+  Prove actual `dnf upgrade` preserves account marker/incarnation, enrollment,
+  throttle state and password recovery across PAM/authselect/Plasma updates and
+  service-account creation. Repeat after reboot and interrupted transactions.
+- Exercise clean install, old-authority migration, enroll/trial/activate, package
+  upgrade, downgrade refusal, disable/reprepare, erase and text-console recovery
+  with SELinux enforcing. Keep source tests, isolated native-tool evidence and
+  full installed acceptance distinguishable in the report.
+
+Exit gate: new lifecycle, KDE factor/accounting and ordinary distribution-update
+matrices pass on disposable Fedora KDE 44 x86_64 with SELinux enforcing. Every
+changed boundary has executable evidence and no unresolved blocking finding.
+Recorded targeted Fedora 44 cases, final source checks and targeted final RPM
+acceptance passed; the report retains each case's build scope. Untested
+administration, old credential migration and hardware
+cases remain explicit coverage limits. Physical hardware and independent review
+remain M9 work.
+
 ### M9 — Review, hardware validation and versioned release
 
 - Build a requirement-to-evidence checklist covering every acceptance category in specification section 18 and every completion gate in section 20. Link tests, VM reports, hardware observations, benchmarks and review findings.
@@ -387,12 +444,12 @@ Exit gate: all specification completion gates have evidence and no unresolved se
 | Decision | Resolution required | When |
 |---|---|---|
 | PAM token reuse and UI | Does the actual Fedora stack consume the candidate without a second password prompt? If not, prove an explicit password-selection conversation or refuse activation. | M1, before M7 |
-| Account eligibility | ADR 0012 implements the exact reviewed Fedora policy for the restricted appliance domain; M6.1 records the production-authority component evidence. Unknown policy/state remains unavailable. | M1 feasibility; M6.1 acceptance before M7 |
+| Account eligibility | M8.1 uses ADR 0017 local-record authority and ADR 0018 reviewed KDE policy; unknown restrictions/state remain unavailable. Historical M6.1 evidence does not certify these changes. | M8.1 before M9 |
 | Failure accounting | A six-digit account password is indistinguishable from a PIN candidate until tested. Document potential PIN-budget consumption, wrong-PIN effects on password lockout counters, supported authselect features, and the exact fifth-attempt boundary. Reconcile ambiguous wording in specification section 11 without bypassing existing lockout policy. | M1/M2 |
 | TPM authorization and parent | Fix the reviewed object template, parent recreation, object identity checks, salted sessions, DA-budget inspection and behavior under unavailable hierarchy authorization. | M1/M4 |
 | Blocking backends | Prove how hard LocalPIN deadlines survive a blocked native call, discard late authorization, and clean up workers/handles/reservations without unbounded spawning. Measure total fallback latency separately, including delays in the original password stack. | M1/M5 |
 | Reboot throttling | Define conservative behavior for recent attempts even if no cooldown was active; a boot-ID change must not allow reboot-assisted unlimited guesses. | M2/M3 |
-| UID reuse | ADR 0006 remains binding. ADR 0012 implements immutable inputs, a writer-drain barrier and durable revocation for a defined appliance domain; M6.1 records its evidence. Ordinary UID/name/home equality cannot establish continuity. | M1/M2 restriction; M6.1 acceptance before M7 |
+| UID reuse | ADR 0017 binds the native root shadow marker to a random incarnation and retains native locks through delivery. Prove deletion/recreation, downtime, crash/reboot and supported-tool behavior; UID/name/home equality is insufficient. | M8.1 before M9 |
 | Local-session identity | Define eligible logind sessions/seats and the user-manager lookup policy; do not equate a claimed service name with a genuine locker. | M1/M5 |
 | Integration authority | Decide the narrow root/admin path for PAM changes and recovery, separate from fresh own-user password enrollment. | M1/M6 |
 | Revocation races | Define the durable commit point for disable/rotation versus a verification already in flight; fence later results by generation while acknowledging that previously delivered authorization can finish. | M2/M3 |
@@ -434,8 +491,11 @@ reports. The [M6.1 report](development/m6.1-account-authorities.md) now records
 the restricted production account implementation and component validation;
 M7 records its required unlock acceptance; M8's recorded installed confinement,
 RPM, desktop, reboot and recovery matrix passed for that same restricted domain.
-M9 retains independent review and physical hardware/release gates, and hosted CI
-execution remains unverified.
+The [M8.1 report](development/m8.1-desktop-compatibility.md) supplies fresh
+targeted installed evidence for the current account/KDE/update architecture,
+including passed final source checks and targeted final RPM acceptance. M9 retains independent review, missing
+administration/migration coverage and physical hardware/release gates; hosted
+CI execution remains unverified.
 
 No calendar estimate is committed before the feasibility work. Subsequent estimates should use measured test infrastructure effort and availability of independent review/hardware, with review and recovery work included in the schedule.
 

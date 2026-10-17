@@ -1,5 +1,11 @@
 # ADR 0012: Immutable-appliance account lifecycle authority
 
+Historical implementation: [ADR 0017](0017-shadow-record-account-authority.md)
+supersedes this frozen-domain authority for newly provisioned `LPACCT03`
+accounts. The observations and M6.1–M8 evidence below retain their original
+scope. New code sets no immutable flags; privileged migration first revokes
+old authority and removes its flags before fresh provisioning/enrollment.
+
 Date: 2026-10-17. Status: accepted for the restricted domain below; implemented
 and validated by the [M6.1 enforcing-VM evidence](../development/m6.1-account-authorities.md)
 and [separate development review](../development/m6.1-review.md). This does not

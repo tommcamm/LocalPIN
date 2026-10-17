@@ -23,6 +23,9 @@ pub(crate) const SUPPORTED_POLICY: &str = "auth requisite pam_faillock.so preaut
 const POLICY_PATH: &str = "/etc/pam.d/localpin-enroll";
 
 fn validate_policy_text(text: &str) -> bool {
+    if !crate::eligibility::pam_syntax_supported(text) {
+        return false;
+    }
     let canonical = text
         .lines()
         .filter_map(|line| {
@@ -418,6 +421,15 @@ mod tests {
         assert!(!validate_policy_text(include_str!(
             "../policy/localpin-enroll.disabled"
         )));
+        for malformed in [
+            format!("\u{a0}# misleading comment\n{SUPPORTED_POLICY}"),
+            SUPPORTED_POLICY.replace("auth requisite", "auth\u{b}requisite"),
+            SUPPORTED_POLICY.replace("pam_unix.so", "pam_unix.so#attached"),
+            SUPPORTED_POLICY.replace('\n', "\r\n"),
+            format!("# continuation \\\n{SUPPORTED_POLICY}"),
+        ] {
+            assert!(!validate_policy_text(&malformed));
+        }
     }
 
     #[test]

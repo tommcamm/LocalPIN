@@ -1,0 +1,6 @@
+{
+  "passed": true,
+  "kernel_before": "7.2.10-200.fc44.x86_64",
+  "kernel_after": "7.2.11-200.fc44.x86_64",
+  "newly_installed_kernel_booted": true
+}

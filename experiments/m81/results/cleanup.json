@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "physical_tpm_touched": false,
+  "temporary_ssh_key_removed": true,
+  "clone_autologin_removed": true,
+  "guest_private_secrets_removed": true,
+  "accounts_revoked": true,
+  "original_policy_restored": true,
+  "clone_undefined": true,
+  "private_emulator_state_removed_by_libvirt": true,
+  "owned_independent_volume_deleted": true,
+  "original_vm_remains_defined_and_off": true,
+  "temporary_host_access_removed": true,
+  "offline_bootstrap_copies_removed": true
+}

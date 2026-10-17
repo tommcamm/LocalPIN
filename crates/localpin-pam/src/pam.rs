@@ -77,6 +77,16 @@ impl NativePam {
         })
     }
 
+    fn native_policy_supported(&self) -> bool {
+        let Some(service) = self.item(PAM_SERVICE) else {
+            return false;
+        };
+        // SAFETY: PAM_SERVICE is a borrowed NUL-terminated Linux-PAM item;
+        // no PAM mutation occurs while the policy selector borrows its bytes.
+        let service = unsafe { CStr::from_ptr(service.as_ptr().cast()).to_bytes() };
+        localpin_auth::kde_native_policy_supported(service)
+    }
+
     fn item(&self, item: c_int) -> Option<NonNull<c_void>> {
         let mut value = ptr::null();
         // SAFETY: handle is live by the entry-point contract; value is a valid
@@ -180,6 +190,24 @@ impl Drop for NativeResponse {
     }
 }
 
+/// Parse only the explicit noninteractive policy selector or the normal PIN mode.
+unsafe fn policy_argument(argc: c_int, argv: *const *const c_char) -> Option<bool> {
+    match argc {
+        0 => Some(false),
+        1 if !argv.is_null() => {
+            // SAFETY: PAM's module ABI supplies argc live string pointers.
+            // NULL is rejected before reading either the argument or its bytes.
+            let argument = unsafe { *argv };
+            if argument.is_null() {
+                return None;
+            }
+            // SAFETY: the non-NULL argument obeys PAM's NUL-terminated contract.
+            (unsafe { CStr::from_ptr(argument) } == c"policy").then_some(true)
+        }
+        _ => None,
+    }
+}
+
 fn boundary(operation: impl FnOnce() -> c_int) -> c_int {
     catch_unwind(AssertUnwindSafe(operation)).unwrap_or(crate::IGNORE)
 }
@@ -188,21 +216,27 @@ fn boundary(operation: impl FnOnce() -> c_int) -> c_int {
 ///
 /// # Safety
 /// `handle` must be NULL or a live Linux-PAM handle with valid public item and
-/// conversation contracts. `argc`/`argv` obey the PAM module ABI; no arguments
-/// are supported. The handle must remain valid throughout this call.
+/// conversation contracts. `argc`/`argv` obey the PAM module ABI. No arguments
+/// selects PIN capture; exactly `policy` selects a noninteractive native-policy
+/// guard with no authentication decision. The handle stays live throughout.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pam_sm_authenticate(
     handle: *mut c_void,
     _flags: c_int,
     argc: c_int,
-    _argv: *const *const c_char,
+    argv: *const *const c_char,
 ) -> c_int {
     boundary(|| {
         // SAFETY: inherited live-handle contract of this exported entry point.
-        let Some(mut pam) = (unsafe { NativePam::new(handle, argc) }) else {
+        let Some(mut pam) = (unsafe { NativePam::new(handle, 0) }) else {
             return crate::IGNORE;
         };
-        crate::authenticate(&mut pam, crate::broker::verify)
+        // SAFETY: inherited argc/argv module ABI contract; no pointers escape.
+        match unsafe { policy_argument(argc, argv) } {
+            Some(true) if pam.native_policy_supported() => crate::SUCCESS,
+            Some(false) => crate::authenticate(&mut pam, crate::broker::verify),
+            _ => crate::IGNORE,
+        }
     })
 }
 
@@ -215,14 +249,19 @@ pub unsafe extern "C" fn pam_sm_setcred(
     handle: *mut c_void,
     _flags: c_int,
     argc: c_int,
-    _argv: *const *const c_char,
+    argv: *const *const c_char,
 ) -> c_int {
     boundary(|| {
         // SAFETY: inherited live-handle contract of this exported entry point.
-        let Some(pam) = (unsafe { NativePam::new(handle, argc) }) else {
+        let Some(pam) = (unsafe { NativePam::new(handle, 0) }) else {
             return crate::IGNORE;
         };
-        crate::setcred(&pam)
+        // SAFETY: inherited argc/argv module ABI contract; no pointers escape.
+        match unsafe { policy_argument(argc, argv) } {
+            Some(true) if pam.native_policy_supported() => crate::SUCCESS,
+            Some(false) => crate::setcred(&pam),
+            _ => crate::IGNORE,
+        }
     })
 }
 
@@ -247,6 +286,23 @@ mod tests {
                 crate::IGNORE
             );
             assert!(!PANIC_ON_ENTRY.with(std::cell::Cell::get));
+        }
+    }
+
+    #[test]
+    fn only_explicit_policy_argument_selects_noninteractive_guard() {
+        let policy = [c"policy".as_ptr()];
+        let unknown = [c"debug".as_ptr()];
+        let null = [ptr::null()];
+        // SAFETY: every non-NULL pointer refers to a live fixed C string.
+        unsafe {
+            assert_eq!(policy_argument(0, ptr::null()), Some(false));
+            assert_eq!(policy_argument(1, policy.as_ptr()), Some(true));
+            assert_eq!(policy_argument(1, unknown.as_ptr()), None);
+            assert_eq!(policy_argument(1, null.as_ptr()), None);
+            assert_eq!(policy_argument(1, ptr::null()), None);
+            assert_eq!(policy_argument(2, ptr::null()), None);
+            assert_eq!(policy_argument(-1, ptr::null()), None);
         }
     }
 

@@ -1,0 +1,24 @@
+{
+  "disabled_factor_never_enabled_by_correction": true,
+  "localpin_evr": "0.1.0-0.6.alpha1.fc44",
+  "native_disabled_factor": {
+    "informational_messages": 1,
+    "interactive_prompts": 0,
+    "pam_return": 9
+  },
+  "native_tally_unchanged": true,
+  "only_expected_pin_throttle_update_after_authorization": true,
+  "original_profile_restored": true,
+  "passed": true,
+  "phase": "without-fingerprint-profile",
+  "preservation_before_pin": {
+    "all_protected_file_metadata_preserved": true,
+    "boot_unchanged": true,
+    "managed_shadow_markers_preserved": true,
+    "registry_active_pointer_credentials_throttles_tallies_kde_bytes_preserved": true
+  },
+  "raw_snapshots_guest_root_only": true,
+  "runner_sha256": "04fc5a73fb3d2b0d6ccb9ea8f94d1b44b5e13d706ac4bf98ae12e049faefe6f7",
+  "same_existing_tpm_pin_verified_without_reenrollment": true,
+  "selinux_enforcing": true
+}

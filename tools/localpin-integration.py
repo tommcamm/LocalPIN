@@ -1,6 +1,6 @@
 #!/usr/bin/python3 -I
 # SPDX-License-Identifier: MIT OR Apache-2.0
-"""Fixed-path, non-setuid Fedora appliance activation and console recovery.
+"""Fixed-path, non-setuid Fedora KDE activation and console recovery.
 
 There is deliberately no alternate root, command, policy, secret or environment
 override. Importable functions permit synthetic filesystem tests; the installed
@@ -27,6 +27,7 @@ CONTROL = STATE / 'control'
 MANIFEST = CONTROL / 'manifest.json'
 GATE = STATE / 'gate'
 KDE = Path('/etc/pam.d/kde')
+FINGERPRINT = Path('/etc/pam.d/kde-fingerprint')
 MODULE = Path('/usr/lib64/security/pam_localpin.so')
 ACCOUNT = '/usr/libexec/localpin/localpin-account'
 POLICY = Path('/usr/share/localpin/policy')
@@ -39,23 +40,16 @@ POSTLOGIN = 'c1ecd4d1a5b5de7d26e3336cd33551d1d65e13751b5f46405183472895838a9d'
 PREFIX = b'# BEGIN LOCALPIN\nauth [success=done default=ignore] /usr/lib64/security/pam_localpin.so\n# END LOCALPIN\n'
 LEGACY_PREFIX = b'# BEGIN local screen-unlock PIN\nauth sufficient pam_pinlock.so retries=1\n# END local screen-unlock PIN\n'
 ENV = {'PATH': '/usr/sbin:/usr/bin', 'LANG': 'C', 'LC_ALL': 'C'}
-NATIVE = {
-    '/usr/lib64/libpam.so.0.85.1': 'e8a3e3aa67cc17d4c659892fe63b9695ae202b6f107170f1ef5bb345570a8760',
-    '/usr/lib64/security/pam_env.so': '5a54893c723005dc9b33b1f7da87fd30d9f8a0aefc333f7b0fd7585dd7dc848f',
-    '/usr/lib64/security/pam_faildelay.so': 'c284c89bcc9163a15e533ef1c335c198da59735f6d86e40c364fa1ccc84954a3',
-    '/usr/lib64/security/pam_faillock.so': 'babb242bec2f6a080f64c294d8641582c8ffbeda0ffe43eae5b2a3d3c4eb034b',
-    '/usr/lib64/security/pam_unix.so': '1b14e350075868d3118959858fec47a2cfdbab31506e8482c31d0c550ab00222',
-    '/usr/lib64/security/pam_nologin.so': '4a9f97b38509ce458d33d9563525dbde8243f1c472d260905899a7a7d80358fd',
-    '/usr/bin/unix_chkpwd': '0cb285f3c1819e3ca92545b448fed4d0b6a41ce81899ad11d9512d80b18b7e79',
-}
-PRIVATE = ('localpin-enroll', 'localpin-eligibility')
+NATIVE = tuple(Path('/usr/lib64/security') / ('pam_' + name + '.so') for name in
+               ('env', 'faildelay', 'faillock', 'unix', 'nologin')) + (Path('/usr/bin/unix_chkpwd'),)
+PRIVATE = ('localpin-enroll', 'localpin-eligibility', 'localpin-kde-password', 'localpin-kde-fingerprint')
 BINARIES = [MODULE, *(Path('/usr/libexec/localpin') / n for n in (
     'localpind', 'localpin-account', 'localpin-worker', 'localpin-auth-worker',
     'localpin-eligibility-worker')), Path('/usr/bin/localpinctl')]
-PROTECTED = [Path('/etc') / n for n in ('passwd', 'shadow', 'group', 'gshadow', 'environment')]
-PROTECTED += [KDE, *(Path('/etc/pam.d') / n for n in PRIVATE)]
-PROTECTED += [Path('/etc/authselect') / n for n in ('password-auth', 'postlogin', 'nsswitch.conf')]
-PROTECTED += [Path('/etc/security/faillock.conf'), Path('/etc/security/pam_env.conf')]
+# Mutable account databases and authselect output are rechecked by the native
+# authority/worker at each operation. They are not an installation fingerprint.
+PROTECTED = [KDE, FINGERPRINT, *(Path('/etc/pam.d') / n for n in PRIVATE),
+             Path('/etc/security/faillock.conf')]
 
 
 class Refusal(RuntimeError):
@@ -232,7 +226,7 @@ def load():
         return None
     except (ValueError, UnicodeError):
         raise Refusal('corrupt integration manifest; use documented manual console recovery') from None
-    require(isinstance(state, dict) and state.get('schema') == 1
+    require(isinstance(state, dict) and state.get('schema') in (1, 2)
             and state.get('phase') in ('preparing', 'prepared', 'active', 'disabled', 'suspended'),
             'unsupported integration state; use documented console recovery')
     return state
@@ -256,12 +250,77 @@ def binary_snapshot():
     return snapshot(BINARIES, metadata=False)
 
 
+def canonical(data):
+    """Compare reviewed PAM directives, permitting comments and whitespace."""
+    return '\n'.join(' '.join(line.split()) for raw in data.decode('ascii').splitlines()
+                     if (line := raw.partition('#')[0].strip()))
+
+
+def reviewed_pam_syntax(data):
+    """Admit the reviewed ASCII subset before normalizing a live KDE policy.
+
+    Recovery deliberately keeps its existing permissive canonical comparison.
+    Preparation accepts LF and space/tab, with printable ASCII full-line
+    comments, but no continuation, other controls or inline comment syntax.
+    """
+    if any(byte not in (9, 10) and (not 0x20 <= byte <= 0x7e or byte == 0x5c)
+           for byte in data):
+        return False
+    for line in data.split(b'\n'):
+        active = line.lstrip(b' \t')
+        if active and not active.startswith(b'#') and b'#' in active:
+            return False
+    return True
+
+
+def service_policy(path, *, integrated):
+    name = 'kde-localpin' if path == KDE else 'kde-fingerprint-localpin'
+    data = read(POLICY / (name + '.review-required'))
+    if not integrated:
+        if path == KDE:
+            require(data.startswith(PREFIX), 'invalid packaged KDE block')
+            data = data[len(PREFIX):]
+        data = data.replace(b'localpin-kde-password', b'password-auth').replace(
+            b'localpin-kde-fingerprint', b'fingerprint-auth')
+    return data
+
+
+def transform_service(path, data, *, install):
+    """Change one owned auth substack, preserving every other source byte."""
+    old = b'password-auth' if path == KDE else b'fingerprint-auth'
+    new = b'localpin-kde-password' if path == KDE else b'localpin-kde-fingerprint'
+    source, target = (old, new) if install else (new, old)
+    pattern = rb'(?m)^([ \t]*auth[ \t]+substack[ \t]+)' + re.escape(source) + rb'([ \t]*(?:#.*)?$)'
+    result, count = re.subn(pattern, lambda match: match[1] + target + match[2], data)
+    require(count == 1, 'missing or ambiguous KDE auth substack; console review required')
+    return (PREFIX + result) if install and path == KDE else result
+
+
+def native_policy_files():
+    # The stable SONAME is the Linux-PAM ABI contract. Fedora owns and updates
+    # its implementation; do not pin a particular distribution build's hash.
+    link = Path('/usr/lib64/libpam.so.0')
+    safe_parents(link)
+    info = link.lstat()
+    target = os.readlink(link)
+    require(stat.S_ISLNK(info.st_mode) and info.st_uid == info.st_gid == 0
+            and re.fullmatch(r'libpam\.so\.0\.[0-9.]+', target), 'unsafe libpam SONAME link')
+    for path in (*NATIVE, link.parent / target):
+        data = read(path, 16 * 1024 * 1024)
+        require(data[:6] == b'\x7fELF\x02\x01' and data[18:20] == b'\x3e\x00',
+                'native x86_64 PAM runtime required')
+
+
 def validate_policy(*, integrated=False):
-    auth = digest(read('/etc/authselect/password-auth'))
-    require(auth != FAILLOCK_AUTH,
-            'activation refused: parallel fingerprint failures accumulate under with-faillock; reviewed desktop compatibility is required')
-    require(auth == DEFAULT_AUTH, 'unknown password-auth profile; activation refused')
-    require(digest(read('/etc/authselect/postlogin')) == POSTLOGIN, 'unknown postlogin policy')
+    release = dict(line.split('=', 1) for line in read('/usr/lib/os-release').decode('ascii').splitlines()
+                   if '=' in line and not line.startswith('#'))
+    require(release.get('ID', '').strip('"') == 'fedora'
+            and release.get('VERSION_ID', '').strip('"') == '44'
+            and os.uname().machine == 'x86_64', 'Fedora KDE 44 x86_64 is required')
+    run([ACCOUNT, 'check-policy'])
+    require(all(line.split()[0] not in ('auth', '-auth')
+                for line in canonical(read('/etc/authselect/postlogin')).splitlines()),
+            'postlogin auth hooks require explicit support')
     for path, expected in [('/etc/pam.d/password-auth', '/etc/authselect/password-auth'),
                            ('/etc/pam.d/postlogin', '/etc/authselect/postlogin'),
                            ('/etc/nsswitch.conf', '/etc/authselect/nsswitch.conf')]:
@@ -271,7 +330,11 @@ def validate_policy(*, integrated=False):
     for database in ('passwd', 'group', 'shadow'):
         entries = [line.partition(':')[2].split() for raw in text.splitlines()
                    if (line := raw.split('#')[0].strip()).partition(':')[0].strip() == database]
-        require(entries == [['files']], 'files-only appliance NSS provisioning is required')
+        allowed = (['files'], ['files', 'systemd'])
+        if database == 'group':
+            allowed += (['files', '[SUCCESS=merge]', 'systemd'],)
+        require(len(entries) == 1 and entries[0] in allowed,
+                'local files accounts with optional systemd NSS are required')
     require(read('/etc/security/faillock.conf') == PERSISTENT,
             'persistent accounting required: migrate native tallies offline and install the exact reviewed faillock configuration before prepare')
     tally = Path('/var/lib/faillock')
@@ -279,18 +342,19 @@ def validate_policy(*, integrated=False):
     info = tally.lstat()
     require(stat.S_ISDIR(info.st_mode) and info.st_uid == info.st_gid == 0
             and stat.S_IMODE(info.st_mode) == 0o755, 'unsafe persistent faillock directory')
-    require(run(['/usr/bin/stat', '-f', '-c', '%T', str(tally)]).stdout.strip() == b'btrfs',
-            'persistent faillock requires the reviewed persistent Btrfs filesystem')
-    require(digest(read(KDE)) == (INTEGRATED if integrated else STOCK), 'unknown or changed KDE PAM policy')
-    for path, expected in NATIVE.items():
-        require(digest(read(path, 4 * 1024 * 1024)) == expected, 'unreviewed native PAM binary; activation refused')
-    require(os.readlink('/usr/lib64/libpam.so.0') == 'libpam.so.0.85.1', 'unreviewed libpam link')
+    require(run(['/usr/bin/stat', '-f', '-c', '%T', str(tally)]).stdout.strip() in (b'btrfs', b'ext2/ext3', b'xfs'),
+            'persistent faillock requires a supported local persistent filesystem')
+    for path in (KDE, FINGERPRINT):
+        policy = read(path)
+        require(reviewed_pam_syntax(policy), 'unsupported KDE PAM syntax')
+        require(canonical(policy) == canonical(service_policy(path, integrated=integrated)),
+                'unknown or changed KDE PAM policy')
+    native_policy_files()
     require(run(['/usr/sbin/getenforce']).stdout.strip() == b'Enforcing', 'SELinux enforcing is required')
     for name in PRIVATE:
         source = read(POLICY / (name + '.review-required'))
         if integrated:
             require(read(Path('/etc/pam.d') / name) == source, 'changed private PAM policy')
-    require(digest(read(POLICY / 'kde-localpin.review-required')) == INTEGRATED, 'invalid packaged KDE policy')
     binary_snapshot()
 
 
@@ -318,28 +382,40 @@ def upgrade_binding(state):
 
 
 def registry_binding(registry):
-    """Compare the exact authority except the reviewed /etc cache-window fields.
-
-    LPACCT02 has twenty 84-byte snapshots, then bounded 20-byte account IDs.
-    Native cache-window-finish independently verifies all immutable inputs and
-    preserves the original IDs. Only /etc directory size/ctime/nanoseconds may
-    change during ldconfig; its device/inode/mode/link count stay in this hash.
-    This parser never creates or supplies account authority.
-    """
-    require(len(registry) >= 1692 and registry[:8] == b'LPACCT02'
-            and int.from_bytes(registry[8:10], 'big') == 20,
+    """Bind every incarnation/marker exactly; never infer account continuity."""
+    require(len(registry) >= 10 and registry[:8] == b'LPACCT03',
             'unsupported account registry; package transaction refused')
-    count = int.from_bytes(registry[1690:1692], 'big')
-    require(count <= 128 and len(registry) == 1692 + count * 20,
-            'invalid account registry; package transaction refused')
-    return digest(registry[:26] + registry[50:])
+    count = int.from_bytes(registry[8:10], 'big')
+    require(0 < count <= 128, 'invalid account registry; package transaction refused')
+    offset = 10
+    previous = 0
+    names, markers = set(), set()
+    for _ in range(count):
+        require(offset + 29 <= len(registry), 'truncated account registry')
+        uid = int.from_bytes(registry[offset:offset + 4], 'big')
+        incarnation = registry[offset + 4:offset + 20]
+        marker = int.from_bytes(registry[offset + 20:offset + 28], 'big')
+        length = registry[offset + 28]
+        name = bytes(registry[offset + 29:offset + 29 + length])
+        require(previous < uid <= 59999 and uid >= 1000 and incarnation != bytes(16)
+                and 0 < marker < 2**32 - 1 and 1 <= length <= 32
+                and len(name) == length and re.fullmatch(rb'[a-z_][a-z0-9_-]*', name),
+                'invalid account registry binding')
+        require(name not in names and marker not in markers, 'duplicate account registry binding')
+        names.add(name)
+        markers.add(marker)
+        previous = uid
+        offset += 29 + length
+    require(offset == len(registry), 'invalid account registry length')
+    return digest(registry)
 
 
 def current(state, *, binaries=True):
     require(state is not None and state['phase'] in ('prepared', 'active', 'suspended'),
-            'prepare the supported appliance before testing or activation')
+            'prepare the supported Fedora KDE integration before testing or activation')
+    require(state.get('schema') == 2, 'legacy appliance integration requires disable and fresh preparation')
     validate_policy(integrated=True)
-    require(snapshot(PROTECTED) == state.get('protected'), 'protected policy/account state changed; recovery required')
+    require(snapshot(PROTECTED, metadata=False) == state.get('protected'), 'owned policy changed; recovery required')
     if binaries:
         require(binary_snapshot() == state.get('binaries'), 'installed LocalPIN binaries changed; package recovery and fresh desktop tests required')
 
@@ -351,23 +427,26 @@ def prepare(uids, *, dry_run=False):
             and all(1000 <= uid <= 59999 for uid in uids), 'explicit unique supported UID list required')
     validate_policy()
     original = read(KDE)
-    expected = read(POLICY / 'kde-localpin.review-required')
-    require(expected == PREFIX + original, 'packaged PAM block does not preserve exact stock policy')
+    expected = transform_service(KDE, original, install=True)
+    fingerprint = read(FINGERPRINT)
+    fingerprint_expected = transform_service(FINGERPRINT, fingerprint, install=True)
     if dry_run:
         return {'operation': 'prepare', 'dry_run': True, 'uids': sorted(uids),
                 'reenrollment_required': True, 'gate': 'disabled',
-                'diff': ''.join(difflib.unified_diff(original.decode().splitlines(True), expected.decode().splitlines(True),
-                                                     fromfile='/etc/pam.d/kde', tofile='/etc/pam.d/kde (prepared)'))}
+                'diff': ''.join(''.join(difflib.unified_diff(before.decode().splitlines(True), after.decode().splitlines(True),
+                                                     fromfile=str(path), tofile=str(path) + ' (prepared)'))
+                                for path, before, after in [(KDE, original, expected),
+                                                            (FINGERPRINT, fingerprint, fingerprint_expected)])}
     close_gate()
     backup = CONTROL / ('backup-' + uuid.uuid4().hex)
     backup.mkdir(mode=0o700)
     originals = {}
-    for path in [KDE, *(Path('/etc/pam.d') / name for name in PRIVATE)]:
+    for path in [KDE, FINGERPRINT, *(Path('/etc/pam.d') / name for name in PRIVATE)]:
         data = read(path)
         atomic_write(backup / path.name, data)
         originals[path.name] = {'sha256': digest(data), 'mode': stat.S_IMODE(path.lstat().st_mode)}
     sync_dir(CONTROL)
-    state = {'schema': 1, 'phase': 'preparing', 'uids': sorted(uids),
+    state = {'schema': 2, 'phase': 'preparing', 'uids': sorted(uids),
              'backup': backup.name, 'originals': originals, 'tests': None,
              'package_version': '0.1.0-alpha.1', 'created_at': int(time.time())}
     save(state)  # Recovery intent is durable before the first protected edit.
@@ -377,9 +456,10 @@ def prepare(uids, *, dry_run=False):
     for name in PRIVATE:
         atomic_write(Path('/etc/pam.d') / name, read(POLICY / (name + '.review-required')), 0o644)
     atomic_write(KDE, expected, originals['kde']['mode'])
-    run(['/usr/sbin/restorecon', str(KDE), *(str(Path('/etc/pam.d') / n) for n in PRIVATE)])
+    atomic_write(FINGERPRINT, fingerprint_expected, originals['kde-fingerprint']['mode'])
+    run(['/usr/sbin/restorecon', str(KDE), str(FINGERPRINT), *(str(Path('/etc/pam.d') / n) for n in PRIVATE)])
     run([ACCOUNT, 'seal', *(arg for uid in sorted(uids) for arg in ('--uid', str(uid)))], timeout=60)
-    state.update(phase='prepared', protected=snapshot(PROTECTED), binaries=binary_snapshot())
+    state.update(phase='prepared', protected=snapshot(PROTECTED, metadata=False), binaries=binary_snapshot())
     save(state)
     start()
     return {'phase': 'prepared', 'gate': 'disabled', 'reenrollment_required': True,
@@ -432,21 +512,31 @@ def activate(state):
     return {'phase': 'active', 'tests': 'administrator-attested', 'survives_reboot': True}
 
 
-def removable_policy(data, original):
+def removable_policy(data, original, path=None):
     """Remove only our exact leading block, preserving subsequent admin edits."""
-    require(digest(original) == STOCK, 'invalid original KDE backup')
+    path = KDE if path is None else path
+    require((path == KDE and digest(original) == STOCK)
+            or canonical(original) == canonical(service_policy(path, integrated=False)),
+            'invalid original KDE backup')
     if data == original:
         return data
-    require(data.startswith(PREFIX), 'changed or missing owned block; refusing to overwrite administrator PAM edits')
-    remainder = data[len(PREFIX):]
+    if path == KDE:
+        require(data.startswith(PREFIX), 'changed or missing owned block; refusing to overwrite administrator PAM edits')
+        remainder = data[len(PREFIX):]
+    else:
+        remainder = data
     require(b'LOCALPIN' not in remainder and b'pam_localpin' not in remainder
             and b'pam_pinlock' not in remainder, 'ambiguous additional PIN policy; manual console review required')
-    return remainder
+    if b'localpin-kde-' in remainder:
+        remainder = transform_service(path, remainder, install=False)
+    require(b'localpin-' not in remainder, 'ambiguous owned substack; manual console review required')
+    return original if canonical(remainder) == canonical(original) else remainder
 
 
 def disable(state, *, dry_run=False):
     if state is None:
-        require(digest(read(KDE)) == STOCK, 'unowned or changed KDE policy; manual review required')
+        require(all(canonical(read(path)) == canonical(service_policy(path, integrated=False))
+                    for path in (KDE, FINGERPRINT)), 'unowned or changed KDE policy; manual review required')
         if not dry_run:
             close_gate()
             stop()
@@ -460,7 +550,14 @@ def disable(state, *, dry_run=False):
     before = read(KDE)
     replacement = removable_policy(before, original)
     restorations = []
+    if state.get('schema') == 2:
+        old = read(backup / FINGERPRINT.name, mode=0o600)
+        require(digest(old) == state['originals'][FINGERPRINT.name]['sha256'], 'changed fingerprint-policy backup')
+        restorations.append((FINGERPRINT, removable_policy(read(FINGERPRINT), old, FINGERPRINT),
+                             state['originals'][FINGERPRINT.name]['mode']))
     for name in PRIVATE:
+        if name not in state['originals']:
+            continue  # Legacy appliance manifests predate the two KDE substacks.
         path = Path('/etc/pam.d') / name
         old = read(backup / name, mode=0o600)
         require(digest(old) == state['originals'][name]['sha256'], 'changed private-policy backup')
@@ -501,8 +598,9 @@ def package_check(state, *, removal=False):
         current(state, binaries=False)
     else:
         require(state is None or state['phase'] == 'disabled', 'incomplete package/integration transaction; recover first')
-        require(digest(read(KDE)) == STOCK, 'unowned or unknown KDE policy; package transaction refused')
-    return {'package_check': 'passed', 'schema': 1, 'removal': removal}
+        require(all(canonical(read(path)) == canonical(service_policy(path, integrated=False))
+                    for path in (KDE, FINGERPRINT)), 'unowned or unknown KDE policy; package transaction refused')
+    return {'package_check': 'passed', 'schema': 2, 'removal': removal}
 
 
 def package_suspend(state):
@@ -518,7 +616,7 @@ def package_suspend(state):
         return {'suspended': True, 'enrollment_preserved': True, 'gate': 'disabled'}
     previous = {'socket': service_active('localpin.socket'), 'service': service_active('localpin.service')}
     close_gate()
-    state.update(phase='suspended', tests=None, services=previous)
+    state.update(resume_phase=state['phase'], phase='suspended', services=previous)
     save(state)  # Durable recovery intent precedes service stop and replacement.
     stop()
     state['upgrade_binding'] = upgrade_binding(state)
@@ -529,42 +627,42 @@ def package_suspend(state):
 def package_resume(state):
     if state is None or state['phase'] == 'disabled':
         return {'resumed': False}
-    require(state['phase'] == 'suspended', 'no suspended upgrade to resume')
+    require(state['phase'] == 'suspended'
+            or (state.get('resume_pending') is True and state['phase'] == state.get('resume_phase')),
+            'no suspended upgrade to resume')
+    require(state.get('resume_phase', 'prepared') in ('prepared', 'active'), 'invalid upgrade resume phase')
     close_gate()
     stop()
     current(state, binaries=False)
-    if state.get('cache_window'):
-        # The native helper restores only the exact suspended authority, after
-        # refreezing /etc and checking every other snapshot and incarnation.
-        run([ACCOUNT, 'cache-window-finish'])
     require(upgrade_binding(state) == state.get('upgrade_binding'),
             'account, credential or throttle state changed during package transaction; recovery required')
-    state.update(binaries=binary_snapshot(), tests=None, cache_window=False)
+    state.update(binaries=binary_snapshot())
     save(state)
     units = [name for key, name in [('socket', 'localpin.socket'), ('service', 'localpin.service')]
              if state['services'][key]]
     if units:
         run(['/usr/bin/systemctl', 'start', *units])
-    state['phase'] = 'prepared'
+    state['phase'] = state.get('resume_phase', 'prepared')
+    state['resume_pending'] = True
     save(state)
-    return {'resumed': True, 'enrollment_preserved': True, 'gate': 'disabled',
-            'next': 'Repeat trial and desktop tests before activation.'}
+    if state['phase'] == 'active':
+        atomic_write(GATE, b'LPINT01\nactive\n', 0o644)
+        run(['/usr/sbin/restorecon', str(GATE)])
+    return {'resumed': True, 'enrollment_preserved': True,
+            'gate': 'active' if state['phase'] == 'active' else 'disabled'}
 
 
 def package_cache_begin(state):
+    """Compatibility verb: ordinary RPM cache writes need no authority window."""
     if state is None or state['phase'] == 'disabled':
         return {'cache_window': False}
     require(state['phase'] == 'suspended', 'suspend the package before its cache window')
     close_gate()
     stop()
     current(state, binaries=False)
-    if not state.get('cache_window'):
-        require(upgrade_binding(state) == state.get('upgrade_binding'),
-                'account, credential or throttle state changed before package transaction')
-        state['cache_window'] = True
-        save(state)  # Intent must survive a crash inside the native operation.
-    run([ACCOUNT, 'cache-window-begin'])
-    return {'cache_window': True, 'account_authority': 'suspended', 'gate': 'disabled'}
+    require(upgrade_binding(state) == state.get('upgrade_binding'),
+            'account, credential or throttle state changed before package transaction')
+    return {'cache_window': False, 'account_authority': 'account-marker', 'gate': 'disabled'}
 
 
 def remaining_references():
@@ -584,7 +682,7 @@ def remaining_references():
                     'unknown PAM symlink; removal refused')
             path = target
         data = read(path)
-        if b'pam_localpin' in data:
+        if b'pam_localpin' in data or b'localpin-kde-password' in data or b'localpin-kde-fingerprint' in data:
             references.append(entry.name)
     return references
 
@@ -592,7 +690,7 @@ def remaining_references():
 def candidate_check(candidate, schema):
     """RPM's native EVR comparison; never execute a string as a program."""
     match = re.fullmatch(r'([0-9]+):([A-Za-z0-9.+~^]+)-([A-Za-z0-9.+~^]+)', candidate)
-    require(match is not None and match[1] == '0' and match[2] == '0.1.0' and schema == 1,
+    require(match is not None and match[1] == '0' and match[2] == '0.1.0' and schema == 2,
             'unsupported package policy/schema transition; disable integration and use the reviewed migration procedure')
     result = run(['/usr/bin/rpm', '-q', '--queryformat', '%{EPOCHNUM}:%{VERSION}-%{RELEASE}', 'localpin'])
     previous = re.fullmatch(r'([0-9]+):([A-Za-z0-9.+~^]+)-([A-Za-z0-9.+~^]+)', result.stdout.decode('ascii'))
@@ -639,8 +737,9 @@ def status(state):
     return {'schema_version': 1, 'phase': state['phase'] if state else 'unprepared',
             'gate': gate, 'tested': state.get('tests', {}).get('kind')
             if state and state.get('tests') and gate == 'active' else 'not-recorded',
-            'supported_account_domain': 'restricted Fedora 44 Btrfs appliance',
-            'fingerprint_faillock_combination': 'activation-refused'}
+            'supported_account_domain': 'Fedora KDE 44 x86_64 local files accounts',
+            'fingerprint_faillock_combination': 'KDE-specific native accounting',
+            'distribution_updates': 'stable PAM ABI; owned KDE policy; account markers'}
 
 
 def main():

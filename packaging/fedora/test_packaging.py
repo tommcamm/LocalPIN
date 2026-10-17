@@ -44,8 +44,8 @@ class PackagingTests(unittest.TestCase):
         post = spec.split("%post\n", 1)[1].split("%preun\n", 1)[0]
         preun = spec.split("%preun\n", 1)[1].split("%postun\n", 1)[0]
         self.assertLess(pre.index("package-check --candidate-evr"), pre.index("package-suspend || exit 1"))
-        self.assertLess(pre.index("package-suspend || exit 1"), pre.index("package-cache-begin || exit 1"))
-        self.assertIn("--candidate-schema 1 || exit 1", pre)
+        self.assertNotIn("package-cache-begin", pre)
+        self.assertIn("--candidate-schema 2 || exit 1", pre)
         self.assertIn("Requires(pre):  python3-rpm", spec)
         self.assertLess(preun.index("localpin-integration disable || exit 1"), preun.index("package-check --removal || exit 1"))
         self.assertLess(preun.index("package-check --removal || exit 1"), preun.index("systemctl stop"))
@@ -56,6 +56,8 @@ class PackagingTests(unittest.TestCase):
         self.assertNotRegex(spec, r'--notriggers|--noscripts|chattr\s')
         self.assertNotIn("restorecon -RF", post)
         self.assertIn("%config(noreplace) %{_sysconfdir}/pam.d/localpin-enroll", spec)
+        self.assertIn("%config(noreplace) %{_sysconfdir}/pam.d/localpin-kde-password", spec)
+        self.assertIn("%config(noreplace) %{_sysconfdir}/pam.d/localpin-kde-fingerprint", spec)
         self.assertNotIn("%{_sysconfdir}/security/faillock.conf", spec)
         self.assertNotRegex(spec, r"chmod (?:[0-7]*[46][0-7]{3}|u\+s)")
 

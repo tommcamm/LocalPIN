@@ -1,9 +1,8 @@
-//! Enforcing lifecycle for an explicitly opted-in immutable Fedora appliance.
+//! Local-files account lifecycle with a root-owned shadow-record sentinel.
 //!
-//! The global shared lease is retained by each authority object through broker
-//! delivery. Root administration first takes the exclusive lease and durably
-//! revokes every incarnation, then clears immutable flags. Ordinary unmanaged
-//! Unix accounts never acquire an incarnation from this module.
+//! Each authority retains both its global lifecycle lease and a native password
+//! database read lock through final authorization delivery. Normal account tools
+//! remove the sentinel when deleting an account; recreation cannot inherit it.
 
 use std::{
     collections::BTreeSet,
@@ -20,21 +19,18 @@ use rustix::fs::{
     AtFlags, FlockOperation, IFlags, Mode, OFlags, ResolveFlags, flock, ioctl_getflags,
     ioctl_setflags, openat2,
 };
-use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
 const REGISTRY_ROOT: &str = "/var/lib/localpin-accounts";
 const STORAGE_ROOT: &str = "/var/lib/localpin";
-const MAGIC: &[u8; 8] = b"LPACCT02";
+const MAGIC: &[u8; 8] = b"LPACCT03";
 const MAX_REGISTRY: usize = 16 * 1024;
 const MAX_INPUT: u64 = 64 * 1024;
 const MAX_ACCOUNTS: usize = 128;
-const CACHE_MAGIC: &[u8; 8] = b"LPACCH01";
-const CACHE_JOURNAL: &str = "cache-window";
-const CACHE_PENDING: &str = "cache-window.pending";
-const MAX_CACHE_JOURNAL: usize = 2 * MAX_REGISTRY + 16;
-const DIRECTORIES: &[&str] = &["/etc", "/etc/pam.d", "/etc/authselect", "/etc/security"];
-const FILES: &[&str] = &[
+// Only privileged migration removes the legacy appliance flags. New accounts
+// never freeze these paths; normal distribution updates can replace them.
+const LEGACY_DIRECTORIES: &[&str] = &["/etc", "/etc/pam.d", "/etc/authselect", "/etc/security"];
+const LEGACY_FILES: &[&str] = &[
     "/etc/passwd",
     "/etc/shadow",
     "/etc/group",
@@ -49,11 +45,6 @@ const FILES: &[&str] = &[
     "/etc/security/faillock.conf",
     "/etc/security/pam_env.conf",
 ];
-const LINKS: &[(&str, &str)] = &[
-    ("/etc/pam.d/password-auth", "/etc/authselect/password-auth"),
-    ("/etc/pam.d/postlogin", "/etc/authselect/postlogin"),
-    ("/etc/nsswitch.conf", "/etc/authselect/nsswitch.conf"),
-];
 
 /// Sanitized root administration failure. No account hashes or names are shown.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -62,7 +53,7 @@ pub enum AccountError {
     Privilege,
     /// A lease is held, or a protected input still has a writable reference.
     Busy,
-    /// Required state, paths, immutable flags or filesystem support is missing.
+    /// Required trusted state, paths, native locking or filesystem support is missing.
     Unavailable,
     /// The registry or requested account list is invalid.
     Invalid,
@@ -242,6 +233,10 @@ impl Lease {
     }
 
     fn read(&self) -> Result<Registry> {
+        Registry::decode(&self.read_bytes()?)
+    }
+
+    fn read_bytes(&self) -> Result<Zeroizing<Vec<u8>>> {
         self.validate()?;
         let file = child(&self.directory, "registry", OFlags::RDONLY, Mode::empty())?;
         safe_record(&file)?;
@@ -259,7 +254,7 @@ impl Lease {
         // made durable before a reader can use it as authority.
         file.sync_all()?;
         self.directory.sync_all()?;
-        Registry::decode(&bytes)
+        Ok(bytes)
     }
 
     fn write(&self, registry: &Registry) -> Result<()> {
@@ -331,423 +326,252 @@ fn replace_registry(
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct Snapshot {
-    dev: u64,
-    ino: u64,
-    size: u64,
-    ctime: i64,
-    nanos: i64,
-    mode: u32,
-    links: u64,
-    digest: [u8; 32],
-}
-
-impl Snapshot {
-    fn metadata(m: &std::fs::Metadata, digest: [u8; 32]) -> Self {
-        Self {
-            dev: m.dev(),
-            ino: m.ino(),
-            size: m.len(),
-            ctime: m.ctime(),
-            nanos: m.ctime_nsec(),
-            mode: m.mode(),
-            links: m.nlink(),
-            digest,
-        }
-    }
-
-    fn encode(&self, out: &mut Vec<u8>) {
-        for n in [
-            self.dev,
-            self.ino,
-            self.size,
-            self.ctime as u64,
-            self.nanos as u64,
-        ] {
-            out.extend_from_slice(&n.to_be_bytes());
-        }
-        out.extend_from_slice(&self.mode.to_be_bytes());
-        out.extend_from_slice(&self.links.to_be_bytes());
-        out.extend_from_slice(&self.digest);
-    }
-    fn decode(input: &mut &[u8]) -> Result<Self> {
-        Ok(Self {
-            dev: number(input)?,
-            ino: number(input)?,
-            size: number(input)?,
-            ctime: number(input)? as i64,
-            nanos: number(input)? as i64,
-            mode: u32::from_be_bytes(take(input)?),
-            links: number(input)?,
-            digest: take(input)?,
-        })
-    }
+struct Binding {
+    account: AccountId,
+    name: String,
+    marker: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct Registry {
-    inputs: Vec<Snapshot>,
-    accounts: Vec<AccountId>,
+    bindings: Vec<Binding>,
 }
+
+fn valid_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 32
+        && name.bytes().enumerate().all(|(i, c)| {
+            c.is_ascii_lowercase() || c == b'_' || (i > 0 && (c.is_ascii_digit() || c == b'-'))
+        })
+}
+
+fn marker(text: &str) -> Option<u64> {
+    if text.is_empty() || text.starts_with('0') || !text.bytes().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    text.parse::<u64>()
+        .ok()
+        .filter(|value| *value < u64::from(u32::MAX))
+}
+
 impl Registry {
     fn revoked() -> Self {
         Self {
-            inputs: Vec::new(),
-            accounts: Vec::new(),
+            bindings: Vec::new(),
         }
     }
+
     fn active(&self) -> bool {
-        !self.inputs.is_empty()
+        !self.bindings.is_empty()
     }
+
+    fn validate(&self) -> Result<()> {
+        if self.bindings.len() > MAX_ACCOUNTS {
+            return Err(AccountError::Invalid);
+        }
+        let mut uids = BTreeSet::new();
+        let mut names = BTreeSet::new();
+        let mut markers = BTreeSet::new();
+        let mut previous_uid = 0;
+        for binding in &self.bindings {
+            if !(1000..=59999).contains(&binding.account.uid.get())
+                || binding.account.uid.get() <= previous_uid
+                || !valid_name(&binding.name)
+                || marker(&binding.marker.to_string()) != Some(binding.marker)
+                || !uids.insert(binding.account.uid.get())
+                || !names.insert(binding.name.as_str())
+                || !markers.insert(binding.marker)
+            {
+                return Err(AccountError::Invalid);
+            }
+            previous_uid = binding.account.uid.get();
+        }
+        Ok(())
+    }
+
     fn encode(&self) -> Vec<u8> {
         let mut out = MAGIC.to_vec();
-        out.extend_from_slice(&(self.inputs.len() as u16).to_be_bytes());
-        for snapshot in &self.inputs {
-            snapshot.encode(&mut out);
-        }
-        out.extend_from_slice(&(self.accounts.len() as u16).to_be_bytes());
-        for account in &self.accounts {
-            out.extend_from_slice(&account.uid.get().to_be_bytes());
-            out.extend_from_slice(&account.incarnation.get());
+        out.extend_from_slice(&(self.bindings.len() as u16).to_be_bytes());
+        for binding in &self.bindings {
+            out.extend_from_slice(&binding.account.uid.get().to_be_bytes());
+            out.extend_from_slice(&binding.account.incarnation.get());
+            out.extend_from_slice(&binding.marker.to_be_bytes());
+            out.push(binding.name.len() as u8);
+            out.extend_from_slice(binding.name.as_bytes());
         }
         out
     }
+
     fn decode(mut input: &[u8]) -> Result<Self> {
         if take::<8>(&mut input)? != *MAGIC {
             return Err(AccountError::Invalid);
         }
         let count = u16::from_be_bytes(take(&mut input)?) as usize;
-        if count != 0 && count != DIRECTORIES.len() + FILES.len() + LINKS.len() {
+        if count > MAX_ACCOUNTS {
             return Err(AccountError::Invalid);
         }
-        let inputs = (0..count)
-            .map(|_| Snapshot::decode(&mut input))
-            .collect::<Result<Vec<_>>>()?;
-        let count = u16::from_be_bytes(take(&mut input)?) as usize;
-        if count > MAX_ACCOUNTS || (inputs.is_empty() && count != 0) {
-            return Err(AccountError::Invalid);
-        }
-        let mut accounts = Vec::new();
-        let mut seen = BTreeSet::new();
+        let mut bindings = Vec::with_capacity(count);
         for _ in 0..count {
-            let uid = u32::from_be_bytes(take(&mut input)?);
-            if !seen.insert(uid) {
-                return Err(AccountError::Invalid);
-            }
-            accounts.push(AccountId {
-                uid: Uid::new(uid).map_err(|_| AccountError::Invalid)?,
-                incarnation: Incarnation::new(take(&mut input)?)
-                    .map_err(|_| AccountError::Invalid)?,
+            let uid = Uid::new(u32::from_be_bytes(take(&mut input)?))
+                .map_err(|_| AccountError::Invalid)?;
+            let incarnation =
+                Incarnation::new(take(&mut input)?).map_err(|_| AccountError::Invalid)?;
+            let marker = u64::from_be_bytes(take(&mut input)?);
+            let length = usize::from(take::<1>(&mut input)?[0]);
+            let (name, rest) = input
+                .split_at_checked(length)
+                .ok_or(AccountError::Invalid)?;
+            input = rest;
+            bindings.push(Binding {
+                account: AccountId { uid, incarnation },
+                name: std::str::from_utf8(name)
+                    .map_err(|_| AccountError::Invalid)?
+                    .to_owned(),
+                marker,
             });
         }
         if !input.is_empty() {
             return Err(AccountError::Invalid);
         }
-        Ok(Self { inputs, accounts })
+        let registry = Self { bindings };
+        registry.validate()?;
+        Ok(registry)
     }
 }
+
 fn take<const N: usize>(input: &mut &[u8]) -> Result<[u8; N]> {
     let (head, rest) = input.split_at_checked(N).ok_or(AccountError::Invalid)?;
     *input = rest;
     head.try_into().map_err(|_| AccountError::Invalid)
 }
-fn number(input: &mut &[u8]) -> Result<u64> {
-    Ok(u64::from_be_bytes(take(input)?))
+
+/// A native password-database lock retained through actual broker delivery.
+///
+/// Linux OFD locks conflict with glibc's POSIX lckpwdf lock and systemd's OFD
+/// lock, and closing another same-process descriptor cannot release this lock.
+struct PasswordLease {
+    file: File,
 }
 
-fn input_snapshot() -> Result<Vec<Snapshot>> {
-    input_snapshot_for_cache(false)
-}
-
-fn input_snapshot_for_cache(allow_etc_unfrozen: bool) -> Result<Vec<Snapshot>> {
-    let mut output = Vec::new();
-    for (path, directory) in DIRECTORIES
-        .iter()
-        .map(|p| (*p, true))
-        .chain(FILES.iter().map(|p| (*p, false)))
-    {
-        let file = fixed_open(
-            path,
-            OFlags::RDONLY
-                | if directory {
-                    OFlags::DIRECTORY
+impl PasswordLease {
+    fn open(exclusive: bool, create: bool) -> Result<Self> {
+        let directory = fixed_open("/etc", OFlags::RDONLY | OFlags::DIRECTORY)?;
+        let file = if create {
+            match child(
+                &directory,
+                ".pwd.lock",
+                OFlags::RDWR | OFlags::CREATE | OFlags::EXCL,
+                Mode::RUSR | Mode::WUSR,
+            ) {
+                Ok(file) => {
+                    file.sync_all()?;
+                    directory.sync_all()?;
+                    file
+                }
+                Err(_) => child(&directory, ".pwd.lock", OFlags::RDWR, Mode::empty())?,
+            }
+        } else {
+            child(
+                &directory,
+                ".pwd.lock",
+                if exclusive {
+                    OFlags::RDWR
                 } else {
-                    OFlags::empty()
+                    OFlags::RDONLY
                 },
-        )?;
-        let before = file.metadata()?;
-        if before.gid() != 0
-            || (!directory && (!before.is_file() || before.nlink() != 1))
-            || before.mode() & 0o022 != 0
-        {
-            return Err(AccountError::Unavailable);
-        }
-        // Only the enforcing guest's Btrfs filesystem is in this domain.
-        let filesystem = rustix::fs::fstatfs(&file)?.f_type as u64;
-        let frozen = ioctl_getflags(&file)?.contains(IFlags::IMMUTABLE);
-        if filesystem != 0x9123_683e || (!frozen && !(allow_etc_unfrozen && path == "/etc")) {
-            return Err(AccountError::Unavailable);
-        }
-        let digest = if directory {
-            [0; 32]
-        } else {
-            if before.len() > MAX_INPUT {
-                return Err(AccountError::Unavailable);
-            }
-            let mut bytes = Zeroizing::new(Vec::new());
-            (&file).take(MAX_INPUT + 1).read_to_end(&mut bytes)?;
-            if bytes.len() as u64 > MAX_INPUT {
-                return Err(AccountError::Unavailable);
-            }
-            Sha256::digest(&*bytes).into()
+                Mode::empty(),
+            )?
         };
-        let snapshot = Snapshot::metadata(&before, digest);
-        if Snapshot::metadata(&file.metadata()?, digest) != snapshot
-            || ioctl_getflags(&file)?.contains(IFlags::IMMUTABLE) != frozen
-        {
-            return Err(AccountError::Unavailable);
-        }
-        output.push(snapshot);
+        safe_record(&file)?;
+        native_database_lock(&file, exclusive)?;
+        let lease = Self { file };
+        lease.validate()?;
+        Ok(lease)
     }
-    for (path, expected) in LINKS {
-        let (parent, name) = path.rsplit_once('/').ok_or(AccountError::Invalid)?;
-        let dir = fixed_open(parent, OFlags::RDONLY | OFlags::DIRECTORY)?;
-        let link = rustix::fs::statat(&dir, name, AtFlags::SYMLINK_NOFOLLOW)?;
-        let target = rustix::fs::readlinkat(&dir, name, Vec::new())?;
-        if target.to_bytes() != expected.as_bytes()
-            || link.st_uid != 0
-            || link.st_gid != 0
-            || link.st_nlink != 1
-        {
-            return Err(AccountError::Unavailable);
-        }
-        let m = std::fs::symlink_metadata(path)?;
-        if !m.file_type().is_symlink() {
-            return Err(AccountError::Unavailable);
-        }
-        output.push(Snapshot::metadata(
-            &m,
-            Sha256::digest(target.to_bytes()).into(),
-        ));
-    }
-    Ok(output)
-}
 
-// The only refreshable authority bytes are /etc's size and ctime fields.
-// Identity, mode, link count and digest remain exact, as does every other input.
-fn cache_inputs_match(original: &[Snapshot], current: &[Snapshot]) -> bool {
-    if original.len() != DIRECTORIES.len() + FILES.len() + LINKS.len()
-        || current.len() != original.len()
-    {
-        return false;
-    }
-    let mut first = original[0].clone();
-    first.size = current[0].size;
-    first.ctime = current[0].ctime;
-    first.nanos = current[0].nanos;
-    first == current[0] && original[1..] == current[1..]
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct CacheWindow {
-    original: Registry,
-    restored: Option<Registry>,
-}
-
-impl CacheWindow {
     fn validate(&self) -> Result<()> {
-        if !self.original.active() || self.original.accounts.is_empty() {
-            return Err(AccountError::Invalid);
-        }
-        if let Some(restored) = &self.restored
-            && (restored.accounts != self.original.accounts
-                || !cache_inputs_match(&self.original.inputs, &restored.inputs))
-        {
-            return Err(AccountError::Invalid);
+        safe_record(&self.file)?;
+        let actual = fixed_open("/etc/.pwd.lock", OFlags::RDONLY)?.metadata()?;
+        let held = self.file.metadata()?;
+        if actual.dev() != held.dev() || actual.ino() != held.ino() {
+            return Err(AccountError::Unavailable);
         }
         Ok(())
     }
+}
 
-    fn encode(&self) -> Result<Vec<u8>> {
-        self.validate()?;
-        let original = self.original.encode();
-        let restored = self
-            .restored
-            .as_ref()
-            .map(Registry::encode)
-            .unwrap_or_default();
-        if original.len() > MAX_REGISTRY || restored.len() > MAX_REGISTRY {
-            return Err(AccountError::Invalid);
-        }
-        let mut bytes = CACHE_MAGIC.to_vec();
-        for value in [original, restored] {
-            bytes.extend_from_slice(&(value.len() as u32).to_be_bytes());
-            bytes.extend_from_slice(&value);
-        }
-        Ok(bytes)
-    }
-
-    fn decode(mut bytes: &[u8]) -> Result<Self> {
-        if bytes.len() > MAX_CACHE_JOURNAL || take::<8>(&mut bytes)? != *CACHE_MAGIC {
-            return Err(AccountError::Invalid);
-        }
-        let original = Self::registry(&mut bytes)?.ok_or(AccountError::Invalid)?;
-        let restored = Self::registry(&mut bytes)?;
-        if !bytes.is_empty() {
-            return Err(AccountError::Invalid);
-        }
-        let value = Self { original, restored };
-        value.validate()?;
-        Ok(value)
-    }
-
-    fn registry(bytes: &mut &[u8]) -> Result<Option<Registry>> {
-        let length = u32::from_be_bytes(take(bytes)?) as usize;
-        if length > MAX_REGISTRY {
-            return Err(AccountError::Invalid);
-        }
-        let (value, rest) = bytes
-            .split_at_checked(length)
-            .ok_or(AccountError::Invalid)?;
-        *bytes = rest;
-        if length == 0 {
-            Ok(None)
+#[allow(unsafe_code)]
+fn native_database_lock(file: &File, exclusive: bool) -> Result<()> {
+    let mut lock = libc::flock {
+        l_type: if exclusive {
+            libc::F_WRLCK
         } else {
-            Registry::decode(value).map(Some)
-        }
-    }
-}
-
-fn read_cache_window(directory: &File, owner: u32) -> Result<Option<CacheWindow>> {
-    match rustix::fs::statat(directory, CACHE_JOURNAL, AtFlags::SYMLINK_NOFOLLOW) {
-        Err(rustix::io::Errno::NOENT) => return Ok(None),
-        Err(error) => return Err(error.into()),
-        Ok(_) => {}
-    }
-    let file = child(directory, CACHE_JOURNAL, OFlags::RDONLY, Mode::empty())?;
-    safe_record_owned(&file, owner)?;
-    let before = Snapshot::metadata(&file.metadata()?, [0; 32]);
-    if before.size > MAX_CACHE_JOURNAL as u64 {
-        return Err(AccountError::Invalid);
-    }
-    let mut bytes = Zeroizing::new(Vec::new());
-    (&file)
-        .take(MAX_CACHE_JOURNAL as u64 + 1)
-        .read_to_end(&mut bytes)?;
-    if bytes.len() > MAX_CACHE_JOURNAL || Snapshot::metadata(&file.metadata()?, [0; 32]) != before {
-        return Err(AccountError::Unavailable);
-    }
-    file.sync_all()?;
-    directory.sync_all()?;
-    CacheWindow::decode(&bytes).map(Some)
-}
-
-fn remove_cache_record(directory: &File, name: &str, owner: u32) -> Result<()> {
-    match rustix::fs::statat(directory, name, AtFlags::SYMLINK_NOFOLLOW) {
-        Err(rustix::io::Errno::NOENT) => return Ok(()),
-        Err(error) => return Err(error.into()),
-        Ok(_) => {}
-    }
-    let file = child(directory, name, OFlags::RDONLY, Mode::empty())?;
-    safe_record_owned(&file, owner)?;
-    rustix::fs::unlinkat(directory, name, AtFlags::empty())?;
-    Ok(())
-}
-
-fn discard_cache_window(directory: &File, owner: u32) -> Result<()> {
-    remove_cache_record(directory, CACHE_JOURNAL, owner)?;
-    remove_cache_record(directory, CACHE_PENDING, owner)?;
-    directory.sync_all()?;
-    Ok(())
-}
-
-fn write_cache_window(
-    directory: &File,
-    window: &CacheWindow,
-    owner: u32,
-    mut fault: impl FnMut(RegistryBoundary) -> Result<()>,
-) -> Result<()> {
-    let bytes = window.encode()?;
-    if let Some(old) = read_cache_window(directory, owner)?
-        && (old.original != window.original || (old.restored.is_some() && old != *window))
-    {
-        return Err(AccountError::Unavailable);
-    }
-    remove_cache_record(directory, CACHE_PENDING, owner)?;
-    let mut file = child(
-        directory,
-        CACHE_PENDING,
-        OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL,
-        Mode::RUSR | Mode::WUSR,
-    )?;
-    safe_record_owned(&file, owner)?;
-    fault(RegistryBoundary::TempCreated)?;
-    file.write_all(&bytes)?;
-    fault(RegistryBoundary::Written)?;
-    file.sync_all()?;
-    fault(RegistryBoundary::FileSynced)?;
-    rustix::fs::renameat(directory, CACHE_PENDING, directory, CACHE_JOURNAL)?;
-    fault(RegistryBoundary::Renamed)?;
-    directory.sync_all()?;
-    fault(RegistryBoundary::DirectorySynced)?;
-    Ok(())
-}
-
-fn validate_cache_finish(
-    live: &Registry,
-    window: Option<&CacheWindow>,
-    inputs: &[Snapshot],
-) -> Result<()> {
-    let valid = match window {
-        None => live.active() && live.inputs == inputs,
-        Some(CacheWindow {
-            restored: Some(restored),
-            ..
-        }) => (!live.active() || live == restored) && restored.inputs == inputs,
-        Some(window) => !live.active() && cache_inputs_match(&window.original.inputs, inputs),
+            libc::F_RDLCK
+        } as libc::c_short,
+        l_whence: libc::SEEK_SET as libc::c_short,
+        l_start: 0,
+        l_len: 0,
+        l_pid: 0,
     };
-    if valid {
-        Ok(())
-    } else {
-        Err(AccountError::Unavailable)
+    // SAFETY: fcntl's fixed F_OFD_SETLK command borrows this correctly sized
+    // live flock for this call. It receives no caller-controlled command/path,
+    // transfers no ownership, and the File owns the resulting kernel lease.
+    let result = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_OFD_SETLK, &mut lock) };
+    if result != 0 {
+        return Err(match std::io::Error::last_os_error().raw_os_error() {
+            Some(libc::EAGAIN | libc::EACCES) => AccountError::Busy,
+            _ => AccountError::Unavailable,
+        });
     }
+    Ok(())
 }
 
-/// Production lifecycle reader retaining a shared mutation lease until dropped.
+/// Production lifecycle retaining registry and native account locks until drop.
 pub struct SystemLifecycle {
     lease: Lease,
+    password: PasswordLease,
 }
+
 impl SystemLifecycle {
-    /// Acquire the fixed root-owned registry and a nonblocking shared lease.
-    /// Missing, corrupt, revoked or unsupported state never creates identity.
+    /// Open existing trusted authority. Missing and legacy state never creates identity.
     pub fn open() -> std::result::Result<Self, LifecycleError> {
         let lease = Lease::open(false, false).map_err(|_| LifecycleError::Unavailable)?;
-        let authority = Self { lease };
-        authority
-            .validate()
-            .map_err(|_| LifecycleError::Unavailable)?;
-        Ok(authority)
-    }
-    fn validate(&self) -> Result<Registry> {
-        let registry = self.lease.read()?;
-        if !registry.active() || registry.inputs != input_snapshot()? {
-            return Err(AccountError::Unavailable);
+        let password =
+            PasswordLease::open(false, false).map_err(|_| LifecycleError::Unavailable)?;
+        if !lease
+            .read()
+            .map_err(|_| LifecycleError::Unavailable)?
+            .active()
+        {
+            return Err(LifecycleError::Unavailable);
         }
-        Ok(registry)
+        Ok(Self { lease, password })
     }
 }
+
 impl LifecycleAuthority for SystemLifecycle {
     fn current_incarnation(
         &mut self,
         uid: Uid,
     ) -> std::result::Result<Incarnation, LifecycleError> {
-        self.validate()
-            .map_err(|_| LifecycleError::Unavailable)?
-            .accounts
+        self.password
+            .validate()
+            .map_err(|_| LifecycleError::Unavailable)?;
+        let registry = self.lease.read().map_err(|_| LifecycleError::Unavailable)?;
+        let binding = registry
+            .bindings
             .iter()
-            .find(|a| a.uid == uid)
-            .map(|a| a.incarnation)
-            .ok_or(LifecycleError::Unsupported)
+            .find(|binding| binding.account.uid == uid)
+            .ok_or(LifecycleError::Unsupported)?;
+        let passwd = read_input("/etc/passwd").map_err(|_| LifecycleError::Unavailable)?;
+        let shadow = read_input("/etc/shadow").map_err(|_| LifecycleError::Unavailable)?;
+        validate_binding(
+            std::str::from_utf8(&passwd).map_err(|_| LifecycleError::Unavailable)?,
+            std::str::from_utf8(&shadow).map_err(|_| LifecycleError::Unavailable)?,
+            binding,
+        )
+        .map_err(|_| LifecycleError::Unavailable)?;
+        Ok(binding.account.incarnation)
     }
 }
 
@@ -759,118 +583,216 @@ fn root_required() -> Result<()> {
     }
 }
 
-fn password_database_lock() -> Result<File> {
-    let directory = fixed_open("/etc", OFlags::RDONLY | OFlags::DIRECTORY)?;
-    let file = match child(
-        &directory,
-        ".pwd.lock",
-        OFlags::RDWR | OFlags::CREATE | OFlags::EXCL,
-        Mode::RUSR | Mode::WUSR,
-    ) {
-        Ok(file) => {
-            file.sync_all()?;
-            directory.sync_all()?;
-            file
-        }
-        Err(_) => child(&directory, ".pwd.lock", OFlags::RDWR, Mode::empty())?,
-    };
-    safe_record(&file)?;
-    let actual = child(&directory, ".pwd.lock", OFlags::RDONLY, Mode::empty())?.metadata()?;
-    let held = file.metadata()?;
-    if actual.dev() != held.dev() || actual.ino() != held.ino() {
-        return Err(AccountError::Unavailable);
-    }
-    // Same whole-file POSIX write lock used by glibc lckpwdf/shadow-utils.
-    // Do not open/close another descriptor for this inode after acquisition:
-    // POSIX record locks are process-associated and any such close releases it.
-    rustix::fs::fcntl_lock(&file, FlockOperation::NonBlockingLockExclusive)?;
-    Ok(file)
-}
-
-fn set_frozen(frozen: bool) -> Result<()> {
-    // All fixed paths are opened without symlinks. Link targets above are the
-    // pinned real authselect files, never followed from an arbitrary link.
-    for path in FILES.iter().chain(DIRECTORIES.iter().rev()) {
-        let file = fixed_open(path, OFlags::RDONLY)?;
-        let mut flags = ioctl_getflags(&file)?;
-        flags.set(IFlags::IMMUTABLE, frozen);
-        ioctl_setflags(&file, flags)?;
-        file.sync_all()?;
-        if ioctl_getflags(&file)?.contains(IFlags::IMMUTABLE) != frozen {
-            return Err(AccountError::Unavailable);
-        }
-    }
-    Ok(())
-}
-
-/// A short-lived kernel proof that protected inodes have no existing writer.
-///
-/// Immutable flags prevent later write opens; they do not invalidate an already
-/// writable descriptor. Linux read leases reject such descriptors and writable
-/// shared mappings, including mappings retaining a file after its descriptor
-/// was closed. Hold every lease until active registry publication is durable.
-struct WriterBarrier {
-    files: Vec<File>,
-}
-
-impl WriterBarrier {
-    fn acquire() -> Result<Self> {
-        let mut files = Vec::with_capacity(FILES.len());
-        for path in FILES {
-            let file = fixed_open(path, OFlags::RDONLY)?;
-            if !ioctl_getflags(&file)?.contains(IFlags::IMMUTABLE) {
-                return Err(AccountError::Unavailable);
-            }
-            kernel_read_lease(&file, true)?;
-            files.push(file);
-        }
-        let barrier = Self { files };
-        barrier.validate()?;
-        Ok(barrier)
-    }
-
-    fn validate(&self) -> Result<()> {
-        if self.files.len() != FILES.len() {
-            return Err(AccountError::Unavailable);
-        }
-        for file in &self.files {
-            kernel_read_lease(file, false)?;
-            if !ioctl_getflags(file)?.contains(IFlags::IMMUTABLE) {
-                return Err(AccountError::Unavailable);
-            }
-        }
+/// Read-only root preflight for both fixed KDE native authentication substacks.
+/// This selector never authenticates, creates state or touches account/tally data.
+pub fn check_policy() -> Result<()> {
+    root_required()?;
+    if localpin_auth::kde_native_policy_compatible(b"kde")
+        && localpin_auth::kde_native_policy_compatible(b"kde-fingerprint")
+    {
         Ok(())
+    } else {
+        Err(AccountError::Unavailable)
     }
 }
 
-/// Tiny native boundary for Linux file leases, absent from rustix's safe API.
-/// No pointer, borrowed data, ownership transfer or caller-chosen command enters
-/// this ABI: fcntl receives only a live borrowed descriptor and integer constants.
-#[allow(unsafe_code)]
-fn kernel_read_lease(file: &File, acquire: bool) -> Result<()> {
-    let command = if acquire {
-        libc::F_SETLEASE
-    } else {
-        libc::F_GETLEASE
-    };
-    // SAFETY: the File remains borrowed through the call; both commands accept
-    // an integer third argument (F_GETLEASE ignores it), never a memory pointer.
-    let value = unsafe { libc::fcntl(file.as_raw_fd(), command, libc::F_RDLCK) };
-    if value < 0 {
-        let error = std::io::Error::last_os_error();
-        return Err(if error.raw_os_error() == Some(libc::EAGAIN) {
-            AccountError::Busy
-        } else {
-            AccountError::Unavailable
-        });
+fn read_input(path: &str) -> Result<Zeroizing<Vec<u8>>> {
+    let file = fixed_open(path, OFlags::RDONLY)?;
+    let before = file.metadata()?;
+    if !before.is_file() || before.nlink() != 1 || before.gid() != 0 || before.len() > MAX_INPUT {
+        return Err(AccountError::Unavailable);
     }
-    if (!acquire && value != libc::F_RDLCK) || (acquire && value != 0) {
+    let mut bytes = Zeroizing::new(Vec::new());
+    (&file).take(MAX_INPUT + 1).read_to_end(&mut bytes)?;
+    let after = file.metadata()?;
+    if bytes.len() as u64 > MAX_INPUT
+        || before.dev() != after.dev()
+        || before.ino() != after.ino()
+        || before.ctime() != after.ctime()
+        || before.ctime_nsec() != after.ctime_nsec()
+        || before.len() != after.len()
+    {
+        return Err(AccountError::Unavailable);
+    }
+    Ok(bytes)
+}
+
+fn validate_local_account(passwd: &str, shadow: &str, uid: Uid) -> Result<String> {
+    let entries: Vec<Vec<_>> = passwd
+        .lines()
+        .map(|line| line.split(':').collect())
+        .collect();
+    let matches: Vec<_> = entries
+        .iter()
+        .filter(|fields| fields.len() == 7 && fields[2].parse::<u32>() == Ok(uid.get()))
+        .collect();
+    if matches.len() != 1 {
+        return Err(AccountError::Invalid);
+    }
+    let entry = matches[0];
+    if !valid_name(entry[0])
+        || entry[1] != "x"
+        || !entry[5].starts_with('/')
+        || entry[3].parse::<u32>().is_err()
+        || entries
+            .iter()
+            .filter(|fields| fields.first() == Some(&entry[0]))
+            .count()
+            != 1
+        || shadow
+            .lines()
+            .filter(|line| line.split(':').next() == Some(entry[0]))
+            .count()
+            != 1
+        || shadow
+            .lines()
+            .any(|line| line.split(':').next() == Some(entry[0]) && line.split(':').count() != 9)
+    {
+        return Err(AccountError::Invalid);
+    }
+    Ok(entry[0].to_owned())
+}
+
+fn validate_binding(passwd: &str, shadow: &str, binding: &Binding) -> Result<()> {
+    if validate_local_account(passwd, shadow, binding.account.uid)? != binding.name {
+        return Err(AccountError::Unavailable);
+    }
+    let row = shadow
+        .lines()
+        .find(|line| line.split(':').next() == Some(binding.name.as_str()))
+        .ok_or(AccountError::Unavailable)?;
+    if row.split(':').nth(8).and_then(marker) != Some(binding.marker) {
         return Err(AccountError::Unavailable);
     }
     Ok(())
 }
 
-fn cache_storage_guard() -> Result<localpin_storage::Storage> {
+fn legacy_registry(bytes: &[u8]) -> bool {
+    // These are the old bounded appliance layouts, not an active authority for
+    // current readers. A prefix alone, corrupt/truncated body or unknown format
+    // cannot grant permission to remove administrator-owned immutable flags.
+    if bytes.len() > MAX_REGISTRY
+        || bytes.len() < 12
+        || !matches!(&bytes[..8], b"LPACCT01" | b"LPACCT02")
+    {
+        return false;
+    }
+    let snapshots = usize::from(u16::from_be_bytes([bytes[8], bytes[9]]));
+    if snapshots != 0 && snapshots != 20 {
+        return false;
+    }
+    let end = 10 + snapshots * 84;
+    let Some(count) = bytes.get(end..end + 2) else {
+        return false;
+    };
+    let accounts = usize::from(u16::from_be_bytes([count[0], count[1]]));
+    if accounts > MAX_ACCOUNTS
+        || (snapshots == 0) != (accounts == 0)
+        || bytes.len() != end + 2 + accounts * 20
+    {
+        return false;
+    }
+    let mut seen = BTreeSet::new();
+    for entry in bytes[end + 2..].as_chunks::<20>().0 {
+        let uid = u32::from_be_bytes([entry[0], entry[1], entry[2], entry[3]]);
+        if Uid::new(uid).is_err() || !seen.insert(uid) || entry[4..].iter().all(|byte| *byte == 0) {
+            return false;
+        }
+    }
+    true
+}
+
+fn previous_authority(lease: &Lease) -> (Option<Registry>, bool) {
+    let Ok(bytes) = lease.read_bytes() else {
+        return (None, false);
+    };
+    (Registry::decode(&bytes).ok(), legacy_registry(&bytes))
+}
+
+fn immutable_transition(flags: IFlags, legacy: bool) -> Result<Option<IFlags>> {
+    if !flags.contains(IFlags::IMMUTABLE) {
+        return Ok(None);
+    }
+    if !legacy {
+        return Err(AccountError::Unavailable);
+    }
+    Ok(Some(flags & !IFlags::IMMUTABLE))
+}
+
+fn account_input_flags(legacy: bool) -> Result<()> {
+    for path in LEGACY_FILES.iter().chain(LEGACY_DIRECTORIES.iter().rev()) {
+        let file = fixed_open(path, OFlags::RDONLY)?;
+        match ioctl_getflags(&file) {
+            Ok(flags) => {
+                if let Some(updated) = immutable_transition(flags, legacy)? {
+                    ioctl_setflags(&file, updated)?;
+                    file.sync_all()?;
+                    if ioctl_getflags(&file)?.contains(IFlags::IMMUTABLE) {
+                        return Err(AccountError::Unavailable);
+                    }
+                }
+            }
+            Err(rustix::io::Errno::NOTTY | rustix::io::Errno::OPNOTSUPP) => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(())
+}
+
+fn discard_legacy_cache(directory: &File) -> Result<()> {
+    for name in ["cache-window", "cache-window.pending"] {
+        match rustix::fs::statat(directory, name, AtFlags::SYMLINK_NOFOLLOW) {
+            Err(rustix::io::Errno::NOENT) => {}
+            Err(error) => return Err(error.into()),
+            Ok(_) => {
+                let file = child(directory, name, OFlags::RDONLY, Mode::empty())?;
+                safe_record(&file)?;
+                rustix::fs::unlinkat(directory, name, AtFlags::empty())?;
+            }
+        }
+    }
+    directory.sync_all()?;
+    Ok(())
+}
+
+/// Durably revoke all bindings before explicit account/integration maintenance.
+/// Legacy appliance flags are removed only after this revocation is durable.
+pub fn begin_mutation() -> Result<()> {
+    root_required()?;
+    let lease = Lease::open(true, true)?;
+    let (previous, legacy) = previous_authority(&lease);
+    close_desktop_gate()?;
+    lease.write(&Registry::revoked())?;
+    discard_legacy_cache(&lease.directory)?;
+    let _password = PasswordLease::open(true, true)?;
+    account_input_flags(legacy)?;
+    if let Some(previous) = previous {
+        let passwd = read_input("/etc/passwd")?;
+        let shadow = read_input("/etc/shadow")?;
+        let passwd_text = std::str::from_utf8(&passwd).map_err(|_| AccountError::Invalid)?;
+        let shadow_text = std::str::from_utf8(&shadow).map_err(|_| AccountError::Invalid)?;
+        let clear = managed_markers_to_clear(passwd_text, shadow_text, &previous);
+        if !clear.is_empty() {
+            publish_shadow(&shadow_with_markers(shadow_text, &clear)?)?;
+        }
+    }
+    Ok(())
+}
+
+fn managed_markers_to_clear(passwd: &str, shadow: &str, previous: &Registry) -> Vec<Binding> {
+    previous
+        .bindings
+        .iter()
+        .filter(|binding| validate_binding(passwd, shadow, binding).is_ok())
+        .cloned()
+        .map(|mut binding| {
+            binding.marker = 0;
+            binding
+        })
+        .collect()
+}
+
+fn storage_guard() -> Result<localpin_storage::Storage> {
     localpin_storage::Storage::open(fixed_open(
         STORAGE_ROOT,
         OFlags::RDONLY | OFlags::DIRECTORY,
@@ -884,143 +806,339 @@ fn cache_storage_guard() -> Result<localpin_storage::Storage> {
     })
 }
 
-fn set_cache_directory_frozen(frozen: bool) -> Result<()> {
-    let file = fixed_open("/etc", OFlags::RDONLY | OFlags::DIRECTORY)?;
-    let mut flags = ioctl_getflags(&file)?;
-    if flags.contains(IFlags::IMMUTABLE) != frozen {
-        flags.set(IFlags::IMMUTABLE, frozen);
-        ioctl_setflags(&file, flags)?;
-        file.sync_all()?;
-    }
-    if ioctl_getflags(&file)?.contains(IFlags::IMMUTABLE) != frozen {
+// Compatibility entrypoints for existing package scripts. There is no mutable
+// cache window with marker authority and no journal from which to restore state.
+fn package_check() -> Result<()> {
+    root_required()?;
+    let lease = Lease::open(true, false)?;
+    close_desktop_gate()?;
+    let _storage = storage_guard()?;
+    let _password = PasswordLease::open(false, false)?;
+    let registry = lease.read()?;
+    if !registry.active() {
         return Err(AccountError::Unavailable);
+    }
+    let passwd = read_input("/etc/passwd")?;
+    let shadow = read_input("/etc/shadow")?;
+    for binding in &registry.bindings {
+        validate_binding(
+            std::str::from_utf8(&passwd).map_err(|_| AccountError::Invalid)?,
+            std::str::from_utf8(&shadow).map_err(|_| AccountError::Invalid)?,
+            binding,
+        )?;
     }
     Ok(())
 }
 
-fn cache_operation(operation: impl FnOnce(&Lease) -> Result<()>) -> Result<()> {
-    root_required()?;
-    let lease = Lease::open(true, false)?;
-    let result = (|| {
-        close_desktop_gate()?;
-        let _storage = cache_storage_guard()?;
-        operation(&lease)
-    })();
-    if result.is_err() {
-        // An interrupted or refused cache operation cannot leave old identity
-        // available. Preserve the safe journal for retry or fresh recovery.
-        lease.write(&Registry::revoked())?;
-    }
-    result
-}
-
-/// Suspend an exact active domain while only /etc permits package cache edits.
-///
-/// The broker must be stopped. Protected regular inputs and all other directory
-/// immutable flags remain set; the same incarnations are retained only in the
-/// bounded durable cache journal. No caller-selected path or program is run.
+/// Validate quiescent package identity state; marker authority needs no cache window.
 pub fn cache_window_begin() -> Result<()> {
-    cache_operation(|lease| {
-        let live = lease.read()?;
-        let old = read_cache_window(&lease.directory, 0)?;
-        let original = match old {
-            Some(window) if window.restored.is_none() => {
-                if live.active() && live != window.original {
-                    return Err(AccountError::Unavailable);
-                }
-                window.original
-            }
-            Some(_) => return Err(AccountError::Unavailable),
-            None if live.active() && !live.accounts.is_empty() => live.clone(),
-            None => return Err(AccountError::Unavailable),
-        };
-        let inputs = if live.active() {
-            input_snapshot()?
-        } else {
-            input_snapshot_for_cache(true)?
-        };
-        if (live.active() && live.inputs != inputs)
-            || !cache_inputs_match(&original.inputs, &inputs)
-        {
-            return Err(AccountError::Unavailable);
-        }
-        let writers = WriterBarrier::acquire()?;
-        write_cache_window(
-            &lease.directory,
-            &CacheWindow {
-                original,
-                restored: None,
-            },
-            0,
-            |_| Ok(()),
-        )?;
-        // The exact source is durable before either revocation or unfreezing.
-        lease.write(&Registry::revoked())?;
-        writers.validate()?;
-        set_cache_directory_frozen(false)
-    })
+    package_check()
 }
 
-/// Refreeze /etc and restore only the journal's unchanged account incarnations.
-///
-/// Only /etc size/ctime may be refreshed. A durable exact final-registry witness
-/// precedes publication so interrupted completion never adopts new metadata.
-/// Repeating a completed finish validates the already-active full snapshot.
+/// Revalidate identity state after package work, without rebuilding authority.
 pub fn cache_window_finish() -> Result<()> {
-    cache_operation(|lease| {
-        let live = lease.read()?;
-        let pending = read_cache_window(&lease.directory, 0)?;
-        let inputs = if pending.as_ref().is_some_and(|w| w.restored.is_none()) {
-            input_snapshot_for_cache(true)?
-        } else {
-            input_snapshot()?
-        };
-        validate_cache_finish(&live, pending.as_ref(), &inputs)?;
-        let Some(mut window) = pending else {
-            // No authority is reconstructed on this idempotent completion.
-            return Ok(());
-        };
-        let writers = WriterBarrier::acquire()?;
-        let restored = match window.restored.clone() {
-            Some(restored) => restored,
-            None => {
-                set_cache_directory_frozen(true)?;
-                let inputs = input_snapshot()?;
-                if !cache_inputs_match(&window.original.inputs, &inputs) {
-                    return Err(AccountError::Unavailable);
-                }
-                let restored = Registry {
-                    inputs,
-                    accounts: window.original.accounts.clone(),
-                };
-                window.restored = Some(restored.clone());
-                write_cache_window(&lease.directory, &window, 0, |_| Ok(()))?;
-                restored
+    package_check()
+}
+
+struct ProvisionAuthority {
+    accounts: Vec<AccountId>,
+}
+impl LifecycleAuthority for ProvisionAuthority {
+    fn current_incarnation(
+        &mut self,
+        uid: Uid,
+    ) -> std::result::Result<Incarnation, LifecycleError> {
+        self.accounts
+            .iter()
+            .find(|account| account.uid == uid)
+            .map(|account| account.incarnation)
+            .ok_or(LifecycleError::Unsupported)
+    }
+}
+
+fn shadow_with_markers(shadow: &str, bindings: &[Binding]) -> Result<Zeroizing<Vec<u8>>> {
+    if !shadow.ends_with('\n') {
+        return Err(AccountError::Invalid);
+    }
+    let mut output = Zeroizing::new(Vec::new());
+    for line in shadow.lines() {
+        if let Some(binding) = bindings
+            .iter()
+            .find(|binding| line.split(':').next() == Some(binding.name.as_str()))
+        {
+            if line.split(':').count() != 9 {
+                return Err(AccountError::Invalid);
             }
-        };
-        lease.write_checked(&restored, || {
-            writers.validate()?;
-            if restored.inputs != input_snapshot()? {
+            let (prefix, _) = line.rsplit_once(':').ok_or(AccountError::Invalid)?;
+            output.extend_from_slice(prefix.as_bytes());
+            output.push(b':');
+            // Zero is used only for clearing a known old marker after durable
+            // revocation; active registries never permit it.
+            if binding.marker != 0 {
+                output.extend_from_slice(binding.marker.to_string().as_bytes());
+            }
+        } else {
+            output.extend_from_slice(line.as_bytes());
+        }
+        output.push(b'\n');
+    }
+    if output.len() as u64 > MAX_INPUT {
+        return Err(AccountError::Invalid);
+    }
+    Ok(output)
+}
+
+/// Replace only shadow's reserved markers while preserving its native metadata
+/// and SELinux label. Unknown xattrs refuse provisioning rather than dropping
+/// ACLs, integrity signatures or administrator metadata.
+fn publish_shadow(bytes: &[u8]) -> Result<()> {
+    let directory = fixed_open("/etc", OFlags::RDONLY | OFlags::DIRECTORY)?;
+    let old = fixed_open("/etc/shadow", OFlags::RDONLY)?;
+    replace_shadow(&directory, &old, bytes, 0, 0, |_| Ok(()))
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ShadowBoundary {
+    Created,
+    Metadata,
+    Written,
+    FileSynced,
+    Renamed,
+    DirectorySynced,
+}
+
+fn replace_shadow(
+    directory: &File,
+    old: &File,
+    bytes: &[u8],
+    owner: u32,
+    group: u32,
+    mut fault: impl FnMut(ShadowBoundary) -> Result<()>,
+) -> Result<()> {
+    let metadata = old.metadata()?;
+    if !metadata.is_file()
+        || metadata.nlink() != 1
+        || metadata.uid() != owner
+        || metadata.gid() != group
+        || metadata.mode() & 0o022 != 0
+    {
+        return Err(AccountError::Unavailable);
+    }
+    let mut names = [0; 4096];
+    let count = rustix::fs::flistxattr(old, &mut names[..])?;
+    let label = if count == 0 {
+        None
+    } else if &names[..count] == b"security.selinux\0" {
+        let mut label = vec![0; 4096];
+        let length = rustix::fs::fgetxattr(old, "security.selinux", &mut label[..])?;
+        label.truncate(length);
+        Some(label)
+    } else {
+        return Err(AccountError::Unavailable);
+    };
+    const TEMP: &str = ".localpin-shadow.pending";
+    match rustix::fs::statat(directory, TEMP, AtFlags::SYMLINK_NOFOLLOW) {
+        Err(rustix::io::Errno::NOENT) => {}
+        Err(error) => return Err(error.into()),
+        Ok(_) => {
+            let pending = child(directory, TEMP, OFlags::RDONLY, Mode::empty())?;
+            let m = pending.metadata()?;
+            if m.uid() != owner
+                || m.gid() != group
+                || !m.is_file()
+                || m.nlink() != 1
+                || m.mode() & 0o077 != 0
+            {
                 return Err(AccountError::Unavailable);
             }
-            Ok(())
-        })?;
-        discard_cache_window(&lease.directory, 0)
+            rustix::fs::unlinkat(directory, TEMP, AtFlags::empty())?;
+        }
+    }
+    let mut pending = child(
+        directory,
+        TEMP,
+        OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL,
+        Mode::RUSR | Mode::WUSR,
+    )?;
+    fault(ShadowBoundary::Created)?;
+    rustix::fs::fchown(
+        &pending,
+        Some(rustix::fs::Uid::from_raw(owner)),
+        Some(rustix::fs::Gid::from_raw(group)),
+    )?;
+    if let Some(label) = label {
+        rustix::fs::fsetxattr(
+            &pending,
+            "security.selinux",
+            &label,
+            rustix::fs::XattrFlags::empty(),
+        )?;
+    }
+    fault(ShadowBoundary::Metadata)?;
+    pending.write_all(bytes)?;
+    fault(ShadowBoundary::Written)?;
+    rustix::fs::fchmod(&pending, Mode::from_raw_mode(metadata.mode() & 0o7777))?;
+    pending.sync_all()?;
+    fault(ShadowBoundary::FileSynced)?;
+    let current = child(directory, "shadow", OFlags::RDONLY, Mode::empty())?.metadata()?;
+    if current.dev() != metadata.dev()
+        || current.ino() != metadata.ino()
+        || current.ctime() != metadata.ctime()
+        || current.ctime_nsec() != metadata.ctime_nsec()
+    {
+        return Err(AccountError::Unavailable);
+    }
+    rustix::fs::renameat(directory, TEMP, directory, "shadow")?;
+    fault(ShadowBoundary::Renamed)?;
+    directory.sync_all()?;
+    fault(ShadowBoundary::DirectorySynced)?;
+    Ok(())
+}
+
+/// Provision fresh disabled incarnations and rotate their root shadow markers.
+/// The broker must be stopped. Old state is quarantined and never adopted.
+pub fn seal(uids: &[Uid]) -> Result<()> {
+    provision(uids, false)
+}
+
+/// Explicit root recovery, including replacing an unknown reserved shadow field.
+/// This never retains the old incarnation, marker, credentials or throttle state.
+pub fn recover(uids: &[Uid]) -> Result<()> {
+    provision(uids, true)
+}
+
+fn provision(uids: &[Uid], recover_unknown: bool) -> Result<()> {
+    root_required()?;
+    if uids.is_empty()
+        || uids.len() > MAX_ACCOUNTS
+        || uids.iter().any(|uid| !(1000..=59999).contains(&uid.get()))
+        || uids
+            .iter()
+            .map(|uid| uid.get())
+            .collect::<BTreeSet<_>>()
+            .len()
+            != uids.len()
+    {
+        return Err(AccountError::Invalid);
+    }
+    let lease = Lease::open(true, true)?;
+    let (previous, legacy) = previous_authority(&lease);
+    close_desktop_gate()?;
+    lease.write(&Registry::revoked())?;
+    discard_legacy_cache(&lease.directory)?;
+    let _password = PasswordLease::open(true, true)?;
+    account_input_flags(legacy)?;
+    let mut storage = storage_guard()?;
+    let passwd = read_input("/etc/passwd")?;
+    let shadow = read_input("/etc/shadow")?;
+    let passwd_text = std::str::from_utf8(&passwd).map_err(|_| AccountError::Invalid)?;
+    let shadow_text = std::str::from_utf8(&shadow).map_err(|_| AccountError::Invalid)?;
+    let faillock = read_input("/etc/security/faillock.conf")?;
+    let tally_directory =
+        localpin_auth::reviewed_faillock_directory(&faillock).ok_or(AccountError::Unavailable)?;
+    let mut used_markers: BTreeSet<u64> = shadow_text
+        .lines()
+        .filter_map(|line| line.split(':').nth(8).and_then(marker))
+        .collect();
+    let mut bindings = Vec::new();
+    for uid in uids {
+        let name = validate_local_account(passwd_text, shadow_text, *uid)?;
+        validate_reserved_field(shadow_text, *uid, &name, previous.as_ref(), recover_unknown)?;
+        provision_missing_tally(tally_directory, *uid, &name)?;
+        let mut incarnation = [0; 16];
+        getrandom::fill(&mut incarnation).map_err(|_| AccountError::Unavailable)?;
+        let mut chosen = None;
+        for _ in 0..16 {
+            // Fedora glibc clamps numeric shadow fields to u32 despite the
+            // public sp_flag unsigned-long type. This is a root record sentinel;
+            // the independent actual incarnation remains 128-bit.
+            let mut bytes = [0; 4];
+            getrandom::fill(&mut bytes).map_err(|_| AccountError::Unavailable)?;
+            let value = u64::from(u32::from_be_bytes(bytes));
+            if value != 0 && value < u64::from(u32::MAX) && used_markers.insert(value) {
+                chosen = Some(value);
+                break;
+            }
+        }
+        bindings.push(Binding {
+            account: AccountId {
+                uid: *uid,
+                incarnation: Incarnation::new(incarnation)
+                    .map_err(|_| AccountError::Unavailable)?,
+            },
+            name,
+            marker: chosen.ok_or(AccountError::Unavailable)?,
+        });
+    }
+    bindings.sort_by_key(|binding| binding.account.uid.get());
+    let updated = shadow_with_markers(shadow_text, &bindings)?;
+    publish_shadow(&updated)?;
+    let mut authority = ProvisionAuthority {
+        accounts: bindings.iter().map(|binding| binding.account).collect(),
+    };
+    let mut clock = crate::BootClock::new().map_err(|_| AccountError::Unavailable)?;
+    for binding in &bindings {
+        storage
+            .reprovision(
+                binding.account,
+                clock.now().map_err(|_| AccountError::Unavailable)?,
+                &mut authority,
+            )
+            .map_err(|_| AccountError::Unavailable)?;
+    }
+    let registry = Registry { bindings };
+    registry.validate()?;
+    lease.write_checked(&registry, || {
+        _password.validate()?;
+        let current_passwd = read_input("/etc/passwd")?;
+        let current_shadow = read_input("/etc/shadow")?;
+        if *current_passwd != *passwd || *current_shadow != *updated {
+            return Err(AccountError::Unavailable);
+        }
+        for binding in &registry.bindings {
+            validate_binding(
+                passwd_text,
+                std::str::from_utf8(&current_shadow).map_err(|_| AccountError::Invalid)?,
+                binding,
+            )?;
+        }
+        Ok(())
     })
 }
 
-/// Durably revoke all accounts before allowing any supported account mutation.
-///
-/// A crash leaves a revoked registry even if only some immutable flags cleared.
-/// This command does not run arbitrary programs or authorize integration edits.
-pub fn begin_mutation() -> Result<()> {
-    root_required()?;
-    let lease = Lease::open(true, true)?;
-    close_desktop_gate()?;
-    lease.write(&Registry::revoked())?;
-    discard_cache_window(&lease.directory, 0)?;
-    let _password_database_lock = password_database_lock()?;
-    set_frozen(false)
+fn validate_reserved_field(
+    shadow: &str,
+    uid: Uid,
+    name: &str,
+    previous: Option<&Registry>,
+    recover_unknown: bool,
+) -> Result<()> {
+    let reserved = shadow
+        .lines()
+        .find(|line| line.split(':').next() == Some(name))
+        .and_then(|line| line.split(':').nth(8))
+        .ok_or(AccountError::Invalid)?;
+    if reserved.is_empty()
+        || recover_unknown
+        || previous.is_some_and(|registry| {
+            registry.bindings.iter().any(|binding| {
+                binding.account.uid == uid
+                    && binding.name == name
+                    && marker(reserved) == Some(binding.marker)
+            })
+        })
+    {
+        Ok(())
+    } else {
+        Err(AccountError::Unavailable)
+    }
+}
+
+/// Report whether trusted current authority establishes this supported UID.
+pub fn supported(uid: Uid) -> bool {
+    SystemLifecycle::open()
+        .and_then(|mut authority| authority.current_incarnation(uid))
+        .is_ok()
 }
 
 // Direct account administration also invalidates any previous desktop test
@@ -1057,155 +1175,6 @@ fn remove_gate(directory: &File, owner: u32, group: u32) -> Result<()> {
     }
     directory.sync_all()?;
     Ok(())
-}
-
-struct ProvisionAuthority {
-    accounts: Vec<AccountId>,
-}
-impl LifecycleAuthority for ProvisionAuthority {
-    fn current_incarnation(
-        &mut self,
-        uid: Uid,
-    ) -> std::result::Result<Incarnation, LifecycleError> {
-        self.accounts
-            .iter()
-            .find(|a| a.uid == uid)
-            .map(|a| a.incarnation)
-            .ok_or(LifecycleError::Unsupported)
-    }
-}
-
-/// Seal policy/account files and provision fresh disabled account incarnations.
-///
-/// The broker must be stopped. Every invocation first revokes old incarnations;
-/// interrupted provisioning is recovered only by this privileged operation with
-/// fresh randomness. Old storage is quarantined, never repaired for an own user.
-pub fn seal(uids: &[Uid]) -> Result<()> {
-    root_required()?;
-    if uids.is_empty() || uids.len() > MAX_ACCOUNTS {
-        return Err(AccountError::Invalid);
-    }
-    let unique: BTreeSet<_> = uids.iter().map(|uid| uid.get()).collect();
-    if unique.len() != uids.len() {
-        return Err(AccountError::Invalid);
-    }
-    let lease = Lease::open(true, true)?;
-    close_desktop_gate()?;
-    lease.write(&Registry::revoked())?;
-    discard_cache_window(&lease.directory, 0)?;
-    let _password_database_lock = password_database_lock()?;
-    set_frozen(true)?;
-    let writers = WriterBarrier::acquire()?;
-    let inputs = input_snapshot()?;
-    // Local source proof is deliberately independent of NSS resolution. The
-    // password-free eligibility authority additionally checks its exact policy.
-    let passwd = read_input("/etc/passwd")?;
-    let shadow = read_input("/etc/shadow")?;
-    let passwd = std::str::from_utf8(&passwd).map_err(|_| AccountError::Invalid)?;
-    let shadow = std::str::from_utf8(&shadow).map_err(|_| AccountError::Invalid)?;
-    let faillock = read_input("/etc/security/faillock.conf")?;
-    let tally_directory =
-        localpin_auth::reviewed_faillock_directory(&faillock).ok_or(AccountError::Unavailable)?;
-    for uid in uids {
-        let name = validate_local_account(passwd, shadow, *uid)?;
-        provision_missing_tally(tally_directory, *uid, &name)?;
-    }
-    let mut storage = localpin_storage::Storage::open(fixed_open(
-        STORAGE_ROOT,
-        OFlags::RDONLY | OFlags::DIRECTORY,
-    )?)
-    .map_err(|e| {
-        if e == localpin_storage::Error::Busy {
-            AccountError::Busy
-        } else {
-            AccountError::Unavailable
-        }
-    })?;
-    let mut accounts = Vec::new();
-    for uid in uids {
-        let mut bytes = [0; 16];
-        getrandom::fill(&mut bytes).map_err(|_| AccountError::Unavailable)?;
-        accounts.push(AccountId {
-            uid: *uid,
-            incarnation: Incarnation::new(bytes).map_err(|_| AccountError::Unavailable)?,
-        });
-    }
-    let mut authority = ProvisionAuthority {
-        accounts: accounts.clone(),
-    };
-    let mut clock = crate::BootClock::new().map_err(|_| AccountError::Unavailable)?;
-    for account in &accounts {
-        storage
-            .reprovision(
-                *account,
-                clock.now().map_err(|_| AccountError::Unavailable)?,
-                &mut authority,
-            )
-            .map_err(|_| AccountError::Unavailable)?;
-    }
-    if inputs != input_snapshot()? {
-        return Err(AccountError::Unavailable);
-    }
-    let registry = Registry { inputs, accounts };
-    lease.write_checked(&registry, || {
-        writers.validate()?;
-        if registry.inputs != input_snapshot()? {
-            return Err(AccountError::Unavailable);
-        }
-        Ok(())
-    })
-}
-
-fn read_input(path: &str) -> Result<Zeroizing<Vec<u8>>> {
-    let file = fixed_open(path, OFlags::RDONLY)?;
-    let mut bytes = Zeroizing::new(Vec::new());
-    file.take(MAX_INPUT + 1).read_to_end(&mut bytes)?;
-    if bytes.len() as u64 > MAX_INPUT {
-        return Err(AccountError::Unavailable);
-    }
-    Ok(bytes)
-}
-
-fn validate_local_account(passwd: &str, shadow: &str, uid: Uid) -> Result<String> {
-    let matches = passwd
-        .lines()
-        .filter_map(|line| {
-            let fields: Vec<_> = line.split(':').collect();
-            (fields.len() == 7 && fields[2].parse::<u32>() == Ok(uid.get())).then_some(fields)
-        })
-        .collect::<Vec<_>>();
-    if matches.len() != 1 {
-        return Err(AccountError::Invalid);
-    }
-    let entry = &matches[0];
-    if entry[0].is_empty()
-        || entry[0].len() > 32
-        || !entry[0]
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
-        || entry[1] != "x"
-        || !entry[5].starts_with('/')
-        || entry[3].parse::<u32>().is_err()
-    {
-        return Err(AccountError::Invalid);
-    }
-    if passwd
-        .lines()
-        .filter(|line| line.split(':').next() == Some(entry[0]))
-        .count()
-        != 1
-        || shadow
-            .lines()
-            .filter(|line| {
-                let fields: Vec<_> = line.split(':').collect();
-                fields.len() == 9 && fields[0] == entry[0]
-            })
-            .count()
-            != 1
-    {
-        return Err(AccountError::Invalid);
-    }
-    Ok(entry[0].to_owned())
 }
 
 fn provision_missing_tally(tally_directory: &'static str, uid: Uid, name: &str) -> Result<()> {
@@ -1283,13 +1252,6 @@ fn publish_tally(
     Ok(())
 }
 
-/// Report whether the fixed production authority can establish a supported UID.
-pub fn supported(uid: Uid) -> bool {
-    SystemLifecycle::open()
-        .and_then(|mut a| a.current_incarnation(uid))
-        .is_ok()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1305,7 +1267,7 @@ mod tests {
             let mut random = [0; 8];
             getrandom::fill(&mut random).unwrap();
             let path = std::env::temp_dir().join(format!(
-                "localpin-account-registry-{}-{}",
+                "localpin-account-{}-{}",
                 std::process::id(),
                 u64::from_be_bytes(random)
             ));
@@ -1333,176 +1295,281 @@ mod tests {
             std::fs::remove_dir_all(&self.path).unwrap();
         }
     }
-
-    #[test]
-    fn lifecycle_administration_removes_only_a_safe_gate_and_never_reopens_it() {
-        use std::os::unix::fs::{PermissionsExt, symlink};
-        let fixture = Fixture::new();
-        let group = fixture.directory.metadata().unwrap().gid();
-        let gate = fixture.path.join("gate");
-        remove_gate(&fixture.directory, fixture.owner, group).unwrap();
-        assert!(!gate.exists());
-        std::fs::write(&gate, b"LPINT01\nactive\n").unwrap();
-        std::fs::set_permissions(&gate, std::fs::Permissions::from_mode(0o644)).unwrap();
-        remove_gate(&fixture.directory, fixture.owner, group).unwrap();
-        assert!(!gate.exists());
-        std::fs::write(&gate, b"LPINT01\nactive\n").unwrap();
-        std::fs::set_permissions(&gate, std::fs::Permissions::from_mode(0o666)).unwrap();
-        assert_eq!(
-            remove_gate(&fixture.directory, fixture.owner, group),
-            Err(AccountError::Unavailable)
-        );
-        std::fs::set_permissions(&gate, std::fs::Permissions::from_mode(0o644)).unwrap();
-        std::fs::hard_link(&gate, fixture.path.join("other")).unwrap();
-        assert_eq!(
-            remove_gate(&fixture.directory, fixture.owner, group),
-            Err(AccountError::Unavailable)
-        );
-        std::fs::remove_file(&gate).unwrap();
-        symlink("other", &gate).unwrap();
-        assert_eq!(
-            remove_gate(&fixture.directory, fixture.owner, group),
-            Err(AccountError::Unavailable)
-        );
-        assert_eq!(
-            std::fs::read(fixture.path.join("other")).unwrap(),
-            b"LPINT01\nactive\n"
-        );
-    }
-    fn account(uid: u32, incarnation: u8) -> AccountId {
-        AccountId {
-            uid: Uid::new(uid).unwrap(),
-            incarnation: Incarnation::new([incarnation; 16]).unwrap(),
+    fn binding(uid: u32, name: &str, marker: u64, incarnation: u8) -> Binding {
+        Binding {
+            account: AccountId {
+                uid: Uid::new(uid).unwrap(),
+                incarnation: Incarnation::new([incarnation; 16]).unwrap(),
+            },
+            name: name.into(),
+            marker,
         }
     }
     fn sample() -> Registry {
         Registry {
-            inputs: vec![
-                Snapshot {
-                    dev: 1,
-                    ino: 2,
-                    size: 3,
-                    ctime: 4,
-                    nanos: 5,
-                    mode: 0o100600,
-                    links: 1,
-                    digest: [6; 32]
-                };
-                DIRECTORIES.len() + FILES.len() + LINKS.len()
-            ],
-            accounts: vec![account(1000, 1), account(1001, 2)],
+            bindings: vec![binding(1000, "alice", 42, 7)],
         }
     }
-
-    fn cache_sample() -> Registry {
-        let mut original = sample();
-        original.inputs[0].mode = 0o040755;
-        original.inputs[0].links = 2;
-        original.inputs[0].digest = [0; 32];
-        original
-    }
-
-    fn cache_ready(original: &Registry) -> CacheWindow {
-        let mut restored = original.clone();
-        restored.inputs[0].size += 32;
-        restored.inputs[0].ctime += 1;
-        restored.inputs[0].nanos += 1;
-        CacheWindow {
-            original: original.clone(),
-            restored: Some(restored),
-        }
-    }
+    const PASSWD: &str = "alice:x:1000:1000:Alice:/home/alice:/bin/bash\n";
+    const SHADOW: &str = "alice:$y$j9T$salt$hash:20000:0:99999:7:::42\n";
 
     #[test]
-    fn cache_window_refresh_is_exactly_three_etc_metadata_fields() {
-        let original = cache_sample();
-        type Mutation = (fn(&mut Snapshot), bool);
-        let mutations: [Mutation; 8] = [
-            (|s| s.dev += 1, false),
-            (|s| s.ino += 1, false),
-            (|s| s.size += 1, true),
-            (|s| s.ctime += 1, true),
-            (|s| s.nanos += 1, true),
-            (|s| s.mode ^= 1, false),
-            (|s| s.links += 1, false),
-            (|s| s.digest[0] ^= 1, false),
-        ];
-        for position in 0..original.inputs.len() {
-            for (change, allowed_on_etc) in mutations {
-                let mut inputs = original.inputs.clone();
-                change(&mut inputs[position]);
-                assert_eq!(
-                    cache_inputs_match(&original.inputs, &inputs),
-                    position == 0 && allowed_on_etc
-                );
-            }
+    fn registry_is_bounded_exact_and_refuses_legacy_or_ambiguous_authority() {
+        let registry = sample();
+        assert_eq!(Registry::decode(&registry.encode()), Ok(registry.clone()));
+        assert_eq!(
+            Registry::decode(&Registry::revoked().encode()),
+            Ok(Registry::revoked())
+        );
+        assert!(!Registry::revoked().active());
+        for magic in [b"LPACCT01", b"LPACCT02"] {
+            let mut bytes = registry.encode();
+            bytes[..8].copy_from_slice(magic);
+            assert_eq!(Registry::decode(&bytes), Err(AccountError::Invalid));
         }
-        assert!(!cache_inputs_match(&original.inputs, &original.inputs[1..]));
-        assert_eq!(original.inputs.len(), 20);
-        let encoded = original.encode();
-        let ready = cache_ready(&original).restored.unwrap().encode();
-        assert_eq!(&encoded[..26], &ready[..26]);
-        assert_eq!(&encoded[50..], &ready[50..]);
-    }
-
-    #[test]
-    fn cache_window_journal_is_versioned_bounded_and_cannot_change_accounts() {
-        let original = cache_sample();
-        for window in [
-            CacheWindow {
-                original: original.clone(),
-                restored: None,
-            },
-            cache_ready(&original),
+        let bytes = registry.encode();
+        for length in 0..bytes.len() {
+            assert_eq!(
+                Registry::decode(&bytes[..length]),
+                Err(AccountError::Invalid)
+            );
+        }
+        let mut trailing = bytes;
+        trailing.push(0);
+        assert_eq!(Registry::decode(&trailing), Err(AccountError::Invalid));
+        for bad in [
+            binding(1000, "bob", 43, 8),
+            binding(1001, "alice", 43, 8),
+            binding(1001, "bob", 42, 8),
+            binding(1001, "bob", 0, 8),
+            binding(1001, "bob", u64::MAX, 8),
+            binding(1001, "Bad", 43, 8),
         ] {
-            let encoded = window.encode().unwrap();
-            assert_eq!(CacheWindow::decode(&encoded).unwrap(), window);
-            for boundary in 0..encoded.len() {
-                assert!(CacheWindow::decode(&encoded[..boundary]).is_err());
-            }
-            let mut trailing = encoded.clone();
-            trailing.push(0);
-            assert!(CacheWindow::decode(&trailing).is_err());
-            let mut oversized = encoded;
-            oversized[8..12].copy_from_slice(&((MAX_REGISTRY + 1) as u32).to_be_bytes());
-            assert!(CacheWindow::decode(&oversized).is_err());
+            let mut bad_registry = registry.clone();
+            bad_registry.bindings.push(bad);
+            assert_eq!(
+                Registry::decode(&bad_registry.encode()),
+                Err(AccountError::Invalid)
+            );
         }
-        let mut bad = cache_ready(&original);
-        bad.restored.as_mut().unwrap().accounts[0] = account(1000, 9);
-        assert_eq!(bad.encode(), Err(AccountError::Invalid));
-        let mut bad = cache_ready(&original);
-        bad.restored.as_mut().unwrap().inputs[1].ctime += 1;
-        assert_eq!(bad.encode(), Err(AccountError::Invalid));
-        assert!(
-            CacheWindow {
-                original: Registry::revoked(),
-                restored: None
+    }
+
+    #[test]
+    fn only_complete_bounded_legacy_registry_proves_ownership_of_old_immutable_flags() {
+        for magic in [b"LPACCT01", b"LPACCT02"] {
+            let mut revoked = magic.to_vec();
+            revoked.extend_from_slice(&[0; 4]);
+            assert!(legacy_registry(&revoked));
+            let mut active = magic.to_vec();
+            active.extend_from_slice(&20_u16.to_be_bytes());
+            active.extend_from_slice(&[0; 20 * 84]);
+            active.extend_from_slice(&1_u16.to_be_bytes());
+            active.extend_from_slice(&1000_u32.to_be_bytes());
+            active.extend_from_slice(&[7; 16]);
+            assert!(legacy_registry(&active));
+            for length in 0..active.len() {
+                assert!(!legacy_registry(&active[..length]));
             }
-            .encode()
-            .is_err()
+            let mut bad = active.clone();
+            bad.push(0);
+            assert!(!legacy_registry(&bad));
+            let mut bad = active.clone();
+            bad[8..10].copy_from_slice(&19_u16.to_be_bytes());
+            assert!(!legacy_registry(&bad));
+            let mut bad = active.clone();
+            bad[10 + 20 * 84..12 + 20 * 84].copy_from_slice(&129_u16.to_be_bytes());
+            assert!(!legacy_registry(&bad));
+            let mut bad = active.clone();
+            bad[12 + 20 * 84..16 + 20 * 84].fill(0);
+            assert!(!legacy_registry(&bad));
+            let mut bad = active.clone();
+            bad[16 + 20 * 84..].fill(0);
+            assert!(!legacy_registry(&bad));
+            let mut duplicate = active.clone();
+            duplicate[10 + 20 * 84..12 + 20 * 84].copy_from_slice(&2_u16.to_be_bytes());
+            duplicate.extend_from_slice(&active[12 + 20 * 84..]);
+            assert!(!legacy_registry(&duplicate));
+            assert!(!legacy_registry(&vec![0; MAX_REGISTRY + 1]));
+        }
+        assert!(!legacy_registry(&sample().encode()));
+        assert!(!legacy_registry(&Registry::revoked().encode()));
+        assert!(!legacy_registry(b"LPACCT02garbage"));
+        assert!(!legacy_registry(b"UNKNOWN!\0\0\0\0"));
+    }
+
+    #[test]
+    fn fresh_current_unknown_or_missing_authority_never_clears_administrator_immutable_flags() {
+        for legacy in [false, true] {
+            assert_eq!(immutable_transition(IFlags::empty(), legacy), Ok(None));
+            assert_eq!(immutable_transition(IFlags::NODUMP, legacy), Ok(None));
+        }
+        let hardened = IFlags::IMMUTABLE | IFlags::NODUMP;
+        assert_eq!(
+            immutable_transition(hardened, false),
+            Err(AccountError::Unavailable)
+        );
+        assert_eq!(
+            immutable_transition(hardened, true),
+            Ok(Some(IFlags::NODUMP))
+        );
+        let current = sample().encode();
+        for proof in [
+            Some(current.as_slice()),
+            Some(b"LPACCT02corrupt".as_slice()),
+            None,
+        ] {
+            let legacy = proof.is_some_and(legacy_registry);
+            assert!(!legacy);
+            assert_eq!(
+                immutable_transition(hardened, legacy),
+                Err(AccountError::Unavailable)
+            );
+        }
+    }
+
+    #[test]
+    fn marker_tracks_shadow_record_across_native_rewrites_but_never_uid_recreation() {
+        let old = binding(1000, "alice", 42, 7);
+        assert_eq!(validate_binding(PASSWD, SHADOW, &old), Ok(()));
+        // A service account addition and regular password/aging updates preserve
+        // the same record sentinel, independent of whole-file inode/contents.
+        let passwd = format!("daemon:x:999:999::/var/lib/daemon:/sbin/nologin\n{PASSWD}");
+        let shadow = format!(
+            "daemon:!:20000::::::\n{}",
+            SHADOW.replace("salt$hash:20000", "new$hash:20001")
+        );
+        assert_eq!(validate_binding(&passwd, &shadow, &old), Ok(()));
+        for changed in [
+            SHADOW.replace(":42\n", ":\n"),
+            SHADOW.replace(":42\n", ":43\n"),
+            SHADOW.replace(":42\n", ":042\n"),
+            SHADOW.replace(":42\n", ":18446744073709551615\n"),
+            SHADOW.replace("alice:", "bob:"),
+            String::new(),
+            format!("{SHADOW}{SHADOW}"),
+        ] {
+            assert!(validate_binding(PASSWD, &changed, &old).is_err());
+        }
+        for changed in [
+            PASSWD.replace(":1000:1000:", ":1001:1000:"),
+            PASSWD.replace("alice:", "bob:"),
+            format!("{PASSWD}{PASSWD}"),
+            String::new(),
+        ] {
+            assert!(validate_binding(&changed, SHADOW, &old).is_err());
+        }
+        let fresh = binding(1000, "alice", 43, 8);
+        assert!(validate_binding(PASSWD, SHADOW, &fresh).is_err());
+        assert_ne!(old.account, fresh.account);
+    }
+
+    #[test]
+    fn provisioning_changes_only_selected_reserved_fields() {
+        let shadow = format!("root:!:20000::::::\n{SHADOW}bob:!:20000::::::\n");
+        let updated = shadow_with_markers(&shadow, &[binding(1000, "alice", 43, 8)]).unwrap();
+        assert_eq!(&*updated, shadow.replace(":42\n", ":43\n").as_bytes());
+        assert!(shadow_with_markers(shadow.trim_end(), &sample().bindings).is_err());
+        assert!(shadow_with_markers("alice:!:20000::::\n", &sample().bindings).is_err());
+        for value in [
+            "",
+            "0",
+            "00",
+            "042",
+            "+42",
+            "-1",
+            "18446744073709551615",
+            "18446744073709551616",
+        ] {
+            assert_eq!(marker(value), None);
+        }
+        assert_eq!(marker("4294967294"), Some(u64::from(u32::MAX - 1)));
+        assert_eq!(marker("4294967295"), None);
+        assert_eq!(marker("4294967296"), None);
+    }
+
+    #[test]
+    fn normal_provisioning_never_overwrites_unknown_reserved_state() {
+        let uid = Uid::new(1000).unwrap();
+        assert_eq!(
+            validate_reserved_field(&SHADOW.replace(":42\n", ":\n"), uid, "alice", None, false),
+            Ok(())
+        );
+        assert_eq!(
+            validate_reserved_field(SHADOW, uid, "alice", Some(&sample()), false),
+            Ok(())
+        );
+        assert_eq!(
+            validate_reserved_field(SHADOW, uid, "alice", None, false),
+            Err(AccountError::Unavailable)
+        );
+        assert_eq!(
+            validate_reserved_field(SHADOW, uid, "alice", Some(&Registry::revoked()), false),
+            Err(AccountError::Unavailable)
+        );
+        assert_eq!(
+            validate_reserved_field(
+                &SHADOW.replace(":42\n", ":43\n"),
+                uid,
+                "alice",
+                Some(&sample()),
+                false
+            ),
+            Err(AccountError::Unavailable)
+        );
+        assert_eq!(
+            validate_reserved_field(SHADOW, uid, "alice", None, true),
+            Ok(())
         );
     }
 
     #[test]
-    fn cache_window_atomic_checkpoint_crashes_keep_only_old_or_complete_witness() {
-        for boundary in [
-            RegistryBoundary::TempCreated,
-            RegistryBoundary::Written,
-            RegistryBoundary::FileSynced,
-            RegistryBoundary::Renamed,
-            RegistryBoundary::DirectorySynced,
+    fn mutation_clears_only_exact_managed_identity_and_leaves_foreign_fields_untouched() {
+        let previous = Registry {
+            bindings: vec![binding(1000, "alice", 42, 7), binding(1001, "bob", 43, 8)],
+        };
+        let passwd = format!("{PASSWD}bob:x:1001:1001::/home/bob:/bin/bash\n");
+        let shadow = format!("{SHADOW}bob:!:20000::::::99\n");
+        let clear = managed_markers_to_clear(&passwd, &shadow, &previous);
+        assert_eq!(clear, vec![binding(1000, "alice", 0, 7)]);
+        assert_eq!(
+            &*shadow_with_markers(&shadow, &clear).unwrap(),
+            shadow.replace(":42\n", ":\n").as_bytes()
+        );
+        let reused = passwd.replace("alice:x:1000:", "alice:x:1002:");
+        assert!(managed_markers_to_clear(&reused, &shadow, &previous).is_empty());
+        assert!(managed_markers_to_clear(&passwd, &shadow, &Registry::revoked()).is_empty());
+        assert!(
+            managed_markers_to_clear(&passwd, &SHADOW.replace(":42\n", ":123\n"), &previous)
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn shadow_publication_crashes_are_atomic_and_retry_preserves_native_metadata() {
+        for point in [
+            ShadowBoundary::Created,
+            ShadowBoundary::Metadata,
+            ShadowBoundary::Written,
+            ShadowBoundary::FileSynced,
+            ShadowBoundary::Renamed,
+            ShadowBoundary::DirectorySynced,
         ] {
             let fixture = Fixture::new();
-            let original = cache_sample();
-            let pending = CacheWindow {
-                original: original.clone(),
-                restored: None,
-            };
-            let ready = cache_ready(&original);
-            write_cache_window(&fixture.directory, &pending, fixture.owner, |_| Ok(())).unwrap();
+            let path = fixture.path.join("shadow");
+            let mut old = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&path)
+                .unwrap();
+            old.write_all(SHADOW.as_bytes()).unwrap();
+            old.sync_all().unwrap();
+            let m = old.metadata().unwrap();
+            let updated = shadow_with_markers(SHADOW, &[binding(1000, "alice", 43, 8)]).unwrap();
             assert_eq!(
-                write_cache_window(&fixture.directory, &ready, fixture.owner, |at| {
-                    if at == boundary {
+                replace_shadow(&fixture.directory, &old, &updated, m.uid(), m.gid(), |at| {
+                    if at == point {
                         Err(AccountError::Unavailable)
                     } else {
                         Ok(())
@@ -1510,227 +1577,173 @@ mod tests {
                 }),
                 Err(AccountError::Unavailable)
             );
-            let visible = read_cache_window(&fixture.directory, fixture.owner)
-                .unwrap()
-                .unwrap();
+            let current = std::fs::read(&path).unwrap();
+            assert!(current == SHADOW.as_bytes() || current == *updated);
+            let actual = File::open(&path).unwrap();
             assert_eq!(
-                visible,
-                if matches!(
-                    boundary,
-                    RegistryBoundary::Renamed | RegistryBoundary::DirectorySynced
-                ) {
-                    ready.clone()
-                } else {
-                    pending.clone()
-                }
+                actual.metadata().unwrap().mode() & 0o7777,
+                m.mode() & 0o7777
             );
-            write_cache_window(&fixture.directory, &ready, fixture.owner, |_| Ok(())).unwrap();
-            assert_eq!(
-                read_cache_window(&fixture.directory, fixture.owner).unwrap(),
-                Some(ready)
-            );
-            // A final witness cannot be replaced by an original-only epoch.
-            assert_eq!(
-                write_cache_window(&fixture.directory, &pending, fixture.owner, |_| Ok(())),
-                Err(AccountError::Unavailable)
-            );
-        }
-    }
-
-    #[test]
-    fn cache_window_finish_handles_each_crash_state_without_resnapshotting() {
-        let original = cache_sample();
-        let pending = CacheWindow {
-            original: original.clone(),
-            restored: None,
-        };
-        // Crash after original journal but before revoke: begin can retain its
-        // exact original proof; finish first refuses and the wrapper revokes.
-        assert_eq!(
-            validate_cache_finish(&original, Some(&pending), &original.inputs),
-            Err(AccountError::Unavailable)
-        );
-        assert!(
-            validate_cache_finish(&Registry::revoked(), Some(&pending), &original.inputs).is_ok()
-        );
-        let ready = cache_ready(&original);
-        let restored = ready.restored.as_ref().unwrap();
-        assert!(
-            validate_cache_finish(&Registry::revoked(), Some(&ready), &restored.inputs).is_ok()
-        );
-        // Published registry with a retained witness, then deleted witness.
-        assert!(validate_cache_finish(restored, Some(&ready), &restored.inputs).is_ok());
-        assert!(validate_cache_finish(restored, None, &restored.inputs).is_ok());
-        let mut changed = restored.inputs.clone();
-        changed[0].ctime += 1;
-        assert_eq!(
-            validate_cache_finish(restored, Some(&ready), &changed),
-            Err(AccountError::Unavailable)
-        );
-        assert_eq!(
-            validate_cache_finish(restored, None, &changed),
-            Err(AccountError::Unavailable)
-        );
-        assert_eq!(
-            validate_cache_finish(&Registry::revoked(), None, &restored.inputs),
-            Err(AccountError::Unavailable)
-        );
-        assert_eq!(
-            validate_cache_finish(&original, Some(&ready), &restored.inputs),
-            Err(AccountError::Unavailable)
-        );
-    }
-
-    #[test]
-    fn cache_window_cancellation_discards_both_epoch_records_durably() {
-        let fixture = Fixture::new();
-        let original = cache_sample();
-        let window = CacheWindow {
-            original,
-            restored: None,
-        };
-        write_cache_window(&fixture.directory, &window, fixture.owner, |_| Ok(())).unwrap();
-        // A crash may leave a canonical but incomplete unpublished checkpoint.
-        let temporary = std::fs::OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .mode(0o600)
-            .open(fixture.path.join(CACHE_PENDING))
+            assert_eq!(actual.metadata().unwrap().uid(), m.uid());
+            assert_eq!(actual.metadata().unwrap().gid(), m.gid());
+            replace_shadow(
+                &fixture.directory,
+                &actual,
+                &updated,
+                m.uid(),
+                m.gid(),
+                |_| Ok(()),
+            )
             .unwrap();
-        temporary.sync_all().unwrap();
-        fixture.replace(&Registry::revoked());
-        discard_cache_window(&fixture.directory, fixture.owner).unwrap();
+            assert_eq!(std::fs::read(&path).unwrap(), *updated);
+        }
+    }
+
+    #[test]
+    fn shadow_replacement_refuses_unrecognized_metadata_without_discarding_it() {
+        let fixture = Fixture::new();
+        let path = fixture.path.join("shadow");
+        let old = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&path)
+            .unwrap();
+        (&old).write_all(SHADOW.as_bytes()).unwrap();
+        let m = old.metadata().unwrap();
+        rustix::fs::fsetxattr(
+            &old,
+            "user.localpin-fixture",
+            b"keep",
+            rustix::fs::XattrFlags::empty(),
+        )
+        .unwrap();
         assert_eq!(
-            read_cache_window(&fixture.directory, fixture.owner).unwrap(),
-            None
-        );
-        assert!(!fixture.path.join(CACHE_PENDING).exists());
-        assert_eq!(fixture.read(), Registry::revoked());
-        assert_eq!(
-            validate_cache_finish(&fixture.read(), None, &window.original.inputs),
+            replace_shadow(
+                &fixture.directory,
+                &old,
+                b"changed",
+                m.uid(),
+                m.gid(),
+                |_| Ok(())
+            ),
             Err(AccountError::Unavailable)
         );
+        assert_eq!(std::fs::read(&path).unwrap(), SHADOW.as_bytes());
+        rustix::fs::fremovexattr(&old, "user.localpin-fixture").unwrap();
+        std::os::unix::fs::symlink("shadow", fixture.path.join(".localpin-shadow.pending"))
+            .unwrap();
+        assert_eq!(
+            replace_shadow(
+                &fixture.directory,
+                &old,
+                b"changed",
+                m.uid(),
+                m.gid(),
+                |_| Ok(())
+            ),
+            Err(AccountError::Unavailable)
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), SHADOW.as_bytes());
     }
 
     #[test]
-    fn cache_window_refuses_symlink_hardlink_and_unknown_pending_records() {
+    fn native_shared_ofd_lease_conflicts_with_posix_and_ofd_writers_and_survives_other_close() {
         let fixture = Fixture::new();
-        let window = CacheWindow {
-            original: cache_sample(),
-            restored: None,
-        };
-        let other = fixture.path.join("other");
-        std::fs::write(&other, b"unrelated").unwrap();
-        std::fs::set_permissions(&other, std::fs::Permissions::from_mode(0o600)).unwrap();
-        std::os::unix::fs::symlink("other", fixture.path.join(CACHE_JOURNAL)).unwrap();
-        assert!(read_cache_window(&fixture.directory, fixture.owner).is_err());
-        assert!(discard_cache_window(&fixture.directory, fixture.owner).is_err());
-        std::fs::remove_file(fixture.path.join(CACHE_JOURNAL)).unwrap();
-        std::fs::hard_link(&other, fixture.path.join(CACHE_JOURNAL)).unwrap();
-        assert!(read_cache_window(&fixture.directory, fixture.owner).is_err());
-        assert!(discard_cache_window(&fixture.directory, fixture.owner).is_err());
-        std::fs::remove_file(fixture.path.join(CACHE_JOURNAL)).unwrap();
-        std::os::unix::fs::symlink("other", fixture.path.join(CACHE_PENDING)).unwrap();
-        assert!(
-            write_cache_window(&fixture.directory, &window, fixture.owner, |_| Ok(())).is_err()
-        );
-        assert_eq!(std::fs::read(&other).unwrap(), b"unrelated");
-    }
-    #[test]
-    fn versioned_registry_is_exact_bounded_and_never_invents_ids() {
-        let active = sample();
-        let bytes = active.encode();
-        assert_eq!(Registry::decode(&bytes).unwrap(), active);
+        let path = fixture.path.join("native-lock");
+        let first = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&path)
+            .unwrap();
+        let reader = std::fs::OpenOptions::new().read(true).open(&path).unwrap();
+        native_database_lock(&reader, false).unwrap();
+        let second_reader = File::open(&path).unwrap();
+        native_database_lock(&second_reader, false).unwrap();
+        drop(second_reader);
+        drop(File::open(&path).unwrap());
+        assert_eq!(native_database_lock(&first, true), Err(AccountError::Busy));
+        assert!(rustix::fs::fcntl_lock(&first, FlockOperation::NonBlockingLockExclusive).is_err());
+        drop(reader);
+        native_database_lock(&first, true).unwrap();
+        let other = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
+        assert_eq!(native_database_lock(&other, false), Err(AccountError::Busy));
+        drop(first);
+        rustix::fs::fcntl_lock(&other, FlockOperation::NonBlockingLockExclusive).unwrap();
+        let reader = File::open(&path).unwrap();
         assert_eq!(
-            Registry::decode(&Registry::revoked().encode()).unwrap(),
-            Registry::revoked()
-        );
-        for index in 0..bytes.len() {
-            assert!(Registry::decode(&bytes[..index]).is_err());
-        }
-        let mut trailing = bytes.clone();
-        trailing.push(0);
-        assert!(Registry::decode(&trailing).is_err());
-        let mut bad = bytes.clone();
-        bad[0] = 0;
-        assert!(Registry::decode(&bad).is_err());
-        let mut duplicate = active.clone();
-        duplicate.accounts.push(account(1000, 3));
-        assert!(Registry::decode(&duplicate.encode()).is_err());
-        let mut excess = active;
-        excess.accounts = (1..=129).map(|uid| account(uid, 1)).collect();
-        assert!(Registry::decode(&excess.encode()).is_err());
-    }
-    #[test]
-    fn local_source_requires_unique_uid_and_shadow_identity() {
-        let valid = "fixture:x:1000:1000::/home/fixture:/bin/bash\n";
-        let shadow = "fixture:!:20000:0:99999:7:::\n";
-        let uid = Uid::new(1000).unwrap();
-        assert!(validate_local_account(valid, shadow, uid).is_ok());
-        assert!(validate_local_account(&(valid.to_owned() + valid), shadow, uid).is_err());
-        assert!(validate_local_account(valid, "", uid).is_err());
-        assert!(validate_local_account(valid, &(shadow.to_owned() + shadow), uid).is_err());
-        assert!(
-            validate_local_account("fixture:x:1000:1000::relative:/bin/bash", shadow, uid).is_err()
-        );
-    }
-    #[test]
-    fn provisioning_authority_is_explicit_and_incarnation_bound() {
-        let mut authority = ProvisionAuthority {
-            accounts: vec![account(1000, 7)],
-        };
-        assert_eq!(
-            authority.current_incarnation(Uid::new(1000).unwrap()),
-            Ok(account(1000, 7).incarnation)
-        );
-        assert_eq!(
-            authority.current_incarnation(Uid::new(1001).unwrap()),
-            Err(LifecycleError::Unsupported)
+            native_database_lock(&reader, false),
+            Err(AccountError::Busy)
         );
     }
 
     #[test]
-    fn interrupted_registry_replacement_has_only_old_or_complete_authority() {
-        for boundary in [
+    fn registry_publication_crashes_leave_only_original_or_complete_replacement() {
+        let old = sample();
+        let new = Registry {
+            bindings: vec![binding(1000, "alice", 43, 8)],
+        };
+        for point in [
             RegistryBoundary::TempCreated,
             RegistryBoundary::Written,
             RegistryBoundary::FileSynced,
             RegistryBoundary::Renamed,
             RegistryBoundary::DirectorySynced,
         ] {
-            for activation in [false, true] {
-                let fixture = Fixture::new();
-                let active = sample();
-                let revoked = Registry::revoked();
-                let (old, next) = if activation {
-                    (&revoked, &active)
-                } else {
-                    (&active, &revoked)
-                };
-                fixture.replace(old);
-                assert_eq!(
-                    replace_registry(&fixture.directory, next, fixture.owner, |at| {
-                        if at == boundary {
-                            Err(AccountError::Unavailable)
-                        } else {
-                            Ok(())
-                        }
-                    }),
-                    Err(AccountError::Unavailable)
-                );
-                let published = matches!(
-                    boundary,
-                    RegistryBoundary::Renamed | RegistryBoundary::DirectorySynced
-                );
-                assert_eq!(&fixture.read(), if published { next } else { old });
-                // Root recovery never adopts a pending identity; it first
-                // installs a durable revocation, discarding a canonical temp.
-                fixture.replace(&revoked);
-                assert!(!fixture.read().active());
-            }
+            let fixture = Fixture::new();
+            fixture.replace(&old);
+            assert_eq!(
+                replace_registry(&fixture.directory, &new, fixture.owner, |at| {
+                    if at == point {
+                        Err(AccountError::Unavailable)
+                    } else {
+                        Ok(())
+                    }
+                }),
+                Err(AccountError::Unavailable)
+            );
+            let read = fixture.read();
+            assert!(read == old || read == new);
+            fixture.replace(&Registry::revoked());
+            assert_eq!(fixture.read(), Registry::revoked());
         }
     }
 
+    #[test]
+    fn unsafe_registry_temporary_or_gate_is_never_replaced() {
+        let fixture = Fixture::new();
+        fixture.replace(&sample());
+        let pending = fixture.path.join(".pending");
+        std::os::unix::fs::symlink("registry", &pending).unwrap();
+        assert_eq!(
+            replace_registry(
+                &fixture.directory,
+                &Registry::revoked(),
+                fixture.owner,
+                |_| Ok(())
+            ),
+            Err(AccountError::Unavailable)
+        );
+        assert_eq!(fixture.read(), sample());
+        let group = fixture.directory.metadata().unwrap().gid();
+        let gate = fixture.path.join("gate");
+        std::fs::write(&gate, b"LPINT01\nactive\n").unwrap();
+        std::fs::set_permissions(&gate, std::fs::Permissions::from_mode(0o666)).unwrap();
+        assert_eq!(
+            remove_gate(&fixture.directory, fixture.owner, group),
+            Err(AccountError::Unavailable)
+        );
+        std::fs::set_permissions(&gate, std::fs::Permissions::from_mode(0o644)).unwrap();
+        remove_gate(&fixture.directory, fixture.owner, group).unwrap();
+        assert!(!gate.exists());
+    }
     #[test]
     fn permanent_shared_lease_excludes_revocation_until_all_readers_drop() {
         let fixture = Fixture::new();
@@ -1757,23 +1770,6 @@ mod tests {
         );
         drop(second);
         flock(&admin, FlockOperation::NonBlockingLockExclusive).unwrap();
-    }
-
-    #[test]
-    fn registry_recovery_refuses_unsafe_pending_path() {
-        let fixture = Fixture::new();
-        fixture.replace(&sample());
-        std::os::unix::fs::symlink("registry", fixture.path.join(".pending")).unwrap();
-        assert_eq!(
-            replace_registry(
-                &fixture.directory,
-                &Registry::revoked(),
-                fixture.owner,
-                |_| Ok(())
-            ),
-            Err(AccountError::Unavailable)
-        );
-        assert!(fixture.read().active());
     }
 
     #[test]
@@ -1837,7 +1833,16 @@ mod tests {
             .unwrap();
         (&file).write_all(&[9; 64]).unwrap();
         file.sync_all().unwrap();
-        let before = Snapshot::metadata(&file.metadata().unwrap(), [0; 32]);
+        let m = file.metadata().unwrap();
+        let before = (
+            m.dev(),
+            m.ino(),
+            m.len(),
+            m.ctime(),
+            m.ctime_nsec(),
+            m.mode(),
+            m.nlink(),
+        );
         assert_eq!(
             publish_tally(
                 &fixture.directory,
@@ -1850,110 +1855,19 @@ mod tests {
         );
         assert_eq!(std::fs::read(&path).unwrap(), [9; 64]);
         assert_eq!(
-            Snapshot::metadata(&file.metadata().unwrap(), [0; 32]),
+            {
+                let m = file.metadata().unwrap();
+                (
+                    m.dev(),
+                    m.ino(),
+                    m.len(),
+                    m.ctime(),
+                    m.ctime_nsec(),
+                    m.mode(),
+                    m.nlink(),
+                )
+            },
             before
         );
-    }
-
-    #[test]
-    fn kernel_read_lease_rejects_preopened_writer_then_proves_drain() {
-        let fixture = Fixture::new();
-        let path = fixture.path.join("writer");
-        let writer = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&path)
-            .unwrap();
-        let reader = File::open(&path).unwrap();
-        assert_eq!(kernel_read_lease(&reader, true), Err(AccountError::Busy));
-        drop(writer);
-        kernel_read_lease(&reader, true).unwrap();
-        kernel_read_lease(&reader, false).unwrap();
-    }
-
-    struct WritableMapping {
-        address: *mut libc::c_void,
-        length: usize,
-    }
-    impl WritableMapping {
-        #[allow(unsafe_code)]
-        fn new(file: File) -> Self {
-            let length = 4096;
-            // SAFETY: this test owns a regular temporary file sized to length.
-            // No mapped memory is dereferenced or exposed as a Rust reference;
-            // Drop unmaps the exact same owned kernel extent.
-            let address = unsafe {
-                libc::mmap(
-                    std::ptr::null_mut(),
-                    length,
-                    libc::PROT_READ | libc::PROT_WRITE,
-                    libc::MAP_SHARED,
-                    file.as_raw_fd(),
-                    0,
-                )
-            };
-            assert_ne!(address, libc::MAP_FAILED);
-            drop(file);
-            Self { address, length }
-        }
-    }
-    impl Drop for WritableMapping {
-        #[allow(unsafe_code)]
-        fn drop(&mut self) {
-            // SAFETY: new owns this exact live mapping; no alias escapes.
-            assert_eq!(unsafe { libc::munmap(self.address, self.length) }, 0);
-        }
-    }
-
-    #[test]
-    fn kernel_read_lease_rejects_writable_mapping_after_descriptor_closed() {
-        let fixture = Fixture::new();
-        let path = fixture.path.join("mapping");
-        let file = std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&path)
-            .unwrap();
-        file.set_len(4096).unwrap();
-        // Close the only writable descriptor while the shared writable VMA
-        // retains its kernel file reference, then challenge the barrier.
-        let mapping = WritableMapping::new(file);
-        let reader = File::open(&path).unwrap();
-        assert_eq!(kernel_read_lease(&reader, true), Err(AccountError::Busy));
-        drop(mapping);
-        kernel_read_lease(&reader, true).unwrap();
-        kernel_read_lease(&reader, false).unwrap();
-    }
-
-    #[test]
-    fn old_registry_without_writer_barrier_is_never_adopted() {
-        let mut old = sample().encode();
-        old[..8].copy_from_slice(b"LPACCT01");
-        assert_eq!(Registry::decode(&old), Err(AccountError::Invalid));
-    }
-
-    #[test]
-    fn final_missing_read_lease_prevents_active_registry_publication() {
-        let fixture = Fixture::new();
-        fixture.replace(&Registry::revoked());
-        let path = fixture.path.join("gate");
-        std::fs::write(&path, []).unwrap();
-        let reader = File::open(&path).unwrap();
-        kernel_read_lease(&reader, true).unwrap();
-        drop(reader);
-        let unleased = File::open(&path).unwrap();
-        assert_eq!(
-            replace_registry(&fixture.directory, &sample(), fixture.owner, |at| {
-                if at == RegistryBoundary::FileSynced {
-                    kernel_read_lease(&unleased, false)?;
-                }
-                Ok(())
-            }),
-            Err(AccountError::Unavailable)
-        );
-        assert!(!fixture.read().active());
     }
 }

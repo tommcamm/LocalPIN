@@ -6,52 +6,40 @@ It is intended to become useful, reviewable open-source software.
 
 Repository: [tommcamm/LocalPIN](https://github.com/tommcamm/LocalPIN).
 
-**Development status: M2–M8 verified for the restricted appliance domain below; M9 review and physical hardware gates remain open.**
-This repository contains the specification, implementation roadmap, pure Rust
-state machines, bounded IPC parsers, protected Linux filesystem storage,
-isolated PAM/TPM/platform experiments and guarded Fedora KDE VM tests under
-enforcing SELinux. Actual password fallback, account restrictions and a confined
-worker have evidence, including real same-UID desktops, ambiguous locker fallback and
-independently routed KDE seats. See the [M1 report](docs/development/m1-feasibility.md).
-It includes bounded RustCrypto software credentials and a native TPM backend
-for use inside supervised workers. See the [M4 report](docs/development/m4-credential-backends.md)
-for simulator evidence and remaining hardware and worker gates.
-The broker now composes protected throttling, one-operation backend processes,
-authenticated Unix sockets and live logind session routing. Its production
-account authority still refuses unmanaged accounts. See the
-[M5 report](docs/development/m5-bounded-broker.md) for evidence and limits.
-It now includes a password-only enrollment worker, terminal CLI and protected
-credential transactions. See the [M6 report](docs/development/m6-enrollment-cli.md).
-M6.1 adds production lifecycle and password-free eligibility authorities for an
-explicitly provisioned Fedora 44 x86_64 Btrfs appliance domain. Dedicated real
-accounts have exercised enrollment, rotation, disable, recovery and broker PIN
-verification in a disposable KDE VM with SELinux enforcing. M6.1's component
-gate is complete for this domain. The
-[M6.1 report](docs/development/m6.1-account-authorities.md) and
-[sanitized results](experiments/m61/results/2026-10-17-account-authorities.json)
-record the lifecycle, policy, crash/reboot and concurrency evidence;
-[ADR 0012](docs/adr/0012-immutable-appliance-account-authority.md)
-defines the exact policy and lifecycle restrictions. Ordinary unmanaged accounts
-remain unavailable. M7 adds the small Rust PAM unlock module, fresh candidate
-handling, authenticated bounded broker verification and an exact reviewed KDE
-policy extension. Native PAM tests and stock KDE PIN/password/fault cases passed
-in a disposable enforcing VM, including the native TPM route with a private
-emulator. See the [M7 report](docs/development/m7-pam-integration.md) for evidence,
-TPM recovery limits and the native fingerprint/faillock activation blocker.
-M8 adds native Fedora RPM packaging, systemd/SELinux confinement definitions,
-staged root activation and console recovery, and persistent native accounting.
-Its 49-case installed acceptance matrix passed on the recorded Fedora 44 x86_64
-Btrfs appliance with SELinux enforcing and a private TPM emulator. The
-[M8 report](docs/development/m8-packaging-recovery.md) and
-[sanitized results](experiments/m8/results/2026-10-17-fedora44-rpm-recovery.json)
-record desktop, RPM, ordinary reboot and interrupted-upgrade recovery evidence. The
-[administration runbook](docs/integration-administration.md),
-[persistent-accounting decision](docs/adr/0014-persistent-faillock.md),
-[activation/RPM decision](docs/adr/0015-m8-activation-and-rpm.md) and
-[package-cache window](docs/adr/0016-package-cache-window.md) define the narrow
-deployment contract. The known fingerprint/faillock combination is refused.
-M9 independent review and physical hardware validation remain open; hosted CI
-execution is unverified and there is no supported production release.
+**Development status: M8.1 final source checks and targeted installed RPM acceptance passed on Fedora KDE 44; M9 independent review, hardware and release gates remain open.**
+
+The current target is a normal Fedora KDE 44 x86_64 system with local accounts,
+SELinux enforcing, and routine `dnf upgrade`. M8.1 replaces the frozen appliance
+account model with root-owned shadow-record markers and native account locks.
+It supports existing stock `files systemd` NSS layouts, follows Linux-PAM's
+stable SONAME, and separates KDE password and fingerprint substacks. See
+[ADR 0017](docs/adr/0017-shadow-record-account-authority.md), the
+[account runbook](docs/account-administration.md), and the
+[integration runbook](docs/integration-administration.md). The
+[M8.1 report](docs/development/m8.1-desktop-compatibility.md) records actual KDE
+PIN/password/recovery, fingerprint-plus-faillock, reboot and compatible RPM
+acceptance with SELinux enforcing and a private TPM emulator. The
+[ordinary DNF transaction](experiments/m81/results/dnf-upgrade.json) updated 26
+packages and installed five new kernel RPMs; [native reinstallation](experiments/m81/results/native-pam-reinstall.json)
+replaced seven PAM/authselect runtime inodes without re-enrollment. Final source
+checks and the compatible `.5` → `.6` RPM upgrade passed, preserving enrollment,
+counters and policies and restoring prior activation. Each earlier installed
+case retains its recorded build scope. There is no supported production release.
+
+Earlier milestones provide the core policy/state machines, protected storage,
+software and TPM credentials, bounded broker/IPC, trusted enrollment CLI and
+PAM adapter. The [M1](docs/development/m1-feasibility.md),
+[M4](docs/development/m4-credential-backends.md),
+[M5](docs/development/m5-bounded-broker.md) and
+[M6](docs/development/m6-enrollment-cli.md) reports record their evidence and
+limits. [M6.1](docs/development/m6.1-account-authorities.md),
+[M7](docs/development/m7-pam-integration.md) and
+[M8](docs/development/m8-packaging-recovery.md) passed their recorded real-account,
+KDE, confinement and RPM matrices on the earlier restricted Fedora 44 x86_64
+Btrfs appliance with SELinux enforcing and a private TPM emulator. That
+historical acceptance does not certify the changed M8.1 architecture. M9 retains
+independent human/specialist review and physical TPM/hardware validation; hosted
+CI execution remains unverified.
 
 ## Intended scope
 
@@ -60,8 +48,13 @@ design uses a small PAM adapter, a local broker with durable attempt limits, and
 either a TPM 2.0 credential or an explicitly selected software backend. Password
 fallback, opt-in activation, enforcing SELinux support, and tested recovery are
 release requirements. PAM unlock and fallback have disposable-VM evidence;
-installed M8 activation/confinement/recovery acceptance passed for the restricted
-appliance, and physical hardware validation remains open.
+the [targeted M8.1 matrix](docs/development/m8.1-desktop-compatibility.md) passed
+on a disposable enforcing Fedora KDE 44 x86_64 guest for the recorded builds.
+GUI/DBus AccountsService administration and full old-TPM-credential migration
+were not exercised. Physical fingerprint devices, TPMs, alternate filesystems
+and the full hardware matrix remain unvalidated; historical appliance credentials
+require explicit fresh provisioning/enrollment. Hosted CI and independent review
+remain open.
 
 Initial login, sudo, SSH, polkit, and disk encryption are outside the initial
 scope. Six-digit PINs have limited entropy. The
@@ -124,7 +117,7 @@ installed acceptance is separate from these checks.
 The CLI command grammar is available with `cargo run -p localpinctl -- --help`.
 Status and doctor are read-only. Enrollment requires a trusted supported account
 baseline, fresh password-only PAM authentication and a foreground terminal;
-ordinary unmanaged accounts remain unavailable. The isolated password-PAM
+accounts without privileged marker provisioning remain unavailable. The isolated password-PAM
 test uses namespace-private accounts and policy:
 
 ```sh
@@ -132,21 +125,26 @@ python3 crates/localpin-auth/tests/isolated_pam.py
 ```
 
 See the [M2 report](docs/development/m2-policy-contracts.md) for exact time and
-failure boundaries. Production account support requires a tested lifecycle
-authority that prevents an old incarnation surviving UID reuse. M6.1 implements
-that authority only within the [sealed appliance domain](docs/account-administration.md).
-It freezes global account/policy inputs, drains pre-existing writers before
-sealing, and requires durable global revocation before administration. Resealing
-creates fresh disabled incarnations and requires enrollment again. Own-user
-enrollment never provisions or repairs lifecycle state. The legacy component
-policy still refuses PIN when reboot loses `/run/faillock` state. M8 activation
-requires the exact persistent `/var/lib/faillock` variant; its one-time offline
-transition preserves native counters and requires fresh enrollment. Missing
-persistent state is also refused, never reconstructed. The installed enforcing
-matrix retained the same TPM enrollment through ordinary reboot and interrupted
-package-cache recovery. Compatible upgrades use
-[ADR 0016](docs/adr/0016-package-cache-window.md)'s bounded authority window.
-Do not apply the appliance setup to an everyday machine as a development test.
+failure boundaries. Production identity must prevent a deleted account's old
+PIN from surviving UID reuse. The current
+[account authority](docs/adr/0017-shadow-record-account-authority.md) binds a
+random incarnation to the account's root-owned shadow marker and retains native
+account locks through response delivery. Ordinary password changes,
+service-account additions and package updates can preserve that marker.
+Deletion/recreation, lost authority and explicit recovery require fresh
+provisioning/enrollment. A changed current login/UID cannot use the old binding;
+using that new identity requires fresh provisioning. Reversing an edit on the
+same surviving marked record can match its original binding again. No immutable flags are set on new state;
+privileged migration durably revokes recognized old appliance state before
+removing its flags; unknown/custom immutable hardening is preserved and refused. Own-user enrollment never repairs lifecycle or accounting authority.
+
+Installed activation retains persistent `/var/lib/faillock` accounting;
+existing native counters must be preserved. Unknown PAM graphs, ambiguous
+identity and missing/corrupt persistent state refuse PIN use. The
+[checked M8.1 evidence](experiments/m81/results/updates-summary.json) records
+those actual compatible maintenance cases; repeat affected KDE/RPM/DNF checks
+for changes to this contract. Development never edits the everyday machine's
+authentication setup.
 
 ## Development
 

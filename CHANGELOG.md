@@ -6,6 +6,16 @@ Changes will be recorded here before versioned releases. There are no releases y
 
 ### Added
 
+- M8.1 ordinary Fedora KDE 44 x86_64 compatibility: native shadow-record
+  account markers and account-tool locking replace the global immutable
+  appliance; Linux-PAM's stable ABI replaces reference-build fingerprints.
+  KDE-specific password/fingerprint substacks correct unavailable-sensor
+  accounting and password success resets. Dynamic policy guards preserve
+  additional native authentication factors and missing-module fallback.
+  Compatible RPM updates retain activation, enrollment and attempt history.
+  See [ADR 0017](docs/adr/0017-shadow-record-account-authority.md),
+  [ADR 0018](docs/adr/0018-kde-native-update-compatibility.md) and
+  [M8.1 evidence](docs/development/m8.1-desktop-compatibility.md).
 - M8 native Fedora RPM packaging, systemd/SELinux confinement definitions,
   staged root prepare/trial/attest/activate gate, owned-block console recovery,
   compatible upgrade suspension/resume and removal reference checks. The
@@ -19,8 +29,9 @@ Changes will be recorded here before versioned releases. There are no releases y
 - Exact persistent native faillock policy for M8 activation, retaining the
   legacy volatile component variant and refusing missing accounting state.
   [ADR 0014](docs/adr/0014-persistent-faillock.md) records the one-time offline
-  transition and reboot continuity contract. The known parallel
-  fingerprint/faillock composition remains activation-refused.
+  transition and reboot continuity contract. M8 refused the known parallel
+  fingerprint/faillock composition; M8.1 supersedes that refusal with reviewed
+  KDE-specific accounting.
 - Explicit exact-block legacy migration before fresh sealing/enrollment,
   without importing old verifiers; CLI status distinguishes trial from active
   integration and operator-attested tests from automatic evidence.

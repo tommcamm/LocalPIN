@@ -1,0 +1,926 @@
+{
+  "date": "2026-10-17",
+  "scope": "actual guarded Fedora KDE44 x86_64 RPM/native TPM-emulator/desktop/reboot acceptance",
+  "passed": true,
+  "phases": {
+    "prepare": {
+      "phase": "prepare",
+      "passed": true,
+      "observations": {
+        "dry_run_unchanged": true,
+        "fresh_disabled_account": true,
+        "persistent_native_tally": true
+      }
+    },
+    "enroll": {
+      "phase": "enroll",
+      "passed": true,
+      "observations": {
+        "installed_cli_pty": {
+          "operation": "enroll-tpm",
+          "exit_success": true,
+          "real_controlling_terminal": true,
+          "private_prompt_count": 4,
+          "secret_echo_absent": true
+        },
+        "native_tpm_enrollment": true,
+        "status": {
+          "availability": "available",
+          "enrolled_backend": "tpm2"
+        }
+      }
+    },
+    "isolated-trial": {
+      "phase": "isolated",
+      "passed": true,
+      "observations": {
+        "production_broker_pin_verified": true,
+        "native_password_tally_unchanged": true
+      }
+    },
+    "ui-pin": {
+      "phase": "pin",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "unlock_elapsed_seconds": 0.807,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        },
+        "native_password_tally_unchanged": true
+      }
+    },
+    "ui-password": {
+      "phase": "password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false,
+        "unlock_elapsed_seconds": 0.308,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        }
+      }
+    },
+    "ui-console-recovery": {
+      "phase": "administrative-recovery",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false,
+        "unlock_elapsed_seconds": 0.332,
+        "before_enter_tally": {
+          "bytes": 128
+        },
+        "after_tally": {
+          "bytes": 128
+        },
+        "same_greeter_after_denial": true,
+        "native_pin_denial_observed": true,
+        "native_failure_journal_greeter_verified": true,
+        "console_recovery": {
+          "text_console_recovery_completed": true,
+          "exact_original_kde_restored": true,
+          "socket_boot_opt_in_disabled": true,
+          "boot_unchanged": true
+        },
+        "denied_tally": {
+          "bytes": 128
+        }
+      }
+    },
+    "re-enroll": {
+      "passed": true,
+      "results": {
+        "repair_fault": {
+          "exact_component_restored": true,
+          "selinux": "Enforcing"
+        },
+        "prepare": {
+          "dry_run_unchanged": true,
+          "fresh_disabled_account": true,
+          "persistent_native_tally": true
+        },
+        "enroll": {
+          "installed_cli_pty": {
+            "operation": "enroll-tpm",
+            "exit_success": true,
+            "real_controlling_terminal": true,
+            "private_prompt_count": 4,
+            "secret_echo_absent": true
+          },
+          "native_tpm_enrollment": true,
+          "status": {
+            "availability": "available",
+            "enrolled_backend": "tpm2"
+          }
+        },
+        "isolated": {
+          "production_broker_pin_verified": true,
+          "native_password_tally_unchanged": true
+        },
+        "trial": {
+          "bounded_trial_requested": true
+        }
+      }
+    },
+    "final-ui-pin": {
+      "phase": "pin",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "unlock_elapsed_seconds": 0.815,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        },
+        "native_password_tally_unchanged": true
+      }
+    },
+    "final-ui-password": {
+      "phase": "password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false,
+        "unlock_elapsed_seconds": 0.313,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        }
+      }
+    },
+    "final-ui-recovery": {
+      "phase": "recovery",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false,
+        "unlock_elapsed_seconds": 0.319,
+        "before_enter_tally": {
+          "bytes": 128
+        },
+        "after_tally": {
+          "bytes": 128
+        },
+        "wrong_candidate_denied": true,
+        "same_greeter_after_denial": true,
+        "gui_submissions": 2,
+        "before_tally": {
+          "bytes": 64
+        },
+        "denied_tally": {
+          "bytes": 128
+        },
+        "native_auth_failure_events_before": 1,
+        "native_auth_failure_events_after_denial": 2,
+        "native_failure_journal_greeter_verified": true,
+        "stock_password_stack": false
+      }
+    },
+    "activate": {
+      "passed": true,
+      "repair": {
+        "exact_component_restored": true,
+        "selinux": "Enforcing"
+      },
+      "activation": {
+        "actual_ui_pin_password_recovery_required": true,
+        "actual_console_recovery_proved_for_package": true,
+        "activation_completed": true,
+        "socket_enabled_for_boot": true
+      }
+    },
+    "post-dnf-ui-password": {
+      "phase": "unlock-existing",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false,
+        "unlock_elapsed_seconds": 0.382,
+        "before_enter_tally": {
+          "bytes": 128
+        },
+        "after_tally": {
+          "bytes": 0
+        }
+      }
+    },
+    "reboot-prepare": {
+      "native_package_versions": {
+        "authselect": "0:1.7.1-1.fc44.x86_64",
+        "glibc-common": "0:2.43-9.fc44.x86_64",
+        "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+        "pam": "0:1.7.2-2.fc44.x86_64",
+        "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+        "systemd": "0:259.9-1.fc44.x86_64",
+        "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+      },
+      "observations": {
+        "activation_gate_closed": false,
+        "private_continuity_checkpoint_durable": true,
+        "reboot_requested": false
+      },
+      "passed": true,
+      "phase": "reboot-prepare",
+      "raw_snapshots_guest_root_only": true,
+      "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+      "selinux": "Enforcing"
+    },
+    "reboot-verify": {
+      "native_package_versions": {
+        "authselect": "0:1.7.1-1.fc44.x86_64",
+        "glibc-common": "0:2.43-9.fc44.x86_64",
+        "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+        "pam": "0:1.7.2-2.fc44.x86_64",
+        "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+        "systemd": "0:259.9-1.fc44.x86_64",
+        "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+      },
+      "observations": {
+        "boot_changed": true,
+        "fresh_enrollment_performed": false,
+        "gate": "active",
+        "native_kde_pam_pin_verified": true,
+        "same_enrollment_registry_throttle_tally_and_policies": true
+      },
+      "passed": true,
+      "phase": "reboot-verify",
+      "raw_snapshots_guest_root_only": true,
+      "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+      "selinux": "Enforcing"
+    },
+    "package-upgrade": {
+      "native_package_versions": {
+        "authselect": "0:1.7.1-1.fc44.x86_64",
+        "glibc-common": "0:2.43-9.fc44.x86_64",
+        "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+        "pam": "0:1.7.2-2.fc44.x86_64",
+        "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+        "systemd": "0:259.9-1.fc44.x86_64",
+        "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+      },
+      "observations": {
+        "automatic_active_gate_preserved": true,
+        "compatible_upgrade_completed": true,
+        "explicit_downgrade_refused": false,
+        "same_enrollment_registry_throttle_tally_and_policies": true,
+        "version_after": "0.1.0-0.3.alpha1.fc44",
+        "version_before": "0.1.0-0.1.alpha1.fc44"
+      },
+      "passed": true,
+      "phase": "package-upgrade",
+      "raw_snapshots_guest_root_only": true,
+      "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+      "selinux": "Enforcing"
+    },
+    "upgraded-ui-pin": {
+      "phase": "pin-existing-lock",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "unlock_elapsed_seconds": 0.807,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        },
+        "native_password_tally_unchanged": true
+      }
+    },
+    "downgrade-refusal": {
+      "native_package_versions": {
+        "authselect": "0:1.7.1-1.fc44.x86_64",
+        "glibc-common": "0:2.43-9.fc44.x86_64",
+        "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+        "pam": "0:1.7.2-2.fc44.x86_64",
+        "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+        "systemd": "0:259.9-1.fc44.x86_64",
+        "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+      },
+      "observations": {
+        "automatic_active_gate_preserved": true,
+        "compatible_upgrade_completed": false,
+        "explicit_downgrade_refused": true,
+        "same_enrollment_registry_throttle_tally_and_policies": true,
+        "version_after": "0.1.0-0.3.alpha1.fc44",
+        "version_before": "0.1.0-0.3.alpha1.fc44"
+      },
+      "passed": true,
+      "phase": "downgrade-refusal",
+      "raw_snapshots_guest_root_only": true,
+      "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+      "selinux": "Enforcing"
+    },
+    "suspend": {
+      "native_package_versions": {
+        "authselect": "0:1.7.1-1.fc44.x86_64",
+        "glibc-common": "0:2.43-9.fc44.x86_64",
+        "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+        "pam": "0:1.7.2-2.fc44.x86_64",
+        "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+        "systemd": "0:259.9-1.fc44.x86_64",
+        "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+      },
+      "observations": {
+        "activation_gate_closed": true,
+        "private_continuity_checkpoint_durable": true,
+        "reboot_requested": false
+      },
+      "passed": true,
+      "phase": "suspend",
+      "raw_snapshots_guest_root_only": true,
+      "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+      "selinux": "Enforcing"
+    },
+    "suspended-reboot-verify": {
+      "native_package_versions": {
+        "authselect": "0:1.7.1-1.fc44.x86_64",
+        "glibc-common": "0:2.43-9.fc44.x86_64",
+        "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+        "pam": "0:1.7.2-2.fc44.x86_64",
+        "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+        "systemd": "0:259.9-1.fc44.x86_64",
+        "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+      },
+      "observations": {
+        "boot_changed": true,
+        "fresh_enrollment_performed": false,
+        "gate": "disabled",
+        "native_kde_pam_pin_verified": false,
+        "same_enrollment_registry_throttle_tally_and_policies": true
+      },
+      "passed": true,
+      "phase": "suspended-reboot-verify",
+      "raw_snapshots_guest_root_only": true,
+      "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+      "selinux": "Enforcing"
+    },
+    "resume": {
+      "native_package_versions": {
+        "authselect": "0:1.7.1-1.fc44.x86_64",
+        "glibc-common": "0:2.43-9.fc44.x86_64",
+        "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+        "pam": "0:1.7.2-2.fc44.x86_64",
+        "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+        "systemd": "0:259.9-1.fc44.x86_64",
+        "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+      },
+      "observations": {
+        "boot_changed": true,
+        "fresh_enrollment_performed": false,
+        "gate": "active",
+        "native_kde_pam_pin_verified": true,
+        "same_enrollment_registry_throttle_tally_and_policies": true
+      },
+      "passed": true,
+      "phase": "resume",
+      "raw_snapshots_guest_root_only": true,
+      "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+      "selinux": "Enforcing"
+    },
+    "post-interruption-ui-pin": {
+      "phase": "pin-existing-lock",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "unlock_elapsed_seconds": 0.768,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        },
+        "native_password_tally_unchanged": true
+      }
+    },
+    "final4-package-upgrade": {
+      "native_package_versions": {
+        "authselect": "0:1.7.1-1.fc44.x86_64",
+        "glibc-common": "0:2.43-9.fc44.x86_64",
+        "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+        "pam": "0:1.7.2-2.fc44.x86_64",
+        "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+        "systemd": "0:259.9-1.fc44.x86_64",
+        "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+      },
+      "observations": {
+        "automatic_active_gate_preserved": true,
+        "compatible_upgrade_completed": true,
+        "explicit_downgrade_refused": false,
+        "same_enrollment_registry_throttle_tally_and_policies": true,
+        "version_after": "0.1.0-0.4.alpha1.fc44",
+        "version_before": "0.1.0-0.3.alpha1.fc44"
+      },
+      "passed": true,
+      "phase": "package-upgrade",
+      "raw_snapshots_guest_root_only": true,
+      "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+      "selinux": "Enforcing"
+    },
+    "final4-ui-pin": {
+      "phase": "pin-existing-lock",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "unlock_elapsed_seconds": 0.759,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        },
+        "native_password_tally_unchanged": true
+      }
+    },
+    "final4-ui-password": {
+      "phase": "password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false,
+        "unlock_elapsed_seconds": 0.283,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        }
+      }
+    },
+    "erase": {
+      "native_package_versions": {
+        "authselect": "0:1.7.1-1.fc44.x86_64",
+        "glibc-common": "0:2.43-9.fc44.x86_64",
+        "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+        "pam": "0:1.7.2-2.fc44.x86_64",
+        "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+        "systemd": "0:259.9-1.fc44.x86_64",
+        "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+      },
+      "observations": {
+        "authority_revoked": true,
+        "both_original_kde_services_restored": true,
+        "native_password_tally_preserved": true,
+        "package_and_module_removed": true
+      },
+      "passed": true,
+      "phase": "erase",
+      "raw_snapshots_guest_root_only": true,
+      "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+      "selinux": "Enforcing"
+    },
+    "erased-ui-password": {
+      "phase": "restored-password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false,
+        "unlock_elapsed_seconds": 0.3,
+        "before_enter_tally": {
+          "bytes": 64
+        },
+        "after_tally": {
+          "bytes": 64
+        }
+      }
+    }
+  },
+  "physical_tpm": false,
+  "host_authentication_changed": false,
+  "raw_native_snapshots": "guest root only; not exported",
+  "recorded_build_scope": "earlier phases retain their recorded RPM versions; final source/RPM acceptance is recorded separately below",
+  "final_source_rpm_acceptance": {
+    "localpin_evr": "0.1.0-0.6.alpha1.fc44",
+    "passed": true,
+    "fresh_guarded_clone": true,
+    "new_kernel_booted": true,
+    "phases": {
+      "ui-console-recovery": {
+        "phase": "administrative-recovery",
+        "passed": true,
+        "selinux": "Enforcing",
+        "observations": {
+          "unlocked": true,
+          "enter_required_observed": false,
+          "locked_before_enter": false,
+          "unlock_elapsed_seconds": 0.323,
+          "before_enter_tally": {
+            "bytes": 128
+          },
+          "after_tally": {
+            "bytes": 128
+          },
+          "same_greeter_after_denial": true,
+          "native_pin_denial_observed": true,
+          "native_failure_journal_greeter_verified": true,
+          "console_recovery": {
+            "text_console_recovery_completed": true,
+            "exact_original_kde_restored": true,
+            "socket_boot_opt_in_disabled": true,
+            "boot_unchanged": true
+          },
+          "denied_tally": {
+            "bytes": 128
+          }
+        }
+      },
+      "re-enroll": {
+        "passed": true,
+        "results": {
+          "repair_fault": {
+            "exact_component_restored": true,
+            "selinux": "Enforcing"
+          },
+          "prepare": {
+            "dry_run_unchanged": true,
+            "fresh_disabled_account": true,
+            "persistent_native_tally": true
+          },
+          "enroll": {
+            "installed_cli_pty": {
+              "operation": "enroll-tpm",
+              "exit_success": true,
+              "real_controlling_terminal": true,
+              "private_prompt_count": 4,
+              "secret_echo_absent": true
+            },
+            "native_tpm_enrollment": true,
+            "status": {
+              "availability": "available",
+              "enrolled_backend": "tpm2"
+            }
+          },
+          "isolated": {
+            "production_broker_pin_verified": true,
+            "native_password_tally_unchanged": true
+          },
+          "trial": {
+            "bounded_trial_requested": true
+          }
+        }
+      },
+      "tested-ui-pin": {
+        "phase": "pin-existing-lock",
+        "passed": true,
+        "selinux": "Enforcing",
+        "observations": {
+          "unlocked": true,
+          "enter_required_observed": true,
+          "locked_before_enter": true,
+          "unlock_elapsed_seconds": 0.796,
+          "before_enter_tally": {
+            "bytes": 0
+          },
+          "after_tally": {
+            "bytes": 0
+          },
+          "native_password_tally_unchanged": true
+        }
+      },
+      "tested-ui-password": {
+        "phase": "password",
+        "passed": true,
+        "selinux": "Enforcing",
+        "observations": {
+          "unlocked": true,
+          "enter_required_observed": false,
+          "locked_before_enter": false,
+          "unlock_elapsed_seconds": 0.32,
+          "before_enter_tally": {
+            "bytes": 0
+          },
+          "after_tally": {
+            "bytes": 0
+          }
+        }
+      },
+      "tested-ui-recovery": {
+        "phase": "recovery",
+        "passed": true,
+        "selinux": "Enforcing",
+        "observations": {
+          "unlocked": true,
+          "enter_required_observed": false,
+          "locked_before_enter": false,
+          "unlock_elapsed_seconds": 0.297,
+          "before_enter_tally": {
+            "bytes": 128
+          },
+          "after_tally": {
+            "bytes": 128
+          },
+          "wrong_candidate_denied": true,
+          "same_greeter_after_denial": true,
+          "gui_submissions": 2,
+          "before_tally": {
+            "bytes": 0
+          },
+          "denied_tally": {
+            "bytes": 128
+          },
+          "native_auth_failure_events_before": 1,
+          "native_auth_failure_events_after_denial": 2,
+          "native_failure_journal_greeter_verified": true,
+          "stock_password_stack": false
+        }
+      },
+      "activate": {
+        "passed": true,
+        "repair": {
+          "exact_component_restored": true,
+          "selinux": "Enforcing"
+        },
+        "activation": {
+          "actual_ui_pin_password_recovery_required": true,
+          "actual_console_recovery_proved_for_package": true,
+          "activation_completed": true,
+          "socket_enabled_for_boot": true
+        }
+      },
+      "final6-package-upgrade": {
+        "native_package_versions": {
+          "authselect": "0:1.7.1-1.fc44.x86_64",
+          "glibc-common": "0:2.43-9.fc44.x86_64",
+          "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+          "pam": "0:1.7.2-2.fc44.x86_64",
+          "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+          "systemd": "0:259.9-1.fc44.x86_64",
+          "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+        },
+        "observations": {
+          "automatic_active_gate_preserved": true,
+          "compatible_upgrade_completed": true,
+          "explicit_downgrade_refused": false,
+          "same_enrollment_registry_throttle_tally_and_policies": true,
+          "version_after": "0.1.0-0.6.alpha1.fc44",
+          "version_before": "0.1.0-0.5.alpha1.fc44"
+        },
+        "passed": true,
+        "phase": "package-upgrade",
+        "raw_snapshots_guest_root_only": true,
+        "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+        "selinux": "Enforcing"
+      },
+      "final6-ui-pin": {
+        "phase": "pin-existing-lock",
+        "passed": true,
+        "selinux": "Enforcing",
+        "observations": {
+          "unlocked": true,
+          "enter_required_observed": true,
+          "locked_before_enter": true,
+          "unlock_elapsed_seconds": 0.824,
+          "before_enter_tally": {
+            "bytes": 0
+          },
+          "after_tally": {
+            "bytes": 0
+          },
+          "native_password_tally_unchanged": true
+        }
+      },
+      "final6-ui-password": {
+        "phase": "password",
+        "passed": true,
+        "selinux": "Enforcing",
+        "observations": {
+          "unlocked": true,
+          "enter_required_observed": false,
+          "locked_before_enter": false,
+          "unlock_elapsed_seconds": 0.33,
+          "before_enter_tally": {
+            "bytes": 0
+          },
+          "after_tally": {
+            "bytes": 0
+          }
+        }
+      },
+      "post-dnf-ui-pin": {
+        "phase": "pin-existing-lock",
+        "passed": true,
+        "selinux": "Enforcing",
+        "observations": {
+          "unlocked": true,
+          "enter_required_observed": true,
+          "locked_before_enter": true,
+          "unlock_elapsed_seconds": 0.888,
+          "before_enter_tally": {
+            "bytes": 0
+          },
+          "after_tally": {
+            "bytes": 0
+          },
+          "native_password_tally_unchanged": true
+        }
+      },
+      "reboot-prepare": {
+        "native_package_versions": {
+          "authselect": "0:1.7.1-1.fc44.x86_64",
+          "glibc-common": "0:2.43-9.fc44.x86_64",
+          "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+          "pam": "0:1.7.2-2.fc44.x86_64",
+          "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+          "systemd": "0:259.9-1.fc44.x86_64",
+          "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+        },
+        "observations": {
+          "activation_gate_closed": false,
+          "private_continuity_checkpoint_durable": true,
+          "reboot_requested": false
+        },
+        "passed": true,
+        "phase": "reboot-prepare",
+        "raw_snapshots_guest_root_only": true,
+        "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+        "selinux": "Enforcing"
+      },
+      "reboot-verify": {
+        "native_package_versions": {
+          "authselect": "0:1.7.1-1.fc44.x86_64",
+          "glibc-common": "0:2.43-9.fc44.x86_64",
+          "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+          "pam": "0:1.7.2-2.fc44.x86_64",
+          "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+          "systemd": "0:259.9-1.fc44.x86_64",
+          "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+        },
+        "observations": {
+          "boot_changed": true,
+          "fresh_enrollment_performed": false,
+          "gate": "active",
+          "native_kde_pam_pin_verified": true,
+          "same_enrollment_registry_throttle_tally_and_policies": true
+        },
+        "passed": true,
+        "phase": "reboot-verify",
+        "raw_snapshots_guest_root_only": true,
+        "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+        "selinux": "Enforcing"
+      },
+      "post-reboot-ui-pin": {
+        "phase": "pin-existing-lock",
+        "passed": true,
+        "selinux": "Enforcing",
+        "observations": {
+          "unlocked": true,
+          "enter_required_observed": true,
+          "locked_before_enter": true,
+          "unlock_elapsed_seconds": 0.79,
+          "before_enter_tally": {
+            "bytes": 0
+          },
+          "after_tally": {
+            "bytes": 0
+          },
+          "native_password_tally_unchanged": true
+        }
+      },
+      "erase": {
+        "native_package_versions": {
+          "authselect": "0:1.7.1-1.fc44.x86_64",
+          "glibc-common": "0:2.43-9.fc44.x86_64",
+          "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+          "pam": "0:1.7.2-2.fc44.x86_64",
+          "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+          "systemd": "0:259.9-1.fc44.x86_64",
+          "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+        },
+        "observations": {
+          "authority_revoked": true,
+          "both_original_kde_services_restored": true,
+          "native_password_tally_preserved": true,
+          "package_and_module_removed": true
+        },
+        "passed": true,
+        "phase": "erase",
+        "raw_snapshots_guest_root_only": true,
+        "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+        "selinux": "Enforcing"
+      },
+      "prepare-enroll-isolated-trial": {
+        "passed": true,
+        "phase": "final5-setup",
+        "observations": {
+          "install": {
+            "package_installed": true,
+            "existing_kde_unchanged": true,
+            "no_enrollment": true,
+            "socket_inactive": true,
+            "native_environment": {
+              "packages": {
+                "pam": "0:1.7.2-2.fc44.x86_64",
+                "systemd": "0:259.9-1.fc44.x86_64",
+                "authselect": "0:1.7.1-1.fc44.x86_64",
+                "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+                "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+                "glibc-common": "0:2.43-9.fc44.x86_64",
+                "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+              },
+              "kernel_release": "7.2.10-200.fc44.x86_64",
+              "authselect_profile": "local with-silent-lastlog with-mdns4 with-fingerprint with-faillock"
+            }
+          },
+          "prepare": {
+            "dry_run_unchanged": true,
+            "fresh_disabled_account": true,
+            "persistent_native_tally": true
+          },
+          "enroll": {
+            "installed_cli_pty": {
+              "operation": "enroll-tpm",
+              "exit_success": true,
+              "real_controlling_terminal": true,
+              "private_prompt_count": 4,
+              "secret_echo_absent": true
+            },
+            "native_tpm_enrollment": true,
+            "status": {
+              "availability": "available",
+              "enrolled_backend": "tpm2"
+            }
+          },
+          "isolated": {
+            "production_broker_pin_verified": true,
+            "native_password_tally_unchanged": true
+          },
+          "trial": {
+            "bounded_trial_requested": true
+          }
+        }
+      },
+      "erased-ui-password": {
+        "phase": "restored-password",
+        "passed": true,
+        "selinux": "Enforcing",
+        "observations": {
+          "unlocked": true,
+          "enter_required_observed": false,
+          "locked_before_enter": false,
+          "unlock_elapsed_seconds": 0.309,
+          "before_enter_tally": {
+            "bytes": 64
+          },
+          "after_tally": {
+            "bytes": 64
+          }
+        }
+      }
+    },
+    "additional_evidence": [
+      "installed-policy-types.json",
+      "dnf-upgrade.json",
+      "native-pam-reinstall.json",
+      "systemd-sysusers.json",
+      "authselect-regeneration.json",
+      "without-fingerprint-profile.json",
+      "legacy-flags.json",
+      "kernel-boot.json",
+      "final-rpm-provenance.json"
+    ],
+    "baseline_localpin_evr": "0.1.0-0.5.alpha1.fc44",
+    "phase_scope": "prepare/enroll, console recovery and activation establish the .5 baseline; final6-package-upgrade and later phases execute .6",
+    "cleanup_passed": true
+  }
+}

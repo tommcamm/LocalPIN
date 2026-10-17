@@ -1,0 +1,22 @@
+{
+  "authentication_secrets_loaded": false,
+  "installed_helper_sha256": "67efff0978fbbb71e703f0d40b7ff1cd7270f332b3937587fe08598d6692ffba",
+  "localpin_version": "0.1.0-0.6.alpha1.fc44",
+  "observations": {
+    "complete_legacy_01_and_02_unfreeze_only_immutable_bit": true,
+    "corrupt_legacy_foreign_file_and_directory_flags_preserved": true,
+    "current_active_foreign_file_and_directory_flags_preserved": true,
+    "current_revoked_foreign_file_and_directory_flags_preserved": true,
+    "durable_revocation_before_unfreeze_barrier": true,
+    "empty_foreign_file_and_directory_flags_preserved": true,
+    "fresh_missing_foreign_file_and_directory_flags_preserved": true,
+    "truncated_legacy_foreign_file_and_directory_flags_preserved": true,
+    "unknown_foreign_file_and_directory_flags_preserved": true
+  },
+  "passed": true,
+  "real_guest_account_databases_changed": false,
+  "runner_sha256": "bed4cf48def8ab7eee7a00e3225b602e6fcd1325ad15e5ea71eae2d80903ed9f",
+  "scope": "installed helper on isolated Btrfs synthetic account inputs",
+  "selinux": "Enforcing",
+  "tpm_opened": false
+}
