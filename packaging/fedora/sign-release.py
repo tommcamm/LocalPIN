@@ -9,17 +9,39 @@ import subprocess
 import tempfile
 
 
-def primary_fingerprints(listing):
+def primary_fingerprints(listing, secret=True):
     result = []
     primary = False
     for line in listing.splitlines():
         fields = line.split(":")
-        if fields[0] in ("sec", "ssb"):
-            primary = fields[0] == "sec"
+        if fields[0] in ("sec", "ssb", "pub", "sub"):
+            primary = fields[0] == ("sec" if secret else "pub")
         elif fields[0] == "fpr" and primary:
             result.append(fields[9])
             primary = False
     return result
+
+
+def has_private_signer(listing):
+    for line in listing.splitlines():
+        fields = line.split(":")
+        # GnuPG's lowercase capability belongs to this key, while uppercase S
+        # can describe a public-only subkey. '+' means local private material;
+        # '#' is a primary/subkey stub and cannot sign in the release runner.
+        if len(fields) > 14 and fields[0] in ("sec", "ssb") and "s" in fields[11] and fields[14] == "+":
+            return True
+    return False
+
+
+def validate_signing_material(secret_listing, public_listing, fingerprint):
+    public_fingerprints = primary_fingerprints(public_listing, secret=False)
+    if public_fingerprints != [fingerprint]:
+        # Report only canonical public fingerprints, never imported UID text,
+        # secret material, the passphrase or raw GnuPG diagnostics.
+        observed = ", ".join(value for value in public_fingerprints if re.fullmatch(r"(?:[0-9A-F]{40}|[0-9A-F]{64})", value)) or "none"
+        raise ValueError(f"RPM_SIGNING_FINGERPRINT is {fingerprint}; uploaded primary fingerprint(s): {observed}. Use the full primary fingerprint from the same RPM_SIGNING_KEY export, not a subkey fingerprint.")
+    if primary_fingerprints(secret_listing) != [fingerprint] or not has_private_signer(secret_listing):
+        raise ValueError(f"RPM_SIGNING_KEY matches primary fingerprint {fingerprint}, but contains no available private signing key. A public-only or stub-only export cannot sign. Create a signing subkey [S], export it with gpg --armor --export-secret-subkeys {fingerprint}, and replace the release environment's RPM_SIGNING_KEY secret. Keep RPM_SIGNING_PASSPHRASE consistent with that subkey.")
 
 
 def sign(directory):
@@ -41,8 +63,9 @@ def sign(directory):
         try:
             run(["gpg", "--batch", "--import"], input=key.encode())
             listing = run(["gpg", "--batch", "--with-colons", "--list-secret-keys", "--fingerprint"], text=True).stdout
-            if primary_fingerprints(listing) != [fingerprint]:
-                raise ValueError("imported signing key does not match the configured primary fingerprint")
+            if primary_fingerprints(listing) != [fingerprint] or not has_private_signer(listing):
+                public_listing = run(["gpg", "--batch", "--with-colons", "--list-keys", "--fingerprint"], text=True).stdout
+                validate_signing_material(listing, public_listing, fingerprint)
             passfile = home / "passphrase"
             passfile.write_text(passphrase + "\n")
             passfile.chmod(0o600)

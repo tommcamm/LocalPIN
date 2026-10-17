@@ -26,6 +26,10 @@ After the release workflow is reviewed and merged into `main`:
    separate publication job signs the RPM and checksums, verifies their
    signatures, creates an annotated tag at the tested commit, uploads all assets
    to a draft, then publishes it as an experimental prerelease with `latest=false`.
+   Before publishing, it checks the draft's description and complete asset list;
+   afterward it verifies the public prerelease and prints its URL in the job
+   summary. The release appears on the repository's
+   [GitHub Releases page](https://github.com/tommcamm/LocalPIN/releases).
 
 The workflow has no push/tag trigger and accepts dispatches only from `main`.
 Build/check jobs have read-only repository access and no signing secrets. Only
@@ -106,6 +110,41 @@ Publish the public key fingerprint through a maintainer-controlled trusted
 channel and document key rotation/revocation before asking others to trust it.
 A public key downloaded beside an RPM alone does not establish that trust.
 No maintainer signing identity or environment secrets are created by this change.
+
+## Troubleshoot signing setup
+
+A failure while checking the imported fingerprint happens before passphrase
+verification. The error reports only public primary fingerprints and distinguishes
+a mismatched key from an export with no usable private signing material.
+
+Check the dedicated key directory locally:
+
+```sh
+gpg --homedir "$localpin_key_dir" --list-keys --with-subkey-fingerprint
+```
+
+The recommended key has a certification primary `[C]` and a signing subkey `[S]`.
+If it has only `[C]`, add a signing subkey before exporting:
+
+```sh
+gpg --homedir "$localpin_key_dir" --quick-add-key "$localpin_fpr" rsa4096 sign 1y
+```
+
+Set those variables to your dedicated key directory and its full primary
+fingerprint first. After creating the subkey, export again using
+`--armor --export-secret-subkeys "$localpin_fpr"` and replace the `release`
+environment's `RPM_SIGNING_KEY`. Set `RPM_SIGNING_PASSPHRASE` to the signing
+subkey's passphrase, and keep `RPM_SIGNING_FINGERPRINT` equal to the primary
+fingerprint from that same export. Exporting secret subkeys from a certification
+key with no subkeys can produce a stub-only export with no signing capability;
+it cannot be used for releases. Never paste private exports or passphrases into
+an issue, PR or workflow input.
+
+For GitHub API HTTP 403 failures, inspect the reported server reason and the
+release job's `contents: write` permission and repository rules. A
+[workflow rerun](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs)
+keeps the original commit and ref. To use a workflow fix merged into `main`,
+start a new manual run on `main`; retrying an old job does not load the new code.
 
 ## Verify and test a download
 

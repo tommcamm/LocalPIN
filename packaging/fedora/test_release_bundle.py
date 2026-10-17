@@ -33,6 +33,51 @@ def lock():
                         {"name": "zeroize", "version": "1.9.1", "source": SOURCE, "checksum": "b" * 64}]}
 
 
+class ReleaseNotesTests(unittest.TestCase):
+    def test_versioned_changes_take_precedence_over_unreleased_and_history(self):
+        changelog = """# Changelog
+## Unreleased
+- Future work.
+## [0.1.0-alpha.1] - 2026-10-17
+### Added
+- This release's change.
+## 0.1.0-alpha.0
+- Historical work.
+"""
+        summary = bundle.changelog_summary(changelog, "0.1.0-alpha.1", "https://example.invalid/blob/commit")
+        self.assertEqual(summary, "- This release's change.")
+
+    def test_unreleased_summary_is_bounded_and_links_use_committed_source(self):
+        changelog = """# Changelog
+## Unreleased
+### Added
+- First change with [instructions](docs/releasing.md).
+  Continuation with an [external link](https://example.invalid/reference).
+- Second change with an [anchor](#changed).
+
+### Changed
+- Third change.
+- Fourth change.
+## 0.0.1
+- Historical work.
+"""
+        source = f"https://github.com/tommcamm/LocalPIN/blob/{COMMIT}"
+        summary = bundle.changelog_summary(changelog, "0.1.0-alpha.1", source)
+        self.assertIn(f"[instructions]({source}/docs/releasing.md)", summary)
+        self.assertIn("  Continuation with an [external link](https://example.invalid/reference).", summary)
+        self.assertIn(f"[anchor]({source}/CHANGELOG.md#changed)", summary)
+        self.assertIn("- Third change.", summary)
+        self.assertNotIn("Fourth", summary)
+        self.assertNotIn("Historical", summary)
+
+    def test_missing_ambiguous_or_empty_changes_fail(self):
+        for changelog in ("# Changelog\n## 0.0.1\n- Historical work.\n",
+                          "## Unreleased\n## Unreleased\n- Duplicate section.\n",
+                          "## Unreleased\nNo documented changes.\n"):
+            with self.subTest(changelog=changelog), self.assertRaisesRegex(ValueError, "[Cc]hangelog"):
+                bundle.changelog_summary(changelog, "0.1.0-alpha.1", "https://example.invalid/source")
+
+
 class SbomTests(unittest.TestCase):
     def test_native_license_field_can_contain_a_url(self):
         packages = bundle.rpm_inventory("synthetic\t0\t1\t1.fc44\tx86_64\thttps://example.invalid/license/\n")
@@ -96,6 +141,7 @@ class BundleTests(unittest.TestCase):
         self.root = self.directory / "source"
         self.root.mkdir()
         (self.root / "Cargo.toml").write_text('[workspace.package]\nversion = "0.1.0-alpha.1"\n')
+        (self.root / "CHANGELOG.md").write_text("# Changelog\n\n## Unreleased\n\n- Synthetic release change.\n")
         (self.root / "Cargo.lock").write_text('''version = 4
 [[package]]
 name = "localpin-core"
@@ -196,6 +242,26 @@ checksum = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
             with self.subTest(version=version), self.assertRaisesRegex(ValueError, "tag"):
                 self.create(tag=tag)
 
+    def test_description_identifies_downloads_evidence_verification_and_limits(self):
+        with patch.dict(bundle.os.environ, {"GITHUB_SERVER_URL": "https://github.com",
+                                           "GITHUB_REPOSITORY": "tommcamm/LocalPIN", "GITHUB_RUN_ID": "12345"}):
+            self.create()
+        manifest = json.loads((self.output / "RELEASE.json").read_text())
+        notes = (self.output / "RELEASE-NOTES.md").read_text()
+        source = f"https://github.com/tommcamm/LocalPIN/blob/{COMMIT}"
+        for expected in ("experimental Fedora KDE 44 x86_64 prerelease", "six-digit PIN unlocking",
+                         "Synthetic release change.", self.rpm.name, manifest["source_archive"],
+                         "SHA256SUMS.asc", "Every published experimental release requires verified RPM and checksum signatures.",
+                         "separately trusted maintainer fingerprint", "There is no supported production release.",
+                         "leaves PIN integration disabled", "hardware matrix remain unvalidated.",
+                         f"({source}/CHANGELOG.md)", f"({source}/docs/integration-administration.md)",
+                         f"({source}/docs/development/m9-release-readiness.md)",
+                         f"({source}/docs/releasing.md#verify-and-test-a-download)",
+                         f"({manifest['workflow_run_url']})"):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, notes)
+        self.assertEqual(manifest["workflow_run_url"], "https://github.com/tommcamm/LocalPIN/actions/runs/12345")
+
     def test_dirty_source_or_wrong_head_fails(self):
         self.dirty = "?? unreviewed.txt"
         with self.assertRaisesRegex(ValueError, "clean"):
@@ -222,6 +288,7 @@ checksum = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 
     def test_signing_finalization_refreshes_rpm_sbom_and_checksums(self):
         self.create()
+        notes = (self.output / "RELEASE-NOTES.md").read_bytes()
         manifest_path = self.output / "RELEASE.json"
         manifest = json.loads(manifest_path.read_text())
         rpm = self.output / manifest["rpm"]["filename"]
@@ -240,6 +307,7 @@ checksum = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         checksums = (self.output / "SHA256SUMS").read_text()
         self.assertIn("RPM-GPG-KEY-LocalPIN", checksums)
         self.assertNotIn("SHA256SUMS.asc", checksums)
+        self.assertEqual((self.output / "RELEASE-NOTES.md").read_bytes(), notes)
 
     def test_finalize_rejects_symlink_and_traversal(self):
         self.create()

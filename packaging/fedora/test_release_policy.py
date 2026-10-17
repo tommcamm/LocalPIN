@@ -1,12 +1,14 @@
 """Publication guard regressions with synthetic bundles and mocked GitHub."""
 import hashlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
 import tempfile
 import subprocess
 import unittest
+import urllib.error
 from unittest.mock import patch
 
 
@@ -24,6 +26,32 @@ signer = load("sign-release")
 COMMIT = "a" * 40
 TAG = "v0.1.0-alpha.1"
 RPM = "localpin-0.1.0-0.1.alpha1.release.fc44.x86_64.rpm"
+
+
+class GitHubApiTests(unittest.TestCase):
+    def test_permission_error_preserves_reason_without_exposing_token(self):
+        token = "synthetic-token-never-published"
+        error = urllib.error.HTTPError("https://api.github.com/synthetic", 403, "Forbidden", {},
+                                       io.BytesIO(json.dumps({"message": f"tag update denied\n{token}"}).encode()))
+        with patch.dict(os.environ, {"GH_TOKEN": token, "GITHUB_REPOSITORY": "synthetic/localpin"}), patch.object(publish.urllib.request, "urlopen", side_effect=error):
+            with self.assertRaises(RuntimeError) as raised:
+                publish.api("git/refs", {"ref": "refs/tags/synthetic"})
+        message = str(raised.exception)
+        self.assertIn("HTTP 403", message)
+        self.assertIn("tag update denied", message)
+        self.assertIn("contents: write", message)
+        self.assertNotIn(token, message)
+        self.assertNotIn("\n", message)
+
+    def test_missing_release_lookup_only_ignores_404(self):
+        for status in (404, 403):
+            error = urllib.error.HTTPError("https://api.github.com/synthetic", status, "failure", {}, io.BytesIO(b"{}"))
+            with self.subTest(status=status), patch.dict(os.environ, {"GH_TOKEN": "synthetic", "GITHUB_REPOSITORY": "synthetic/localpin"}), patch.object(publish.urllib.request, "urlopen", side_effect=error):
+                if status == 404:
+                    self.assertIsNone(publish.api("releases/tags/synthetic", missing_ok=True))
+                else:
+                    with self.assertRaises(RuntimeError):
+                        publish.api("releases/tags/synthetic", missing_ok=True)
 
 
 class ReleasePolicyTests(unittest.TestCase):
@@ -64,7 +92,7 @@ class PublicationTests(unittest.TestCase):
                          "signing": {"signed": True, "fingerprint": "A" * 40}}
         self.write_bundle()
         self.environment = patch.dict(os.environ, {"GITHUB_REF": "refs/heads/main", "GITHUB_SHA": COMMIT,
-                                                   "GITHUB_REPOSITORY": "synthetic/localpin"})
+                                                   "GITHUB_REPOSITORY": "synthetic/localpin", "GITHUB_STEP_SUMMARY": ""})
         self.environment.start()
         self.addCleanup(self.environment.stop)
         self.native = patch.object(publish, "verify_native_assets")
@@ -88,6 +116,12 @@ class PublicationTests(unittest.TestCase):
     def checksums(self):
         (self.output / "SHA256SUMS").write_text("".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n"
                                                         for p in sorted(self.output.iterdir()) if p.name not in ("SHA256SUMS", "SHA256SUMS.asc")))
+
+    def github_release(self, *, draft):
+        return {"tagName": TAG, "name": f"LocalPIN {TAG} (experimental)",
+                "body": (self.output / "RELEASE-NOTES.md").read_text(), "isDraft": draft, "isPrerelease": True,
+                "url": f"https://github.com/synthetic/localpin/releases/tag/{TAG}",
+                "assets": [{"name": path.name} for path in sorted(self.output.iterdir())]}
 
     def test_changed_or_unchecked_assets_are_refused(self):
         (self.output / RPM).write_bytes(b"changed")
@@ -201,14 +235,35 @@ class PublicationTests(unittest.TestCase):
             gh.assert_not_called()
 
     def test_tag_then_draft_upload_then_publish(self):
-        with patch.object(publish, "api", side_effect=[None, None, {"status": "ahead"}, {"sha": "c" * 40}, {}]) as api, patch.object(publish.subprocess, "run") as gh:
+        results = [subprocess.CompletedProcess([], 0), subprocess.CompletedProcess([], 0, json.dumps(self.github_release(draft=True))),
+                   subprocess.CompletedProcess([], 0), subprocess.CompletedProcess([], 0, json.dumps(self.github_release(draft=False)))]
+        with patch.object(publish, "api", side_effect=[None, None, {"status": "ahead"}, {"sha": "c" * 40}, {}]) as api, patch.object(publish.subprocess, "run", side_effect=results) as gh, patch("builtins.print") as output:
             publish.publish(self.output, TAG, COMMIT)
             self.assertEqual(api.call_args_list[3].args[0], "git/tags")
             self.assertEqual(api.call_args_list[4].args[1]["sha"], "c" * 40)
             self.assertIn("--draft", gh.call_args_list[0].args[0])
             self.assertIn("--prerelease", gh.call_args_list[0].args[0])
-            self.assertIn("--draft=false", gh.call_args_list[1].args[0])
+            self.assertEqual(gh.call_args_list[1].args[0][:3], ["gh", "release", "view"])
+            self.assertIn("--draft=false", gh.call_args_list[2].args[0])
+            self.assertEqual(gh.call_args_list[3].args[0][:3], ["gh", "release", "view"])
+            output.assert_called_once_with(f"Published experimental release: https://github.com/synthetic/localpin/releases/tag/{TAG}")
             self.assertNotIn("--clobber", str(gh.call_args_list))
+
+    def test_incomplete_or_wrong_draft_is_not_published(self):
+        for change in ({"body": "wrong description"}, {"assets": []}, {"isPrerelease": False}, {"isDraft": False}):
+            release = {**self.github_release(draft=True), **change}
+            with self.subTest(change=change), patch.object(publish, "api", side_effect=[None, None, {"status": "ahead"}, {"sha": "c" * 40}, {}]), patch.object(publish.subprocess, "run", side_effect=[subprocess.CompletedProcess([], 0), subprocess.CompletedProcess([], 0, json.dumps(release))]) as gh:
+                with self.assertRaisesRegex(ValueError, "description or uploaded assets"):
+                    publish.publish(self.output, TAG, COMMIT)
+                self.assertEqual(gh.call_count, 2)
+                self.assertTrue(all("--draft=false" not in call.args[0] for call in gh.call_args_list))
+
+    def test_final_release_must_be_public_prerelease_at_expected_url(self):
+        for change in ({"isDraft": True}, {"url": "https://github.com/other/repository/releases/tag/other"}):
+            release = {**self.github_release(draft=False), **change}
+            with self.subTest(change=change), patch.object(publish.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, json.dumps(release))):
+                with self.assertRaises(ValueError):
+                    publish.verify_github_release(self.output, TAG, list(self.output.iterdir()), draft=False)
 
 
 if __name__ == "__main__":
