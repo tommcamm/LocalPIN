@@ -1,0 +1,30 @@
+[package]
+name = "localpind"
+description = "Bounded LocalPIN broker and one-operation backend worker"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+localpin-core.workspace = true
+localpin-protocol = { path = "../localpin-protocol", version = "=0.1.0-alpha.1" }
+localpin-storage = { path = "../localpin-storage", version = "=0.1.0-alpha.1" }
+localpin-credentials = { path = "../localpin-credentials", version = "=0.1.0-alpha.1" }
+localpin-tpm = { path = "../localpin-tpm", version = "=0.1.0-alpha.1" }
+rustix = { workspace = true, features = ["net", "event", "process", "time"] }
+zeroize.workspace = true
+dbus = "=0.9.9"
+libc = "=0.2.191"
+getrandom = "=0.4.3"
+sha2 = { version = "=0.11.1", default-features = false }
+
+# One documented SO_PEERPIDFD acquisition function is the sole local exception.
+# `forbid` cannot be narrowed at that function; all other code retains `deny`.
+[lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[lints.clippy]
+all = "warn"

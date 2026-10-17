@@ -293,3 +293,87 @@ with `cargo-deny 0.20.2`, using refreshed RustSec commit
 workspace-local writable Cargo cache and approved network access for refresh.
 CI must refresh and check again; this result is not a specialist cryptographic
 or native-library audit.
+
+## M5 Linux broker and transport dependencies
+
+M5 adds exact direct versions [`dbus 0.9.9`](https://docs.rs/dbus/0.9.9/dbus/)
+and [`listenfd 1.0.2`](https://docs.rs/listenfd/1.0.2/listenfd/), and promotes
+the already locked `libc 0.2.191` and `sha2 0.11.1` to direct broker dependencies.
+The existing `rustix 1.1.5` is enabled for Unix sockets, polling, process handling
+and suspend-inclusive time. Existing OS entropy and zeroizing owners remain in
+use. Registry checksums and the complete target-inclusive graph are committed
+in `Cargo.lock`; no Git/path replacement of an upstream dependency is used.
+
+The dbus-rs wrapper and its exact transitive `libdbus-sys 0.2.7` use
+`Apache-2.0/MIT`; `listenfd` uses Apache-2.0; `libc` and `sha2` offer MIT OR
+Apache-2.0. The reviewed published manifests declare Rust 1.65 for `libc` and
+1.88 for `sha2`; `dbus`, `libdbus-sys` and `listenfd` declare no Rust minimum.
+An absent declaration is not a compatibility guarantee: the build check uses
+the project's pinned Rust 1.99.1. The added Windows/UUID/WebAssembly entries
+remain in the lockfile for target completeness; Linux does not compile them
+as part of listener adoption or D-Bus queries. License notices must still be
+retained for every component distributed in a binary/package.
+
+`libdbus-sys` discovers system `dbus-1 >=1.6` with the already reviewed
+`pkg-config` build dependency. Its `vendored` feature is disabled; no bundled C
+stack is built or downloaded. The observed development/runtime input is Fedora
+`dbus-devel`/`dbus-libs 1.16.2-1.fc44`, with `pkg-config --modversion dbus-1`
+reporting 1.16.2. This is the tested native version, not an extra enforced
+minimum or certification of every version accepted by upstream's build script.
+Fedora's aggregate package license expression includes both AFL/GPL alternative
+terms and GPL-only tools. The linked libdbus library's
+[upstream licensing terms](https://dbus.freedesktop.org/doc/dbus-faq.html)
+offer the AFL alternative; native-library notices and component selection need
+packaging review separately from Cargo's Rust license allowlist. LocalPIN does
+not redistribute the D-Bus daemon or claim the entire Fedora package is under
+the Rust wrapper's license.
+
+Source review covered dbus-rs's blocking call timeout conversion and channel
+creation/registration, the sys crate's pkg-config-only build path, and the
+listener crate's Unix descriptor ownership and environment parsing. The broker
+opens the fixed `/run/dbus/system_bus_socket`, ignoring inherited
+`DBUS_SYSTEM_BUS_ADDRESS`. It calls logind through its unique bus owner, pins
+the D-Bus bus ID and session creation timestamp, and repeats checks before a
+success can be delivered. A domain-separated, length-delimited SHA-256 digest
+of authoritative identity yields the stable opaque session reference. It
+processes public routing metadata; the reference is not a bearer authorization.
+Method calls share an absolute deadline and have no per-property renewal.
+libdbus's native connection/authentication/registration phase has no cancellation
+interface in this wrapper: stalled work retains its broker admission slot and
+late results cannot authorize, but that phase is not claimed to have a hard
+native-call wall-clock bound.
+
+`listenfd` intentionally supports development extensions that accept missing or
+empty `LISTEN_PID` and alternate first descriptor numbers. LocalPIN's startup
+wrapper rejects those extensions before invoking it: the exact current PID,
+exactly one descriptor and the normal descriptor-3 base are required; an
+optional descriptor name must be `localpin`. The adopted descriptor is then
+independently checked as a listening Unix stream socket at the trusted installed
+path. The crate marks it close-on-exec and consumes ownership. Its parser clears
+`LISTEN_PID` and `LISTEN_FDS`; adoption occurs before application threads start,
+because its environment mutation is not safe to introduce into an already
+concurrent process. No systemfd development behavior is part of the broker's
+authorization contract.
+
+The core, protocol, storage and credential crates retain the workspace's local
+unsafe-code prohibition. Only `localpind` narrows its crate lint to `deny`, with
+one function-level exception for `getsockopt(SO_PEERPIDFD)` and immediate
+`OwnedFd::from_raw_fd` ownership transfer. `rustix 1.1.5` has no safe wrapper
+for this option. The reviewed function supplies correctly sized writable output
+buffers, checks the result and returned length, and closes the owned descriptor
+on all validation failures. Linux 6.5 or later is required for this operation;
+an unsupported option, denied syscall, exited peer or unreadable/mismatching
+procfs data fails closed. There is no numeric `pidfd_open` fallback, which could
+bind to a recycled PID before the initial process observation. Native liveness
+tests exercise both a live child and refusal after that same socket peer exits.
+This exception does not permit new unsafe blocks elsewhere or substitute for
+an independent FFI/security review.
+
+The refreshed M5 `cargo deny --locked check advisories bans licenses sources`
+passed all four categories with cargo-deny 0.20.2 and RustSec commit
+`64f92cdc64401fab47baa10e2e11fe382aa57155` on 2026-10-17. An exact duplicate
+exception permits Windows-only `windows-sys 0.59.0` required by dbus alongside
+rustix's 0.61.2; Linux does not compile that ABI. No advisory or source
+exception was introduced. Live logind routing also does not establish supported
+account restrictions or an immutable account incarnation, so the default broker
+keeps ordinary-account PIN authorization unavailable.

@@ -1,7 +1,7 @@
 # LocalPIN protocol version 1
 
-M2 defines this pure contract; no socket, privileged worker, authentication
-backend or installed integration is implemented here. The M5 broker must compose
+M2 defines the wire/state contract; M5 adds Linux transport and typed clients.
+The broker composes
 these transitions with `localpin-core`'s durable reservation/completion,
 identity, enrollment and revocation fences. A `ConnectionAction::Verify` or
 `CommitEnrollment` requests work; it does not authorize success by itself.
@@ -12,7 +12,13 @@ data/control truncation, and closes any received descriptors. Before sending
 secrets the client authenticates the privileged server and socket path. A claimed
 service name, identity or executable is never accepted as authority. M5 supplies
 bounded socket/read/write/worker deadlines, per-UID and global admission control,
-and worker cleanup. This crate never creates sockets or touches host credentials.
+and worker cleanup. The Linux `transport` module implements root socket trust,
+peer credentials, ancillary rejection, strict activation and typed clients.
+`Client::connect` caps setup at 250 ms, `status` at two seconds and `verify` at
+two seconds for software or five for TPM, closing after one terminal result.
+Linux deadlines share suspend-inclusive `BootInstant`/`CLOCK_BOOTTIME` and
+absolute timerfd socket waits; a suspend cannot renew a remaining budget.
+See [ADR 0010](../../docs/adr/0010-bounded-broker-and-live-peers.md).
 
 The broker creates a fresh unpredictable nonzero 128-bit connection identifier
 from OS randomness and sends a `Hello`. Every following request and response

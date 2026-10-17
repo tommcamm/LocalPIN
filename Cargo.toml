@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/localpin-core", "crates/localpin-protocol", "crates/localpin-storage", "crates/localpin-credentials", "crates/localpin-tpm"]
+members = ["crates/localpin-core", "crates/localpin-protocol", "crates/localpin-storage", "crates/localpin-credentials", "crates/localpin-tpm", "crates/localpind"]
 resolver = "3"
 
 [workspace.package]

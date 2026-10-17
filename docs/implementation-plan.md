@@ -1,7 +1,7 @@
 # LocalPIN implementation plan
 
 - Date: 2026-10-17
-- Status: Accepted roadmap; M0 implemented locally; M1 feasibility complete; M2 pure policy/protocol contracts, M3 protected Linux storage and M4 credential backend primitives implemented locally. M4 physical resource-manager evidence and later worker/hardware review gates remain open. Hosted CI execution remains unverified. Permanent account records remain gated on production lifecycle support.
+- Status: Accepted roadmap; M0 implemented locally; M1 feasibility complete; M2 policy/protocol contracts, M3 protected storage, M4 credential primitives and M5 bounded broker implemented locally. Installed sandbox, physical resource-manager and later review gates remain open. Hosted CI execution remains unverified. Permanent account records remain gated on production lifecycle support.
 - Source of requirements: [product-specification.md](product-specification.md), version 1.2. M1 clarifies password/PIN accounting; M2 settles time boundaries and narrows lifecycle support explicitly.
 
 This plan turns the specification into independently reviewable changes and evidence gates. The specification remains authoritative. An unresolved design question below must be resolved in an architecture decision record (ADR), with a specification amendment if necessary, rather than silently changing the requirements.
@@ -174,6 +174,14 @@ Implement `localpind`, socket activation, and protocol clients.
 - Document broker and password-worker privileges independently. No general shell execution, network listener, or desktop-unlock command exists.
 
 Exit gate: Unix-socket integration tests prove peer isolation, live session checks, resource limits, cancellation/replay resistance, server identity verification, and the 250 ms connection / two-second unavailable / five-second genuine TPM-attempt targets under their defined conditions.
+
+The [M5 report](development/m5-bounded-broker.md) and
+[ADR 0010](adr/0010-bounded-broker-and-live-peers.md) record the broker, protocol
+client, native logind routing, process identity and bounded worker implementation.
+Local tests cover actual Unix IPC and native stalls; account lifecycle/policy
+defaults remain unavailable. Installed unit/SELinux and full production account
+flows are not established by these tests. M6/M8/M9 retain their integration,
+packaging and independent hardware/security gates.
 
 ### M6 — Add trusted enrollment and the usable CLI
 

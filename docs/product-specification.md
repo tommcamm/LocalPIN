@@ -4,7 +4,7 @@
 
 **Date:** 2026-10-17
 
-**Status:** Implementation specification; M2 has pure policy/protocol models, with production adapters and installation still pending.
+**Status:** Implementation specification; M2–M5 policy, storage, credential and broker code implemented locally, with production account adapters and installation still pending.
 **Initial deployment:** Fedora Linux, KDE Plasma, local user accounts.  
 **Working component names:** `pam_localpin.so`, `localpind`, `localpinctl`.
 
@@ -26,9 +26,15 @@ The initial supported platform is Fedora KDE with local, non-root users and a ve
 
 Account support additionally requires an enforcing, tested lifecycle authority
 that distinguishes account incarnations and revokes enrollment before UID reuse.
-No such production adapter is delivered in M2; ordinary unmanaged Unix accounts
+No such production adapter is delivered yet; ordinary unmanaged Unix accounts
 remain unsupported for production activation. UID/name/home equality is
 insufficient. See [ADR 0006](adr/0006-account-incarnation-support.md).
+
+The current Linux broker requires `openat2`, procfs and Linux 6.5+
+`SO_PEERPIDFD` support, with a system bus and logind for live session routing.
+Unsupported or denied identity operations leave the PIN route unavailable;
+there is no numeric-PID identity fallback. See
+[ADR 0010](adr/0010-bounded-broker-and-live-peers.md).
 
 Use a pinned stable Rust toolchain, Rust 2024 edition, a declared minimum supported Rust version, and a committed Cargo.lock. Select maintained stable dependencies at implementation time. Record exact versions, licenses, advisories, and native-library requirements; do not follow moving `latest` versions in release builds.
 

@@ -1,0 +1,16 @@
+[Unit]
+Description=LocalPIN local broker socket (development contract)
+
+[Socket]
+ListenStream=/run/localpin/broker.sock
+FileDescriptorName=localpin
+SocketUser=root
+SocketGroup=root
+SocketMode=0666
+DirectoryMode=0755
+Backlog=32
+Accept=no
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target

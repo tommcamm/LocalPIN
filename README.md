@@ -6,7 +6,7 @@ It is intended to become useful, reviewable open-source software.
 
 Repository: [tommcamm/LocalPIN](https://github.com/tommcamm/LocalPIN).
 
-**Development status: M4 credential backend primitives, M3 protected storage and M2 policy/protocol models implemented locally.**
+**Development status: M5 bounded broker, M4 credential primitives, M3 storage and M2 policy/protocol models implemented locally.**
 This repository contains the specification, implementation roadmap, pure Rust
 state machines, bounded IPC parsers, protected Linux filesystem storage,
 isolated PAM/TPM/platform experiments and guarded Fedora KDE VM tests under
@@ -16,8 +16,12 @@ independently routed KDE seats. See the [M1 report](docs/development/m1-feasibil
 It includes bounded RustCrypto software credentials and a native TPM backend
 for use inside supervised workers. See the [M4 report](docs/development/m4-credential-backends.md)
 for simulator evidence and remaining hardware and worker gates.
-It does not yet provide a production broker, PAM module, CLI, or
-installable package. There is no supported production release.
+The broker now composes protected throttling, one-operation backend processes,
+authenticated Unix sockets and live logind session routing. Its production
+account authority still refuses unmanaged accounts. See the
+[M5 report](docs/development/m5-bounded-broker.md) for evidence and limits.
+It does not yet provide a PAM module, enrollment CLI, or installable package.
+There is no supported production release.
 
 ## Intended scope
 
@@ -46,7 +50,9 @@ required at runtime; unsupported kernels fail closed. `localpin-credentials`
 implements strict Argon2id PHC records and shared PIN derivation;
 `localpin-tpm` implements the pinned TPM construction using `tss-esapi`.
 Native builds require `pkg-config` and TPM2-TSS 4.x development libraries
-(`tpm2-tss-devel` on Fedora; `libtss2-dev` on Ubuntu). Dependencies are reviewed in the
+(`tpm2-tss-devel` on Fedora; `libtss2-dev` on Ubuntu), plus libdbus development
+libraries (`dbus-devel` / `libdbus-1-dev`). The broker requires Linux 6.5 or later
+with `SO_PEERPIDFD`, procfs, and a system bus/logind. Dependencies are reviewed in the
 [build-input inventory](docs/development/dependencies.md).
 
 ```sh
@@ -56,21 +62,24 @@ cargo test --workspace --locked
 cargo build --workspace --locked
 ```
 
-These workspace checks cover policy, protocol, storage and backend crates.
+These workspace checks cover policy, protocol, storage, backends and broker.
 Policy/protocol tests use simulated authorities and workers; storage tests use
 synthetic account identities and credentials with actual filesystem and process
 I/O, including persistence faults and contention. See the
 [M3 storage report](docs/development/m3-protected-storage.md)
 and [storage/recovery decision](docs/adr/0008-protected-storage-and-recovery.md)
-for evidence and limits. Native simulator tests are opt-in and start only
-disposable TPMs:
+for evidence and limits. Simulator, benchmark and protected-broker checks are
+explicit opt-in commands using synthetic inputs and disposable state:
 
 ```sh
 python3 crates/localpin-tpm/tests/run_simulator.py
 cargo run -p localpin-credentials --example benchmark --release --locked
+python3 crates/localpind/tests/run_protected_broker.py
 ```
 
-The simulator test requires `swtpm` and `tpm2-tools`. The benchmark uses synthetic
+The simulator test requires `swtpm` and `tpm2-tools`. The protected broker suite
+requires bubblewrap, user namespaces and subordinate UID/GID mappings; it uses
+only disposable state and synthetic account authorities. The benchmark uses synthetic
 input and reports local KDF latency. These checks do not validate production PAM, physical TPMs,
 password fallback, or desktop integration. There are no installation or
 activation commands at this stage.
@@ -79,8 +88,9 @@ See the [M2 report](docs/development/m2-policy-contracts.md) for exact time and
 failure boundaries. Production account support requires a tested lifecycle
 authority that detects UID reuse; no production authority exists yet. The
 current models and storage adapter deliberately refuse unsupported lifecycle
-evidence. Production worker integration and account lifecycle enforcement
-remain required before permanent account enrollment.
+evidence. Account lifecycle and account-policy enforcement remain required
+before permanent account enrollment. Broker systemd units are development
+contracts; installed SELinux/sandbox validation remains part of packaging.
 
 ## Development
 

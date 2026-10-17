@@ -6,6 +6,15 @@ Changes will be recorded here before versioned releases. There are no releases y
 
 ### Added
 
+- M5 `localpind` broker with kernel-authenticated Unix sockets, strict socket
+  activation, typed clients, live logind routing and socket-bound process identity;
+  [M5 evidence report](docs/development/m5-bounded-broker.md).
+- One-operation software/TPM worker with private bounded IPC, response deadlines,
+  cancellation, asynchronous reaping and retained resource leases; durable
+  reservation/completion and delivery under the M3 revocation lock. Prototype
+  systemd units remain uninstalled.
+- Native IPC, peer/session, cancellation/replay, capacity and stalled worker
+  regressions; explicit fail-closed production account authority.
 - M4 `localpin-credentials` with bounded canonical Argon2id-v19 PHC records,
   OS entropy, charged and zeroizing KDF memory, fixed vectors and a local benchmark.
 - `localpin-tpm` with the pinned `tss-esapi` construction, validated public
@@ -50,6 +59,10 @@ Changes will be recorded here before versioned releases. There are no releases y
 
 ### Changed
 
+- Separate M5 review fixed renewed request deadlines and suspend-paused IPC,
+  worker and session timeouts; deadline propagation, absolute boot-time timerfds,
+  delivery/lifetime limits and late cancellation now have regressions. See the
+  [review report](docs/development/m5-review.md).
 - Separate M4 review replaced cached dynamic TPM capability values with fresh
   bounded reads and added counter/policy/lockout/recovery simulator regressions;
   the native test runner also bounds its post-SIGKILL wait. See the
@@ -64,5 +77,6 @@ Changes will be recorded here before versioned releases. There are no releases y
 - Specification 1.1 clarifies that six-digit account passwords can consume a PIN
   attempt before fallback and that forwarded failures retain password accounting.
 
-Production authentication, account lifecycle enforcement, supervised backend
-workers, enrollment CLI, PAM integration, packaging and activation remain unimplemented.
+Production account lifecycle/policy enforcement, enrollment CLI, PAM integration,
+packaging and activation remain unimplemented. Installed broker/worker sandbox
+and physical TPM validation remain open.

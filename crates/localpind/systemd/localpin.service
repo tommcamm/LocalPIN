@@ -1,0 +1,41 @@
+[Unit]
+Description=LocalPIN bounded broker (development contract)
+Requires=localpin.socket
+After=localpin.socket dbus.service systemd-logind.service
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/localpin/localpind
+User=root
+Group=root
+RuntimeDirectory=localpin
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+StateDirectory=localpin
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+DevicePolicy=closed
+DeviceAllow=/dev/tpmrm0 rw
+LimitCORE=0
+LimitNOFILE=256
+TasksMax=48
+MemoryMax=512M
+KillMode=control-group
+TimeoutStopSec=2s
+Restart=on-failure
+RestartSec=1s
