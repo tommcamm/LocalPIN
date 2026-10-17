@@ -67,6 +67,16 @@ nonsecret JSON and distinguish client presence, enrollment, recorded testing
 and activation. Reaching a broker or passing a credential trial is not proof
 of tested KDE integration or password recovery.
 
+## Guided setup amendment — 2026-10-17
+
+[ADR 0019](0019-guided-setup-orchestration.md) permits `localpin setup` to invoke
+only its closed set of fixed packaged integration operations through sudo. This
+supersedes the integration-launch prohibition above for that workflow only.
+The CLI remains non-setuid and has no arbitrary privileged command launcher;
+sudo owns its prompt, and secrets stay on the existing normal-user enrollment
+path. Manual `integration enable`/`disable` remain guidance-only. The terminal,
+fresh-password and credential-transaction contracts in this ADR are unchanged.
+
 ## Remaining gates recorded at M6
 
 ADR 0006 still refuses production unmanaged accounts. Lifecycle provisioning

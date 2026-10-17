@@ -45,9 +45,7 @@ fn integration_changes_do_not_claim_activation() {
         assert!(!output.status.success());
         assert!(output.stdout.is_empty());
         let diagnostic = String::from_utf8_lossy(&output.stderr);
-        assert!(diagnostic.contains(&format!(
-            "sudo /usr/libexec/localpin/localpin-integration {root_action}"
-        )));
+        assert!(diagnostic.contains(&format!("sudo localpin-integration {root_action}")));
         if operation == "enable" {
             assert!(diagnostic.contains("root activation tooling"));
             assert!(diagnostic.contains("bounded trial"));
@@ -72,4 +70,26 @@ fn version_and_help_need_no_broker_or_terminal() {
         assert!(output.stderr.is_empty());
         assert!(String::from_utf8_lossy(&output.stdout).contains("localpinctl"));
     }
+}
+
+#[test]
+fn no_command_without_a_terminal_shows_help_without_prompting() {
+    let output = command().output().unwrap();
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    let help = String::from_utf8_lossy(&output.stdout);
+    assert!(help.contains("Usage: localpin [command]"));
+    assert!(help.contains("setup"));
+    assert!(!help.contains("Choose ["));
+}
+
+#[test]
+fn setup_rejects_extra_arguments_without_echoing_values() {
+    let output = command()
+        .args(["setup", "--password", "synthetic-private-value"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(!String::from_utf8_lossy(&output.stderr).contains("synthetic-private-value"));
 }

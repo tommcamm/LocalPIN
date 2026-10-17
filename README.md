@@ -32,7 +32,7 @@ password stays in place for password unlocking and recovery.
 | **Password fallback** | Use your account password when you prefer it or the PIN route is unavailable, subject to normal account policy. |
 | **A choice of credentials** | TPM 2.0 protection or an explicitly selected Argon2id software backend. |
 | **Persistent attempt limits** | PIN throttling survives service restarts and retains protection across reboots. |
-| **Credential management** | Enroll, change your PIN, switch backends, or disable your PIN through the CLI. |
+| **Guided setup and management** | An interactive terminal guide for setup, status, PIN changes, backend selection and recovery. |
 | **Diagnostics and recovery** | Inspect status, follow actionable diagnostics, and recover through a separate administrator console tool. |
 
 ## Get started
@@ -45,20 +45,29 @@ local account and authentication policy described in the installation guide.
    [GitHub Releases](https://github.com/tommcamm/LocalPIN/releases). Follow the
    [download verification instructions](docs/releasing.md#verify-and-test-a-download),
    including checking the RPM signature against a separately trusted signing key.
-2. **Install the package.** Follow
-   [installation and recovery](docs/integration-administration.md).
-   Installation leaves services stopped and desktop PIN integration disabled.
-3. **Prepare and enroll.** An administrator prepares persistent password-failure
-   accounting offline and provisions the selected accounts. Then enroll from
-   your own foreground terminal in the local KDE session, choosing a backend
-   explicitly. The [usage guide](docs/usage.md#enroll-your-pin) explains the choices.
-4. **Trial, test, and activate.** Complete the runbook's bounded trial, real PIN
-   and password unlock tests, console recovery rehearsal, and final activation.
-   Recovery rehearsal revokes enrollment; repeat preparation, enrollment, and
-   trial tests as directed before activating.
+2. **Install, then start setup** from your own foreground KDE terminal:
 
-**Installation and enrollment alone do not activate PIN unlocking.** Follow the
-complete runbook for the required order and recovery checks.
+   ```sh
+   sudo dnf install ./localpin-*.x86_64.rpm
+   localpin setup
+   ```
+
+   Installation leaves authentication unchanged and services stopped. Setup
+   explains preparation, helps you choose TPM or software protection, enrolls
+   your PIN privately, and guides trial, recovery rehearsal and activation.
+3. **Complete the required checks.** The one-time persistent password-accounting
+   migration still needs an [offline maintenance console](docs/integration-administration.md#prepare-native-accounting-once).
+   Setup stops with guidance when that prerequisite is missing. Keep an
+   administrator console available, perform the actual unlock/recovery tests,
+   and rerun `localpin setup` to resume. Console recovery revokes enrollment;
+   setup guides fresh preparation, enrollment and final trial tests afterward.
+
+**Installation and enrollment alone do not activate PIN unlocking.** The
+[installation and recovery runbook](docs/integration-administration.md) explains
+all prerequisites and retains the manual administrator procedure. The new guided
+flow has passed [local source, terminal and package checks](docs/development/m8.2-guided-setup.md)
+and still needs installed Fedora KDE acceptance; historical M8.1 evidence does
+not validate this change.
 
 Testing a particular commit? [Unsigned CI testing RPMs](packaging/fedora/README.md#download-a-ci-testing-rpm)
 are a separate option for disposable test environments.
@@ -70,16 +79,17 @@ After setup, type your PIN into KDE's existing lock-screen field and press
 or automatic submission after six digits. Enter your full account password in
 the same field whenever needed.
 
-Run these commands as your normal user:
+Run `localpin` as your normal user for the interactive menu, or use these commands:
 
 | Task | Command |
 | --- | --- |
-| Diagnose availability | `localpinctl doctor` |
-| Check enrollment and activation | `localpinctl status` |
-| Change your PIN | `localpinctl change` |
-| Disable your account's PIN credential | `localpinctl disable` |
+| Diagnose availability | `localpin doctor` |
+| Check enrollment and activation | `localpin status` |
+| Change your PIN | `localpin change` |
+| Disable your account's PIN credential | `localpin disable` |
 
-Credential changes require confirmation and fresh account-password verification.
+`localpinctl` remains available for existing commands and scripts. Credential
+changes require confirmation and fresh account-password verification.
 PINs and passwords are entered privately and interactively, never as command
 arguments or through pipes. See the [usage guide](docs/usage.md) for enrollment,
 backend migration, cooldowns, and troubleshooting.

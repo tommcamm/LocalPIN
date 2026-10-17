@@ -1,12 +1,12 @@
 # LocalPIN product specification
 
-**Specification version:** 1.5
+**Specification version:** 1.6
 
 **Date:** 2026-10-17
 
 **Status:** M8.1 final source checks and targeted installed RPM acceptance passed for ordinary Fedora KDE 44 x86_64 with SELinux enforcing and a private TPM emulator; see the [M8.1 report](development/m8.1-desktop-compatibility.md) for evidence and each installed case's build scope. Historical M6.1–M8 evidence retains its earlier appliance scope. GUI/DBus AccountsService, full old-TPM-credential migration and physical hardware remain unvalidated. M9 independent review and release gates remain open; hosted CI execution remains unverified.
 **Initial deployment:** Fedora Linux, KDE Plasma, local user accounts.  
-**Working component names:** `pam_localpin.so`, `localpind`, `localpinctl`.
+**Working component names:** `pam_localpin.so`, `localpind`, `localpin` (CLI; `localpinctl` compatibility name).
 
 ## 1. Product objective
 
@@ -82,8 +82,8 @@ Use a pinned stable Rust toolchain, Rust 2024 edition, a declared minimum suppor
 
 ## 3. Required user experience
 
-1. A user installs the Fedora package without changing authentication automatically.
-2. `localpinctl doctor` reports known backend/service availability and the desktop gate, and explains required recovery checks. Passive status does not perform desktop or password recovery tests or establish unprobed TPM usability.
+1. A user verifies and installs the Fedora RPM without changing authentication automatically, then runs `localpin setup` as their normal user in a foreground KDE terminal. The guide checks prerequisites, previews confirmed preparation, guides enrollment and trial/recovery tests, and requests explicit activation. Missing persistent accounting requires the documented one-time offline maintenance handoff; setup never copies live tallies.
+2. `localpin` opens a compact numbered menu in a terminal and shows help otherwise. `localpin doctor` reports known backend/service availability and the desktop gate, and explains required recovery checks. Passive status does not perform desktop or password recovery tests or establish unprobed TPM usability.
 3. Enrollment requires fresh verification of the existing account password through a trusted password-only PAM policy. Merely knowing an old PIN, controlling an unlocked user process, or having a cached client-side success flag must not authorize enrollment, reset, or backend downgrade.
 4. The user chooses and confirms a six-digit PIN privately. Leading zeroes are valid. The PIN must not be provided through command-line arguments, environment variables, shell history, or normal logs.
 5. Root preparation leaves the desktop gate closed. A bounded current-boot trial permits actual PIN, full-password and console-recovery tests. The administrator explicitly attests those tests before final activation; enrollment alone never opens the gate.
@@ -124,7 +124,7 @@ KDE screen locker, running as the session user
        -> durable per-user throttle and credential state
        -> TPM 2.0 backend OR explicitly selected software backend
 
-localpinctl -> broker enrollment transaction
+localpin (localpinctl) -> broker enrollment transaction
            -> isolated privileged password-PAM worker
            -> credential creation/change only after fresh password verification
 
@@ -261,7 +261,7 @@ Proposed layout:
 | `/var/lib/localpin/users/<uid>/` | Credential generations, throttle, locks; directories 0700, files 0600 |
 | `/run/localpin/` | Root-controlled runtime directory and socket |
 | `/usr/lib64/security/pam_localpin.so` | Distribution-appropriate PAM module location |
-| `/usr/bin/localpinctl` | Normal-user CLI; no setuid bit |
+| `/usr/bin/localpin` / `/usr/bin/localpinctl` | Primary CLI alias / shared normal-user executable; no setuid bit |
 | `/usr/libexec/localpin/` | Broker and narrowly scoped privileged worker executables |
 | `/var/lib/localpin-integration/control/` | Installed M8 root-only original PAM files, manifests and package/version metadata, mode 0700 |
 | `/var/lib/localpin-integration/gate` | Root-written public desktop gate, mode 0644 beneath a mode-0755 directory |
@@ -295,17 +295,48 @@ The enrollment record includes schema version, UID/account identity, generation,
 
 ## 13. CLI and operational behavior
 
-Required commands:
+Required commands (`localpinctl` remains compatible):
 
 ```text
-localpinctl doctor [--json]
-localpinctl status [--json]
-localpinctl enroll --backend auto|tpm2-required|software
-localpinctl change
-localpinctl disable
-localpinctl integration enable|disable|status
-localpinctl recover --user <account>       # administrator, password/recovery context
+localpin                                      # interactive menu, or help without a terminal
+localpin setup
+localpin doctor [--json]
+localpin status [--json]
+localpin enroll --backend auto|tpm2-required|software
+localpin change
+localpin disable
+localpin migrate --backend tpm2-required|software
+localpin integration enable|disable|status
+localpin recover --user <account>             # already-root recovery context
 ```
+
+Guided setup follows [ADR 0019](adr/0019-guided-setup-orchestration.md). It runs
+as the current owner, with no setuid mode. It invokes only a closed set of fixed
+packaged integration operations through absolute sudo with closed arguments,
+a controlled environment and no shell. Sudo owns its administrator-password
+prompt; credential secrets stay in the existing broker/private-input flow.
+The helper's read-only, versioned `setup-status --uid N` report supplies bounded
+nonsecret readiness/resume state. Wizard mutations carry `--setup-uid N` and
+validate single-account integration and registry scope inside the root
+transaction. Test attestation and activation also carry `--setup-trial` with the
+opaque equality reference for the trial covered by the operator's confirmations.
+The root transaction rechecks a live trial, current enrollment and exact trial
+reference; the reference is not authorization. Multiuser, incomplete, suspended,
+legacy or corrupt state requires manual administration.
+
+Setup derives resume decisions from authoritative state, preserves healthy
+active installations, and never automatically repeats preparation. It reuses
+only a still-valid current-boot trial; an expired or enrollment-changed trial
+requires repeated tests. Console recovery remains an actual administrator
+console rehearsal and revokes enrollment; rerunning setup requires preparation,
+enrollment and final trial tests before explicit attestation and activation.
+No user-owned progress checkpoint can establish readiness or completed tests.
+Before trial and activation, the broker must establish current account/session
+readiness and an available enrollment; protected pointer inspection alone does
+not prove native account continuity.
+The modern terminal interface uses inline choices, clear next actions and
+subtle optional colors, with plain output for `NO_COLOR`, `TERM=dumb` and
+redirected output. Menus use bounded visible input; secrets remain private.
 
 Own-user status is available without disclosing another user's enrollment details. JSON output is versioned and contains only nonsecret status. Status includes configured/enrolled backend, current availability, cooldown, integration state, and actionable failure reason. Public-facing messages should explain what the user can do; internal TPM codes belong only in sanitized diagnostics.
 
@@ -313,7 +344,7 @@ Changing, resetting, disabling, recovery, and backend migration require trusted 
 
 Interactive input requires a real terminal or an explicitly implemented protected desktop conversation. Reject insecure noninteractive PIN input. Offer no `--pin`, password environment variable, or general plaintext stdin enrollment option in release builds. Simulator/test secret injection is compiled only into test utilities.
 
-Cancellation before commit leaves the existing enrollment/integration unchanged. CLI output must distinguish “installed,” “enrolled,” “tested,” and “active.” It must never say setup completed merely because files were copied.
+Cancellation before a credential commit leaves that credential unchanged. Setup preserves already completed stages and reports a still-open trial when cancelled. Uncertain mutation results require authoritative inspection before retry. CLI output must distinguish “installed,” “enrolled,” “tested,” and “active.” It must never say setup completed merely because files were copied.
 
 Schema-1 status distinguishes `integration: "trial"` from `"active"`; a trial
 does not set `active: true`. `tested: "operator-attested"` requires agreement
@@ -321,7 +352,7 @@ between the readable root active gate and the broker's active status; otherwise
 the test value remains `"not-recorded"`. Operator attestation is not automatic
 desktop evidence. `integration status` reads the sanitized local gate without
 a broker. `integration enable` and `disable` print the fixed root tool commands
-for `activate` and `disable`; they do not invoke privilege escalation.
+for `activate` and `disable`; these compatibility commands do not invoke privilege escalation. Guided `setup` is the explicit fixed-operation exception defined above.
 
 ## 14. Service hardening and SELinux
 

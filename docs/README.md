@@ -10,8 +10,9 @@ software with no supported production release. Begin in a disposable Fedora KDE
 - [Project overview](../README.md): features, compatibility, and limitations.
 - [Download experimental releases](https://github.com/tommcamm/LocalPIN/releases)
   and [verify a download](releasing.md#verify-and-test-a-download).
-- [Installation and recovery](integration-administration.md): install, prepare
-  persistent accounting, enroll, test, rehearse recovery, and activate.
+- [Installation and recovery](integration-administration.md): verify/install the RPM,
+  run `localpin setup`, complete the offline accounting prerequisite and real
+  unlock/recovery tests, or follow the manual administrator procedure.
 - [Unsigned CI testing RPMs](../packaging/fedora/README.md#download-a-ci-testing-rpm):
   download packages for testing a specific workflow run.
 
@@ -19,8 +20,8 @@ software with no supported production release. Begin in a disposable Fedora KDE
 
 - [Everyday use](usage.md): choose a backend, enroll, unlock, change or disable
   a PIN, interpret status, and troubleshoot.
-- [CLI reference](../crates/localpinctl/README.md): commands, interactive input,
-  and diagnostic fields.
+- [CLI reference](../crates/localpinctl/README.md): the `localpin` menu and guided
+  setup, compatible `localpinctl` commands, private input and diagnostic fields.
 
 ## Administer and recover
 
@@ -53,14 +54,18 @@ work and remaining milestones.
 | --- | --- |
 | [`localpin-pam`](../crates/localpin-pam) | Small PAM adapter for the KDE unlock path |
 | [`localpind`](../crates/localpind) | Broker, account authority, and supervised backend workers |
-| [`localpinctl`](../crates/localpinctl) | Interactive enrollment, credential changes, and diagnostics |
+| [`localpinctl`](../crates/localpinctl) | Shared `localpin` / `localpinctl` CLI, guided setup, credential changes and diagnostics |
 | [`localpin-auth`](../crates/localpin-auth) | Private password-only PAM and eligibility workers |
 | [`localpin-core`](../crates/localpin-core) / [`localpin-protocol`](../crates/localpin-protocol) | Policy, bounded messages, and operation contracts |
 | [`localpin-storage`](../crates/localpin-storage) | Protected files, credential generations, and durable throttling |
 | [`localpin-credentials`](../crates/localpin-credentials) / [`localpin-tpm`](../crates/localpin-tpm) | Software credentials, PIN derivation, and TPM operations |
 | [`packaging/fedora`](../packaging/fedora) / [`tools`](../tools) | RPM/confinement definitions and activation/recovery tooling |
 
-The [desktop compatibility report](development/m8.1-desktop-compatibility.md)
+The [guided setup validation report](development/m8.2-guided-setup.md) records
+local source, terminal and RPM checks for the
+[guided setup contract](adr/0019-guided-setup-orchestration.md). Installed
+onboarding acceptance remains outstanding; source checks do not extend prior
+installed results. The [desktop compatibility report](development/m8.1-desktop-compatibility.md)
 records targeted installed acceptance in a disposable enforcing Fedora KDE VM
 with a private TPM emulator. Historical reports in [development](development/)
 retain their recorded build and environment scope; that report supersedes the

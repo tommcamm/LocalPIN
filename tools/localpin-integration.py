@@ -30,6 +30,7 @@ KDE = Path('/etc/pam.d/kde')
 FINGERPRINT = Path('/etc/pam.d/kde-fingerprint')
 MODULE = Path('/usr/lib64/security/pam_localpin.so')
 ACCOUNT = '/usr/libexec/localpin/localpin-account'
+REGISTRY = Path('/var/lib/localpin-accounts/registry')
 POLICY = Path('/usr/share/localpin/policy')
 PERSISTENT = b'dir = /var/lib/faillock\n'
 STOCK = '7d91b3ad73a998e8b10f9edccd74ba04179a778c4a5e61d9176872f43c7bbac3'
@@ -54,6 +55,14 @@ PROTECTED = [KDE, FINGERPRINT, *(Path('/etc/pam.d') / n for n in PRIVATE),
 
 class Refusal(RuntimeError):
     """Sanitized administrative refusal; no secret material in exceptions."""
+
+
+class SetupScopeRefusal(Refusal):
+    """Onboarding must leave another account's managed installation alone."""
+
+
+class AccountingRequired(Refusal):
+    """Persistent native accounting needs the documented offline handoff."""
 
 
 def require(condition, message):
@@ -335,8 +344,8 @@ def validate_policy(*, integrated=False):
             allowed += (['files', '[SUCCESS=merge]', 'systemd'],)
         require(len(entries) == 1 and entries[0] in allowed,
                 'local files accounts with optional systemd NSS are required')
-    require(read('/etc/security/faillock.conf') == PERSISTENT,
-            'persistent accounting required: migrate native tallies offline and install the exact reviewed faillock configuration before prepare')
+    if read('/etc/security/faillock.conf') != PERSISTENT:
+        raise AccountingRequired('persistent accounting required: migrate native tallies offline and install the exact reviewed faillock configuration before prepare')
     tally = Path('/var/lib/faillock')
     safe_parents(tally)
     info = tally.lstat()
@@ -377,19 +386,21 @@ def enrollment_binding(uids, *, require_enrolled=True, include_throttle=False):
 
 
 def upgrade_binding(state):
-    return {'registry': registry_binding(read('/var/lib/localpin-accounts/registry', 16384, mode=0o600)),
+    return {'registry': registry_binding(read(REGISTRY, 16384, mode=0o600)),
             'accounts': enrollment_binding(state['uids'], require_enrolled=False, include_throttle=True)}
 
 
-def registry_binding(registry):
-    """Bind every incarnation/marker exactly; never infer account continuity."""
+def registry_accounts(registry, *, allow_empty=False):
+    """Parse only the current authority format, including explicit revocation."""
     require(len(registry) >= 10 and registry[:8] == b'LPACCT03',
             'unsupported account registry; package transaction refused')
     count = int.from_bytes(registry[8:10], 'big')
-    require(0 < count <= 128, 'invalid account registry; package transaction refused')
+    require((0 if allow_empty else 1) <= count <= 128,
+            'invalid account registry; package transaction refused')
     offset = 10
     previous = 0
     names, markers = set(), set()
+    accounts = {}
     for _ in range(count):
         require(offset + 29 <= len(registry), 'truncated account registry')
         uid = int.from_bytes(registry[offset:offset + 4], 'big')
@@ -404,10 +415,142 @@ def registry_binding(registry):
         require(name not in names and marker not in markers, 'duplicate account registry binding')
         names.add(name)
         markers.add(marker)
+        accounts[uid] = incarnation
         previous = uid
         offset += 29 + length
     require(offset == len(registry), 'invalid account registry length')
+    return accounts
+
+
+def registry_binding(registry):
+    """Bind every incarnation/marker exactly; never infer account continuity."""
+    registry_accounts(registry)
     return digest(registry)
+
+
+def setup_scope(state, uid):
+    """Check both integration intent and live registry before setup mutations.
+
+    The caller holds the integration transaction lock for mutations. Native
+    account tools retain their own account/password/storage locking.
+    """
+    require(type(uid) is int and 1000 <= uid <= 59999, 'supported setup UID required')
+    if state is not None:
+        uids = state.get('uids')
+        require(isinstance(uids, list) and uids
+                and all(type(value) is int and 1000 <= value <= 59999 for value in uids)
+                and len(uids) == len(set(uids)), 'invalid managed account scope; use console recovery')
+        if uids != [uid]:
+            raise SetupScopeRefusal('setup supports only this account; use administrator tooling for other or multiple managed accounts')
+    try:
+        registry = read(REGISTRY, 16384, mode=0o600)
+    except FileNotFoundError:
+        registry = None
+    accounts = registry_accounts(registry, allow_empty=True) if registry is not None else {}
+    if accounts and list(accounts) != [uid]:
+        raise SetupScopeRefusal('setup supports only this account; use administrator tooling for other or multiple managed accounts')
+    if state and state['phase'] in ('prepared', 'active'):
+        require(list(accounts) == [uid], 'account authority unavailable; use console recovery')
+    return accounts
+
+
+def setup_enrollment(uid, incarnation):
+    """Read the authoritative pointer; missing/corrupt state is never unenrolled."""
+    pointer = read(Path('/var/lib/localpin/users') / str(uid) / 'active', 35, mode=0o600)
+    require(len(pointer) == 35 and pointer[:6] == b'LPA3\0\x01'
+            and int.from_bytes(pointer[6:10], 'big') == uid
+            and pointer[10:26] == incarnation
+            and int.from_bytes(pointer[26:34], 'big') > 0
+            and pointer[34] in (0, 1, 2), 'credential state unavailable; use console recovery')
+    if pointer[34] == 0:
+        return False, None
+    # This does not attempt a PIN or load a TPM. Trial and activation use the
+    # same exact pointer/credential binding and the broker validates metadata.
+    return True, enrollment_binding([uid])
+
+
+def setup_trial(state, binding):
+    """Require exact gate/manifest timing, boot and enrollment agreement."""
+    trial = state.get('trial')
+    if not isinstance(trial, dict) or binding is None:
+        return False, 0
+    begin, end = trial.get('start'), trial.get('end')
+    if (type(begin) is not int or type(end) is not int or not 0 <= begin < end < 2**64
+            or end - begin > 600000 or trial.get('boot') != boot()
+            or trial.get('enrollment') != binding):
+        return False, 0
+    try:
+        gate = read(GATE, 160, mode=0o644)
+    except FileNotFoundError:
+        return False, 0
+    expected = f'LPINT01\ntrial\n{trial["boot"]}\n{begin}\n{end}\n'.encode()
+    remaining = end - now_ms()
+    if gate != expected or not 0 < remaining <= end - begin:
+        return False, 0
+    return True, (remaining + 999) // 1000
+
+
+def setup_trial_reference(state):
+    """Opaque equality reference for one validated trial, never authorization."""
+    return digest(json.dumps(state['trial'], sort_keys=True, separators=(',', ':')).encode())
+
+
+def setup_attestation(state, binding, *, live_trial):
+    tests = state.get('tests')
+    return bool(isinstance(tests, dict) and tests.get('kind') == 'administrator-attestation'
+                and all(tests.get(name) is True for name in ('pin', 'password', 'console_recovery'))
+                and (state['phase'] == 'active' or (binding is not None and live_trial
+                     and tests.get('enrollment') == binding and tests.get('boot') == boot()
+                     and state['trial'].get('enrollment') == binding)))
+
+
+def setup_status(uid):
+    """Root-only read-only onboarding report. No locks, state creation or auth."""
+    state = load()
+    phase = state['phase'] if state else 'unprepared'
+    result = {'schema_version': 1, 'phase': phase, 'blocker': 'none', 'enrolled': False,
+              'trial_valid': False, 'trial_remaining_seconds': 0, 'trial_ref': None,
+              'tests_recorded': False}
+    try:
+        accounts = setup_scope(state, uid)
+    except SetupScopeRefusal:
+        result['blocker'] = 'multiuser'
+        return result
+    if state and (state['schema'] != 2 or phase in ('preparing', 'suspended')):
+        result['blocker'] = 'recovery'
+        return result
+    try:
+        if phase in ('unprepared', 'disabled'):
+            validate_policy()
+            require(gate_state() == 'disabled', 'unexpected live integration gate; use console recovery')
+        else:
+            current(state)
+    except AccountingRequired:
+        result['blocker'] = 'accounting'
+        return result
+    except Refusal:
+        result['blocker'] = 'recovery' if state else 'policy'
+        return result
+    if phase in ('prepared', 'active'):
+        result['enrolled'], binding = setup_enrollment(uid, accounts[uid])
+        result['trial_valid'], result['trial_remaining_seconds'] = setup_trial(state, binding)
+        if result['trial_valid']:
+            result['trial_ref'] = setup_trial_reference(state)
+        result['tests_recorded'] = setup_attestation(state, binding, live_trial=result['trial_valid'])
+        if phase == 'active':
+            # Activation persists across boots and ordinary own-user credential
+            # replacement/removal. The tests are historical evidence, while the
+            # gate and current installation binding are activation authority.
+            if gate_state() != 'active':
+                result['blocker'] = 'recovery'
+        elif gate_state() == 'active':
+            result['blocker'] = 'recovery'
+    # A concurrent integration transaction cannot produce an actionable report
+    # assembled from two different manifests/authorities. The next mutation
+    # always repeats its scope checks inside the integration lock.
+    require(load() == state and setup_scope(state, uid) == accounts,
+            'integration changed during setup inspection; rerun setup')
+    return result
 
 
 def current(state, *, binaries=True):
@@ -745,9 +888,11 @@ def status(state):
 def main():
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=['status', 'prepare', 'trial', 'record-tests', 'activate', 'migrate-legacy',
+    parser.add_argument('operation', choices=['status', 'setup-status', 'prepare', 'trial', 'record-tests', 'activate', 'migrate-legacy',
                                              'disable', 'recover', 'package-check', 'package-suspend', 'package-cache-begin', 'package-resume'])
     parser.add_argument('--uid', type=int, action='append', default=[])
+    parser.add_argument('--setup-uid', type=int, help='Require a single-account setup transaction for this UID')
+    parser.add_argument('--setup-trial', help='Require the exact trial reference confirmed during setup')
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--removal', action='store_true')
     parser.add_argument('--candidate-evr')
@@ -757,7 +902,19 @@ def main():
     parser.add_argument('--recovery', action='store_true', help='Administrator attests actual console recovery test passed')
     args = parser.parse_args()
     require(os.getuid() == os.geteuid(), 'setuid installation is unsupported')
-    require(not args.uid or args.operation == 'prepare', 'UID selection applies only to prepare')
+    require(not args.uid or args.operation in ('prepare', 'setup-status'), 'UID selection applies only to prepare or setup-status')
+    require(args.operation != 'setup-status' or len(args.uid) == 1, 'setup-status requires exactly one UID')
+    require(args.setup_uid is None or args.operation in ('prepare', 'trial', 'record-tests', 'activate'),
+            'setup UID precondition applies only to setup mutations')
+    require(args.setup_uid is None or (1000 <= args.setup_uid <= 59999
+            and (args.operation != 'prepare' or args.uid == [args.setup_uid])),
+            'setup preparation requires exactly its selected UID')
+    require(args.setup_trial is None or (args.setup_uid is not None
+            and args.operation in ('record-tests', 'activate')
+            and re.fullmatch(r'[0-9a-f]{64}', args.setup_trial)),
+            'setup trial reference requires a setup attestation or activation')
+    require(args.setup_uid is None or args.operation not in ('record-tests', 'activate')
+            or args.setup_trial is not None, 'setup attestation and activation require the confirmed trial reference')
     require(not args.dry_run or args.operation in ('prepare', 'disable', 'recover', 'migrate-legacy'), 'dry-run unavailable for this operation')
     require(not args.removal or args.operation == 'package-check', 'removal applies only to package-check')
     require(not (args.pin or args.password or args.recovery) or args.operation == 'record-tests', 'test attestations apply only to record-tests')
@@ -767,12 +924,17 @@ def main():
         print(json.dumps({'schema_version': 1, 'gate': gate_state(), 'tested': 'ask-administrator'}))
         return
     require(os.getuid() == os.geteuid() == 0, 'run this fixed administrative tool as root (for example with sudo)')
+    if args.operation == 'setup-status':
+        print(json.dumps(setup_status(args.uid[0]), sort_keys=True))
+        return
     if args.operation == 'record-tests':
         require(args.pin and args.password and args.recovery, 'explicit PIN, password and console-recovery attestations required')
     if args.candidate_evr:
         candidate_check(args.candidate_evr, args.candidate_schema)
     if args.dry_run or args.operation in ('status', 'package-check'):
         state = load()
+        if args.setup_uid is not None:
+            setup_scope(state, args.setup_uid)
         if args.operation == 'prepare':
             result = prepare(args.uid, dry_run=True)
         elif args.operation in ('disable', 'recover'):
@@ -789,6 +951,20 @@ def main():
                 # Even a corrupt manifest must not leave desktop PIN active.
                 close_gate()
             state = load()
+            if args.setup_uid is not None:
+                setup_scope(state, args.setup_uid)
+                require(state is None or (state.get('schema') == 2
+                        and state['phase'] not in ('preparing', 'suspended')),
+                        'incomplete or legacy integration; use documented console recovery')
+                if args.operation in ('trial', 'record-tests', 'activate'):
+                    require(state is not None and state['phase'] == 'prepared',
+                            'setup state changed; inspect the current installation before continuing')
+                if args.operation in ('record-tests', 'activate'):
+                    binding = enrollment_binding(state['uids']) if state else None
+                    require(state is not None and setup_trial(state, binding)[0],
+                            'a live trial bound to this enrollment is required; repeat desktop tests')
+                    require(setup_trial_reference(state) == args.setup_trial,
+                            'trial changed during setup; repeat the desktop test confirmations')
             if args.operation == 'prepare':
                 result = prepare(args.uid)
             elif args.operation == 'migrate-legacy':

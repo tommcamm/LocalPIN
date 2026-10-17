@@ -26,6 +26,7 @@ Requires:       selinux-policy-targeted >= 44
 Requires:       policycoreutils
 Requires:       python3 >= 3.11
 Requires:       python3-rpm
+Requires:       sudo
 Requires:       tpm2-tss >= 4.0.0
 Requires:       tpm2-tss < 5.0.0
 Requires(pre):  systemd
@@ -56,6 +57,7 @@ for executable in localpind localpin-worker localpin-auth-worker localpin-eligib
     install -m 0755 native/$executable %{buildroot}%{_libexecdir}/localpin/$executable
 done
 install -m 0755 native/localpinctl %{buildroot}%{_bindir}/localpinctl
+ln -s localpinctl %{buildroot}%{_bindir}/localpin
 install -m 0755 tools/localpin-integration.py %{buildroot}%{_libexecdir}/localpin/localpin-integration
 ln -s ../libexec/localpin/localpin-integration %{buildroot}%{_sbindir}/localpin-integration
 install -D -m 0755 native/liblocalpin_pam.so %{buildroot}%{_libdir}/security/pam_localpin.so
@@ -128,7 +130,9 @@ fi
 %doc docs/adr/0016-package-cache-window.md
 %doc docs/adr/0017-shadow-record-account-authority.md
 %doc docs/adr/0018-kde-native-update-compatibility.md
+%doc docs/adr/0019-guided-setup-orchestration.md
 %{_bindir}/localpinctl
+%{_bindir}/localpin
 %{_sbindir}/localpin-integration
 %{_libexecdir}/localpin/
 %{_libdir}/security/pam_localpin.so

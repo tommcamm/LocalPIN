@@ -8,6 +8,10 @@ use crate::CliError;
 /// Public, nonsecret command selection.
 #[derive(Debug, Eq, PartialEq)]
 pub enum Command {
+    /// Open the interactive command menu, or show help without a terminal.
+    Menu,
+    /// Guide the current local account through preparation and activation.
+    Setup,
     /// Print the supported command grammar.
     Help,
     /// Print the application version.
@@ -41,6 +45,8 @@ pub enum Command {
 pub fn parse(args: &[OsString]) -> Result<Command, CliError> {
     let equals = |index: usize, value: &str| args.get(index).is_some_and(|arg| arg == value);
     match args.len() {
+        0 => Ok(Command::Menu),
+        1 if equals(0, "setup") => Ok(Command::Setup),
         1 if equals(0, "--help") || equals(0, "help") => Ok(Command::Help),
         1 if equals(0, "--version") => Ok(Command::Version),
         1 | 2 if equals(0, "status") || equals(0, "doctor") => {
@@ -102,7 +108,7 @@ pub fn check_environment(
 }
 
 /// Supported commands and security-relevant input behavior.
-pub const HELP: &str = "Usage: localpinctl doctor [--json]\n       localpinctl status [--json]\n       localpinctl enroll --backend auto|tpm2-required|software\n       localpinctl change\n       localpinctl disable\n       localpinctl migrate --backend tpm2-required|software\n       localpinctl integration enable|disable|status\n       localpinctl recover --user <account>\n\nPINs and passwords require a foreground terminal. No secret arguments,\nenvironment variables, stdin input, or simulator overrides are supported.\nIntegration enable/disable print the exact root administration command.\nPrepare, a bounded trial, and administrator-recorded desktop/password tests\nprecede activation; installation and enrollment do not activate integration.";
+pub const HELP: &str = "LocalPIN — a PIN for your local desktop account\n\nUsage: localpin [command]\n\nGet started\n  setup                                      Set up or resume guided onboarding\n  status [--json]                             See enrollment and activation\n  doctor [--json]                             Diagnose readiness and next steps\n\nManage your PIN\n  enroll --backend auto|tpm2-required|software Create a PIN with fresh password verification\n  change                                     Choose a new PIN\n  disable                                    Disable your PIN credential\n  migrate --backend tpm2-required|software    Replace protection and choose a new PIN\n\nAdministration\n  integration status                         Inspect the desktop integration gate\n  integration enable|disable                 Show the separate administrator command\n  recover --user <account>                   Recover a local account (administrator only)\n\n  --help                                     Show this help\n  --version                                  Show the installed version\n\nRun localpin with no command to open the interactive menu. The existing\nlocalpinctl command remains compatible. For the guided install path, run\nlocalpin setup as your normal desktop user; sudo prompts authorize system changes.\n\nPINs and passwords use private foreground-terminal prompts. No secret arguments,\nenvironment variables, stdin input, or simulator overrides are supported.\nInstallation and enrollment do not activate integration: preparation, a bounded\ntrial, recovery rehearsal, and administrator-recorded tests precede activation.\nAdministrator details: sudo localpin-integration status";
 
 #[cfg(test)]
 mod tests {
@@ -127,6 +133,11 @@ mod tests {
     }
     #[test]
     fn accepts_only_explicit_command_grammar() {
+        assert_eq!(command(&[]), Ok(Command::Menu));
+        assert_eq!(command(&["setup"]), Ok(Command::Setup));
+        for parts in [vec!["setup", "--yes"], vec!["setup", "--user", "other"]] {
+            assert_eq!(command(&parts), Err(CliError::Arguments));
+        }
         assert_eq!(
             command(&["enroll", "--backend", "software"]),
             Ok(Command::Enroll(BackendPreference::Software))

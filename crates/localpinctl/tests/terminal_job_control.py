@@ -18,7 +18,7 @@ def wait_status(pid, timeout=2):
     raise AssertionError("terminal child did not react within two seconds")
 
 
-def run_case(case):
+def run_case(case, input_kind):
     master, slave = os.openpty()
     original = termios.tcgetattr(slave)
     command_r, command_w = os.pipe()
@@ -37,7 +37,7 @@ def run_case(case):
             os.read(gate_r, 1)
             for descriptor in (0, 1, 2):
                 os.dup2(slave, descriptor)
-            environment = dict(os.environ, LOCALPIN_CLI_JOB_CONTROL_CHILD="1")
+            environment = dict(os.environ, LOCALPIN_CLI_JOB_CONTROL_CHILD=input_kind)
             os.execve(sys.argv[1], [sys.argv[1]], environment)
         os.close(gate_r)
         os.setpgid(child, child)
@@ -84,7 +84,8 @@ def run_case(case):
         assert select.select([report_r], [], [], 3)[0], "no child process identity"
         child_pid = int(os.read(report_r, 64))
         deadline = time.monotonic() + 3
-        while b"Type yes: " not in output:
+        prompt = b"Choose [1]: " if input_kind == "choice" else b"Type yes: "
+        while prompt not in output:
             remaining = deadline - time.monotonic()
             assert remaining > 0 and select.select([master], [], [], remaining)[0], "no private prompt"
             output += os.read(master, 4096)
@@ -115,5 +116,79 @@ def run_case(case):
         os.close(slave)
 
 
-for scenario in ("foreground-loss", "SIGTTIN", "SIGTTOU"):
-    run_case(scenario)
+for kind in ("secret", "choice"):
+    for scenario in ("foreground-loss", "SIGTTIN", "SIGTTOU"):
+        run_case(scenario, kind)
+
+
+def run_menu_case(*, term, no_color=False, redirected=False):
+    """Open the real CLI menu, then select Exit; no account operation runs."""
+    master, slave = os.openpty()
+    original = termios.tcgetattr(slave)
+    output_r, output_w = os.pipe() if redirected else (None, None)
+    child = os.fork()
+    if child == 0:
+        os.setsid()
+        fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
+        os.dup2(slave, 0)
+        os.dup2(output_w if redirected else slave, 1)
+        os.dup2(slave, 2)
+        environment = {"TERM": term}
+        if no_color:
+            environment["NO_COLOR"] = ""
+        os.execve(sys.argv[2], [sys.argv[2]], environment)
+    if redirected:
+        os.close(output_w)
+    reader = output_r if redirected else master
+    output = b""
+    selected_exit = False
+    reaped = False
+    try:
+        deadline = time.monotonic() + 3
+        while True:
+            found, status = os.waitpid(child, os.WNOHANG)
+            if found:
+                reaped = True
+                assert os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0, status
+                break
+            remaining = deadline - time.monotonic()
+            assert remaining > 0, "menu did not exit promptly"
+            if select.select([reader], [], [], min(remaining, 0.1))[0]:
+                output += os.read(reader, 4096)
+            if not redirected and not selected_exit and b"Choose a number" in output:
+                os.write(master, b"7\n")
+                selected_exit = True
+        # The child can exit between select calls; drain its final buffered text.
+        while select.select([reader], [], [], 0)[0]:
+            chunk = os.read(reader, 4096)
+            if not chunk:
+                break
+            output += chunk
+        assert termios.tcgetattr(slave) == original, "menu did not restore the terminal"
+        if redirected:
+            assert b"Usage: localpin [command]" in output
+            assert b"Choose a number" not in output
+        else:
+            assert selected_exit and b"Set up or resume setup" in output
+        expect_color = not redirected and term != "dumb" and not no_color
+        assert (b"\x1b[1;36mLocalPIN\x1b[0m" in output) == expect_color, output
+        if not expect_color:
+            assert b"\x1b" not in output, output
+    finally:
+        if not reaped:
+            os.kill(child, signal.SIGKILL)
+            os.waitpid(child, 0)
+        termios.tcsetattr(slave, termios.TCSANOW, original)
+        if redirected:
+            os.close(output_r)
+        os.close(master)
+        os.close(slave)
+
+
+# Root intentionally gets administrator help instead of the owner menu. These
+# cases exercise only the normal-user menu and never invoke its setup action.
+if os.getuid() != 0:
+    run_menu_case(term="xterm-256color")
+    run_menu_case(term="xterm-256color", no_color=True)
+    run_menu_case(term="dumb")
+    run_menu_case(term="xterm-256color", redirected=True)

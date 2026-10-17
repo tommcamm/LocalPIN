@@ -334,13 +334,23 @@ pub fn run() -> Result<(), CliError> {
     if rustix::process::getuid() != rustix::process::geteuid() {
         return Err(CliError::Forbidden);
     }
+    execute(command)
+}
+
+/// Execute a parsed command after the entry point's process and caller checks.
+pub(crate) fn execute(command: Command) -> Result<(), CliError> {
     match command {
+        Command::Menu => crate::menu::run(),
+        Command::Setup => crate::setup::run(),
         Command::Help => {
             println!("{}", crate::args::HELP);
             Ok(())
         }
         Command::Version => {
-            println!("localpinctl {}", env!("CARGO_PKG_VERSION"));
+            println!(
+                "LocalPIN {} (localpin / localpinctl)",
+                env!("CARGO_PKG_VERSION")
+            );
             Ok(())
         }
         Command::IntegrationEnable => Err(CliError::Integration),
@@ -419,7 +429,7 @@ pub fn run() -> Result<(), CliError> {
                 "{}",
                 match completion {
                     Completion::Enrolled(_) =>
-                        "PIN credential committed. Desktop integration testing and activation are separate steps.",
+                        "PIN created. Next: run localpin setup to test recovery and activate desktop unlocking.",
                     Completion::Disabled =>
                         "PIN credential disabled. Use the existing account password.",
                     Completion::RecoveryDisabled => return Err(CliError::Protocol),

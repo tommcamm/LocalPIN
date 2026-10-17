@@ -885,6 +885,355 @@ class EnrollmentUpgradeBindingTests(unittest.TestCase):
             self.assertEqual(integration.upgrade_binding({"uids": [1000]}), expected)
 
 
+class SetupStatusTests(unittest.TestCase):
+    """Synthetic onboarding reads cannot authenticate or create protected state."""
+    def setUp(self):
+        self.stack = contextlib.ExitStack()
+        self.addCleanup(self.stack.close)
+        self.state = prepared()
+        self.pointer_path = Path('/var/lib/localpin/users/1000/active')
+        self.pointer = (b'LPA3\0\x01' + (1000).to_bytes(4, 'big') + b'i' * 16
+                        + (7).to_bytes(8, 'big') + b'\x02')
+        self.values = {integration.REGISTRY: bytes(RegistryBindingTests.registry()),
+                       self.pointer_path: self.pointer,
+                       self.pointer_path.parent / 'generation-7/credential': b'synthetic credential',
+                       integration.GATE: f'LPINT01\ntrial\n{BOOT}\n1000\n601000\n'.encode()}
+        binding = {"1000": integration.digest(self.pointer + b'synthetic credential')}
+        self.state['trial']['enrollment'] = binding
+
+        def read(path, *args, **kwargs):
+            try:
+                return self.values[Path(path)]
+            except KeyError:
+                raise FileNotFoundError from None
+
+        self.load = self.stack.enter_context(mock.patch.object(integration, 'load', side_effect=lambda: self.state))
+        self.validate = self.stack.enter_context(mock.patch.object(integration, 'validate_policy'))
+        self.stack.enter_context(mock.patch.multiple(
+            integration, read=mock.Mock(side_effect=read), boot=mock.Mock(return_value=BOOT),
+            now_ms=mock.Mock(return_value=1000),
+            snapshot=mock.Mock(return_value=self.state['protected']),
+            binary_snapshot=mock.Mock(return_value=self.state['binaries'])))
+        self.mutations = []
+        for name in ('locked', 'ensure_dirs', 'atomic_write', 'close_gate', 'save', 'start', 'stop', 'run'):
+            operation = self.stack.enter_context(mock.patch.object(
+                integration, name, side_effect=AssertionError('setup inspection cannot mutate or authenticate')))
+            self.mutations.append(operation)
+
+    def test_prepared_report_has_exact_versioned_shape_and_live_trial(self):
+        before = copy.deepcopy(self.state)
+        self.assertEqual(integration.setup_status(1000), {
+            'schema_version': 1, 'phase': 'prepared', 'blocker': 'none', 'enrolled': True,
+            'trial_valid': True, 'trial_remaining_seconds': 600,
+            'trial_ref': integration.setup_trial_reference(self.state), 'tests_recorded': False})
+        self.assertEqual(self.state, before)
+        self.validate.assert_called_once_with(integrated=True)
+        for operation in self.mutations:
+            operation.assert_not_called()
+
+    def test_unprepared_and_disabled_inspection_does_not_create_account_or_integration_state(self):
+        del self.values[integration.REGISTRY]
+        del self.values[integration.GATE]
+        for state, phase in ((None, 'unprepared'),
+                             ({'schema': 2, 'phase': 'disabled', 'uids': [1000]}, 'disabled')):
+            self.state = state
+            with self.subTest(phase=phase):
+                result = integration.setup_status(1000)
+                self.assertEqual((result['phase'], result['blocker'], result['enrolled']),
+                                 (phase, 'none', False))
+        for operation in self.mutations:
+            operation.assert_not_called()
+
+    def test_prepared_disabled_pointer_is_unenrolled_but_missing_or_corrupt_pointer_is_not(self):
+        self.values[self.pointer_path] = self.pointer[:-1] + b'\0'
+        result = integration.setup_status(1000)
+        self.assertFalse(result['enrolled'])
+        self.assertFalse(result['trial_valid'])
+        self.assertEqual(result['blocker'], 'none')
+        for pointer in (None, b'broken', self.pointer[:10] + b'j' * 16 + self.pointer[26:],
+                        self.pointer[:26] + bytes(8) + self.pointer[34:], self.pointer[:-1] + b'\x03'):
+            if pointer is None:
+                self.values.pop(self.pointer_path, None)
+            else:
+                self.values[self.pointer_path] = pointer
+            with self.subTest(pointer=pointer), self.assertRaises((integration.Refusal, FileNotFoundError)):
+                integration.setup_status(1000)
+
+    def test_missing_credential_or_registry_is_not_reported_as_unenrolled(self):
+        for path in (self.pointer_path.parent / 'generation-7/credential', integration.REGISTRY):
+            original = self.values.pop(path)
+            with self.subTest(path=path), self.assertRaises((integration.Refusal, FileNotFoundError)):
+                integration.setup_status(1000)
+            self.values[path] = original
+
+    def test_accounting_policy_binary_and_owned_policy_failures_have_actionable_blockers(self):
+        self.state = None
+        self.values.pop(integration.GATE)
+        self.validate.side_effect = integration.AccountingRequired('synthetic offline migration required')
+        self.assertEqual(integration.setup_status(1000)['blocker'], 'accounting')
+        self.validate.side_effect = integration.Refusal('synthetic unknown policy')
+        self.assertEqual(integration.setup_status(1000)['blocker'], 'policy')
+        self.state = prepared()
+        self.validate.side_effect = None
+        for name, value in (('binary_snapshot', {'binary': 'changed'}), ('snapshot', {'policy': 'changed'})):
+            with self.subTest(check=name), mock.patch.object(integration, name, return_value=value):
+                self.assertEqual(integration.setup_status(1000)['blocker'], 'recovery')
+
+    def test_incomplete_suspended_and_legacy_state_requires_recovery_without_policy_adoption(self):
+        for phase, schema in (('preparing', 2), ('suspended', 2), ('prepared', 1)):
+            self.state.update(phase=phase, schema=schema)
+            with self.subTest(phase=phase, schema=schema):
+                result = integration.setup_status(1000)
+                self.assertEqual((result['phase'], result['blocker']), (phase, 'recovery'))
+                self.assertFalse(result['enrolled'])
+                self.assertFalse(result['trial_valid'])
+        self.validate.assert_not_called()
+
+    def test_manifest_and_registry_multiuser_scope_are_both_refused(self):
+        for uids in ([1001], [1000, 1001]):
+            self.state['uids'] = uids
+            with self.subTest(manifest=uids):
+                self.assertEqual(integration.setup_status(1000)['blocker'], 'multiuser')
+        self.state['uids'] = [1000]
+        original = RegistryBindingTests.registry()
+        entry = bytearray(original[10:])
+        entry[:4] = (1001).to_bytes(4, 'big')
+        entry[4:20] = b'j' * 16
+        entry[20:28] = (3291981168).to_bytes(8, 'big')
+        entry[29:] = b'fixturb'
+        for registry in (original[:8] + b'\0\x01' + entry,
+                         original[:8] + b'\0\x02' + original[10:] + entry):
+            self.values[integration.REGISTRY] = bytes(registry)
+            with self.subTest(registry=registry):
+                self.assertEqual(integration.setup_status(1000)['blocker'], 'multiuser')
+        self.validate.assert_not_called()
+
+    def test_empty_revoked_registry_allows_preparation_but_not_a_prepared_installation(self):
+        self.values[integration.REGISTRY] = b'LPACCT03\0\0'
+        with self.assertRaises(integration.Refusal):
+            integration.setup_status(1000)
+        self.state = None
+        self.values.pop(integration.GATE)
+        self.assertEqual(integration.setup_status(1000)['blocker'], 'none')
+
+    def test_trial_requires_exact_boot_start_end_and_enrollment_binding(self):
+        original = self.values[integration.GATE]
+        for gate in (original.replace(b'1000\n601000', b'1001\n601000'),
+                     original.replace(b'601000', b'600999'), original.replace(BOOT.encode(), b'previous-boot'),
+                     original.replace(b'1000\n601000', b'01000\n601000'), b'LPINT01\ndisabled\n'):
+            self.values[integration.GATE] = gate
+            with self.subTest(gate=gate):
+                result = integration.setup_status(1000)
+                self.assertEqual((result['trial_valid'], result['trial_remaining_seconds']), (False, 0))
+                self.assertIsNone(result['trial_ref'])
+        self.values[integration.GATE] = original
+        for field, value in (('boot', 'previous-boot'), ('start', 999), ('end', 600999),
+                             ('start', True), ('enrollment', {'1000': 'changed'})):
+            trial = copy.deepcopy(self.state['trial'])
+            self.state['trial'][field] = value
+            with self.subTest(field=field, value=value):
+                self.assertFalse(integration.setup_status(1000)['trial_valid'])
+            self.state['trial'] = trial
+        with mock.patch.object(integration, 'now_ms', return_value=601000):
+            self.assertFalse(integration.setup_status(1000)['trial_valid'])
+        with mock.patch.object(integration, 'now_ms', return_value=600999):
+            self.assertEqual(integration.setup_status(1000)['trial_remaining_seconds'], 1)
+
+    def test_current_attestation_is_bound_to_the_live_trial(self):
+        self.state['tests'] = {'kind': 'administrator-attestation', 'boot': BOOT,
+                               'pin': True, 'password': True, 'console_recovery': True,
+                               'enrollment': copy.deepcopy(self.state['trial']['enrollment'])}
+        self.assertTrue(integration.setup_status(1000)['tests_recorded'])
+        self.state['tests']['enrollment'] = {'1000': 'changed'}
+        self.assertFalse(integration.setup_status(1000)['tests_recorded'])
+
+    def test_healthy_active_installation_remains_active_after_reboot(self):
+        self.state['phase'] = 'active'
+        self.values[integration.GATE] = b'LPINT01\nactive\n'
+        self.state['tests'] = {'kind': 'administrator-attestation', 'boot': 'earlier-boot',
+                               'pin': True, 'password': True, 'console_recovery': True,
+                               'enrollment': copy.deepcopy(self.state['trial']['enrollment'])}
+        self.assertEqual(integration.setup_status(1000)['blocker'], 'none')
+        self.state['tests']['enrollment'] = {'1000': 'earlier-enrollment'}
+        self.assertEqual(integration.setup_status(1000)['blocker'], 'none')
+        self.assertTrue(integration.setup_status(1000)['tests_recorded'])
+        self.values[self.pointer_path] = self.pointer[:-1] + b'\0'
+        self.assertEqual(integration.setup_status(1000)['blocker'], 'none')
+        self.assertFalse(integration.setup_status(1000)['enrolled'])
+        self.values[integration.GATE] = b'LPINT01\ndisabled\n'
+        self.assertEqual(integration.setup_status(1000)['blocker'], 'recovery')
+
+    def test_manifest_or_registry_scope_change_during_read_refuses_actionable_report(self):
+        first = copy.deepcopy(self.state)
+        changed = copy.deepcopy(first)
+        changed['uids'] = [1001]
+        self.load.side_effect = [first, changed]
+        with self.assertRaises(integration.Refusal):
+            integration.setup_status(1000)
+
+
+class SetupCommandTests(unittest.TestCase):
+    def setUp(self):
+        self.stack = contextlib.ExitStack()
+        self.addCleanup(self.stack.close)
+        self.stack.enter_context(mock.patch.object(integration.resource, 'setrlimit'))
+        self.stack.enter_context(mock.patch.object(integration.os, 'getuid', return_value=0))
+        self.stack.enter_context(mock.patch.object(integration.os, 'geteuid', return_value=0))
+        self.stack.enter_context(mock.patch('builtins.print'))
+
+    def invoke(self, arguments):
+        with mock.patch.object(sys, 'argv', ['localpin-integration', *arguments]):
+            integration.main()
+
+    def test_setup_status_is_root_only_requires_exactly_one_uid_and_does_not_lock(self):
+        with mock.patch.object(integration, 'setup_status', return_value={}) as report, \
+                mock.patch.object(integration, 'locked') as lock:
+            self.invoke(['setup-status', '--uid', '1000'])
+            report.assert_called_once_with(1000)
+            lock.assert_not_called()
+            for args in (['setup-status'], ['setup-status', '--uid', '1000', '--uid', '1000'],
+                         ['setup-status', '--uid', '1000', '--setup-uid', '1000']):
+                with self.subTest(args=args), self.assertRaises(integration.Refusal):
+                    self.invoke(args)
+            with mock.patch.object(integration.os, 'getuid', return_value=1000), \
+                    mock.patch.object(integration.os, 'geteuid', return_value=1000), \
+                    self.assertRaises(integration.Refusal):
+                self.invoke(['setup-status', '--uid', '1000'])
+
+    def test_setup_mutations_recheck_scope_inside_transaction_lock_before_any_action(self):
+        state = prepared()
+        for operation in ('prepare', 'trial', 'record-tests', 'activate'):
+            events = []
+
+            @contextlib.contextmanager
+            def locked():
+                events.append('locked')
+                yield
+
+            def scope(*args):
+                events.append('scope')
+                raise integration.SetupScopeRefusal('synthetic scope changed after preflight')
+
+            arguments = [operation, '--setup-uid', '1000']
+            if operation == 'prepare':
+                arguments += ['--uid', '1000']
+            if operation == 'record-tests':
+                arguments += ['--pin', '--password', '--recovery']
+            if operation in ('record-tests', 'activate'):
+                arguments += ['--setup-trial', 'a' * 64]
+            with self.subTest(operation=operation), \
+                    mock.patch.object(integration, 'locked', locked), \
+                    mock.patch.object(integration, 'load', return_value=state), \
+                    mock.patch.object(integration, 'setup_scope', side_effect=scope), \
+                    mock.patch.object(integration, operation.replace('-', '_')) as action, \
+                    self.assertRaises(integration.SetupScopeRefusal):
+                self.invoke(arguments)
+            self.assertEqual(events, ['locked', 'scope'])
+            action.assert_not_called()
+
+    def test_setup_preparation_uid_must_match_and_dry_run_checks_both_scopes(self):
+        with mock.patch.object(integration, 'prepare') as action:
+            for uids in ([], ['--uid', '1001'], ['--uid', '1000', '--uid', '1001']):
+                with self.subTest(uids=uids), self.assertRaises(integration.Refusal):
+                    self.invoke(['prepare', '--setup-uid', '1000', *uids])
+            action.assert_not_called()
+            with mock.patch.object(integration, 'load', return_value=None), \
+                    mock.patch.object(integration, 'setup_scope', side_effect=integration.SetupScopeRefusal('synthetic other registry')), \
+                    self.assertRaises(integration.SetupScopeRefusal):
+                self.invoke(['prepare', '--uid', '1000', '--setup-uid', '1000', '--dry-run'])
+            action.assert_not_called()
+
+    def test_setup_attestation_and_activation_require_exact_live_trial_before_action(self):
+        for operation in ('record-tests', 'activate'):
+            arguments = [operation, '--setup-uid', '1000', '--setup-trial', 'a' * 64]
+            if operation == 'record-tests':
+                arguments += ['--pin', '--password', '--recovery']
+            with self.subTest(operation=operation), \
+                    mock.patch.object(integration, 'locked', contextlib.nullcontext), \
+                    mock.patch.object(integration, 'load', return_value=prepared()), \
+                    mock.patch.object(integration, 'setup_scope'), \
+                    mock.patch.object(integration, 'enrollment_binding', return_value=BINDING), \
+                    mock.patch.object(integration, 'setup_trial', return_value=(False, 0)), \
+                    mock.patch.object(integration, operation.replace('-', '_')) as action, \
+                    self.assertRaises(integration.Refusal):
+                self.invoke(arguments)
+            action.assert_not_called()
+
+    def test_setup_trial_reference_is_required_and_closed_to_other_operations(self):
+        for args in (['record-tests', '--setup-uid', '1000', '--pin', '--password', '--recovery'],
+                     ['activate', '--setup-uid', '1000'],
+                     ['activate', '--setup-trial', 'a' * 64],
+                     ['trial', '--setup-uid', '1000', '--setup-trial', 'a' * 64],
+                     ['activate', '--setup-uid', '1000', '--setup-trial', 'A' * 64],
+                     ['activate', '--setup-uid', '1000', '--setup-trial', 'a' * 63],
+                     ['setup-status', '--uid', '1000', '--setup-trial', 'a' * 64]):
+            with self.subTest(args=args), mock.patch.object(integration, 'locked') as lock, \
+                    self.assertRaises(integration.Refusal):
+                self.invoke(args)
+            lock.assert_not_called()
+
+    def test_changed_still_live_trial_rejects_confirmations_before_attestation_or_activation(self):
+        previous = prepared()
+        confirmed_reference = integration.setup_trial_reference(previous)
+        replacement = copy.deepcopy(previous)
+        replacement['trial'].update(start=2000, end=602000)
+        self.assertNotEqual(confirmed_reference, integration.setup_trial_reference(replacement))
+        for operation in ('record-tests', 'activate'):
+            arguments = [operation, '--setup-uid', '1000', '--setup-trial', confirmed_reference]
+            if operation == 'record-tests':
+                arguments += ['--pin', '--password', '--recovery']
+            with self.subTest(operation=operation), \
+                    mock.patch.object(integration, 'locked', contextlib.nullcontext), \
+                    mock.patch.object(integration, 'load', return_value=replacement), \
+                    mock.patch.object(integration, 'setup_scope'), \
+                    mock.patch.object(integration, 'enrollment_binding', return_value=BINDING), \
+                    mock.patch.object(integration, 'setup_trial', return_value=(True, 600)), \
+                    mock.patch.object(integration, operation.replace('-', '_')) as action, \
+                    self.assertRaisesRegex(integration.Refusal, 'trial changed during setup'):
+                self.invoke(arguments)
+            action.assert_not_called()
+
+    def test_current_trial_reference_allows_setup_mutation(self):
+        state = prepared()
+        reference = integration.setup_trial_reference(state)
+        for operation in ('record-tests', 'activate'):
+            arguments = [operation, '--setup-uid', '1000', '--setup-trial', reference]
+            if operation == 'record-tests':
+                arguments += ['--pin', '--password', '--recovery']
+            with self.subTest(operation=operation), \
+                    mock.patch.object(integration, 'locked', contextlib.nullcontext), \
+                    mock.patch.object(integration, 'load', return_value=state), \
+                    mock.patch.object(integration, 'setup_scope'), \
+                    mock.patch.object(integration, 'enrollment_binding', return_value=BINDING), \
+                    mock.patch.object(integration, 'setup_trial', return_value=(True, 600)), \
+                    mock.patch.object(integration, operation.replace('-', '_'), return_value={}) as action:
+                self.invoke(arguments)
+            action.assert_called_once_with(state)
+
+    def test_concurrent_activation_cannot_be_replaced_by_a_setup_trial_or_finalization(self):
+        state = prepared()
+        state['phase'] = 'active'
+        for operation in ('trial', 'record-tests', 'activate'):
+            arguments = [operation, '--setup-uid', '1000']
+            if operation in ('record-tests', 'activate'):
+                arguments += ['--setup-trial', integration.setup_trial_reference(state)]
+            if operation == 'record-tests':
+                arguments += ['--pin', '--password', '--recovery']
+            with self.subTest(operation=operation), \
+                    mock.patch.object(integration, 'locked', contextlib.nullcontext), \
+                    mock.patch.object(integration, 'load', return_value=state), \
+                    mock.patch.object(integration, 'setup_scope'), \
+                    mock.patch.object(integration, operation.replace('-', '_')) as action, \
+                    mock.patch.object(integration, 'atomic_write') as write, \
+                    mock.patch.object(integration, 'close_gate') as close, \
+                    mock.patch.object(integration, 'run') as run, \
+                    mock.patch.object(integration, 'save') as save, \
+                    self.assertRaisesRegex(integration.Refusal, 'setup state changed'):
+                self.invoke(arguments)
+            for mutation in (action, write, close, run, save):
+                mutation.assert_not_called()
+
+
 class NativeAbiTests(unittest.TestCase):
     def setUp(self):
         self.stack = contextlib.ExitStack()

@@ -82,6 +82,60 @@ impl Terminal {
         tcgetattr(&file).map_err(|_| CliError::Terminal)?;
         Ok(Self { file })
     }
+
+    /// Read a bounded, visible nonsecret menu answer on the protected terminal.
+    ///
+    /// Only printable ASCII is accepted. PINs, passwords and credential-operation
+    /// confirmations continue through `Conversation`, whose input is never echoed.
+    pub fn choice(
+        &mut self,
+        prompt: &str,
+        max: usize,
+        deadline: Deadline,
+    ) -> Result<String, CliError> {
+        if max == 0 || max > 64 {
+            return Err(CliError::InputTooLong);
+        }
+        let answer = self.input(prompt, max, deadline, InputStyle::VisibleChoice)?;
+        String::from_utf8(answer.expose().to_vec()).map_err(|_| CliError::Terminal)
+    }
+
+    fn input(
+        &mut self,
+        prompt: &str,
+        max: usize,
+        deadline: Deadline,
+        style: InputStyle,
+    ) -> Result<SecretBytes, CliError> {
+        if max > localpin_protocol::MAX_CONVERSATION_BYTES || deadline.expired() {
+            return Err(CliError::Expired);
+        }
+        if tcgetpgrp(&self.file).map_err(|_| CliError::Terminal)? != rustix::process::getpgrp() {
+            return Err(CliError::Terminal);
+        }
+        let mut mode = PrivateMode::new(&mut self.file)?;
+        mode.file
+            .write_all(sanitize_prompt(prompt).as_bytes())
+            .map_err(|_| CliError::Terminal)?;
+        mode.file.flush().map_err(|_| CliError::Terminal)?;
+        let result = read_bounded_input(
+            &mut mode,
+            max,
+            deadline,
+            Some(rustix::process::getpgrp()),
+            style,
+        );
+        let _ = mode.file.write_all(b"\r\n");
+        // Explicit restoration reports failure instead of claiming secure input.
+        mode.restore()?;
+        result
+    }
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum InputStyle {
+    Secret,
+    VisibleChoice,
 }
 
 /// Terminal escapes and control bytes in worker messages never reach the device.
@@ -104,22 +158,7 @@ impl Conversation for Terminal {
         max: usize,
         deadline: Deadline,
     ) -> Result<SecretBytes, CliError> {
-        if max > localpin_protocol::MAX_CONVERSATION_BYTES || deadline.expired() {
-            return Err(CliError::Expired);
-        }
-        if tcgetpgrp(&self.file).map_err(|_| CliError::Terminal)? != rustix::process::getpgrp() {
-            return Err(CliError::Terminal);
-        }
-        let mut mode = PrivateMode::new(&mut self.file)?;
-        mode.file
-            .write_all(sanitize_prompt(prompt).as_bytes())
-            .map_err(|_| CliError::Terminal)?;
-        mode.file.flush().map_err(|_| CliError::Terminal)?;
-        let result = read_bounded(&mut mode, max, deadline, Some(rustix::process::getpgrp()));
-        let _ = mode.file.write_all(b"\r\n");
-        // Explicit restoration reports failure instead of claiming secure input.
-        mode.restore()?;
-        result
+        self.input(prompt, max, deadline, InputStyle::Secret)
     }
 
     fn message(&mut self, text: &str) -> Result<(), CliError> {
@@ -173,11 +212,22 @@ impl Drop for PrivateMode<'_> {
     }
 }
 
+#[cfg(test)]
 fn read_bounded(
     mode: &mut PrivateMode<'_>,
     max: usize,
     deadline: Deadline,
     expected_foreground: Option<rustix::process::Pid>,
+) -> Result<SecretBytes, CliError> {
+    read_bounded_input(mode, max, deadline, expected_foreground, InputStyle::Secret)
+}
+
+fn read_bounded_input(
+    mode: &mut PrivateMode<'_>,
+    max: usize,
+    deadline: Deadline,
+    expected_foreground: Option<rustix::process::Pid>,
+    style: InputStyle,
 ) -> Result<SecretBytes, CliError> {
     let mut value = Zeroizing::new(Vec::<u8>::with_capacity(max));
     let mut byte = Zeroizing::new([0u8; 1]);
@@ -234,12 +284,40 @@ fn read_bounded(
                 if let Some(last) = value.last_mut() {
                     last.zeroize();
                     value.pop();
+                    if style == InputStyle::VisibleChoice {
+                        mode.file
+                            .write_all(b"\x08 \x08")
+                            .map_err(|_| CliError::Terminal)?;
+                    }
                 }
             }
-            21 => value.zeroize(), // Ctrl-U.
+            21 => {
+                // Ctrl-U.
+                if style == InputStyle::VisibleChoice {
+                    for _ in 0..value.len() {
+                        mode.file
+                            .write_all(b"\x08 \x08")
+                            .map_err(|_| CliError::Terminal)?;
+                    }
+                }
+                value.zeroize();
+            }
             0 => return Err(CliError::Terminal),
+            _ if style == InputStyle::VisibleChoice && !(b' '..=b'~').contains(&byte[0]) => {
+                return Err(CliError::Terminal);
+            }
             _ if value.len() == max => return Err(CliError::InputTooLong),
-            _ => value.push(byte[0]),
+            _ => {
+                value.push(byte[0]);
+                if style == InputStyle::VisibleChoice {
+                    mode.file
+                        .write_all(&byte[..])
+                        .map_err(|_| CliError::Terminal)?;
+                }
+            }
+        }
+        if style == InputStyle::VisibleChoice {
+            mode.file.flush().map_err(|_| CliError::Terminal)?;
         }
         byte.zeroize();
     }
@@ -424,6 +502,94 @@ mod tests {
         assert_eq!(after.input_modes, before.input_modes);
         assert_eq!(after.output_modes, before.output_modes);
         assert_eq!(after.control_modes, before.control_modes);
+    }
+
+    #[test]
+    fn pty_visible_choice_echoes_printable_input_and_edits_without_control_injection() {
+        let (mut master, mut slave) = pty();
+        let before = tcgetattr(&slave).unwrap();
+        {
+            let mut private = PrivateMode::new(&mut slave).unwrap();
+            master.write_all(b"12\x7f3\x154\n").unwrap();
+            let answer = read_bounded_input(
+                &mut private,
+                4,
+                Deadline::after(std::time::Duration::from_secs(1)),
+                None,
+                InputStyle::VisibleChoice,
+            )
+            .unwrap();
+            assert_eq!(answer.expose(), b"4");
+        }
+        assert_eq!(tcgetattr(&slave).unwrap().local_modes, before.local_modes);
+        let expected = b"12\x08 \x083\x08 \x08\x08 \x084";
+        let mut echoed = vec![0; expected.len()];
+        master.read_exact(&mut echoed).unwrap();
+        assert_eq!(echoed, expected);
+    }
+
+    #[test]
+    fn pty_visible_choice_rejects_escape_controls_and_oversize_then_restores() {
+        for (bytes, error) in [
+            (b"1\x1b[2J".as_slice(), CliError::Terminal),
+            (b"1\t".as_slice(), CliError::Terminal),
+            (b"1\xff".as_slice(), CliError::Terminal),
+            (b"1\x03".as_slice(), CliError::Cancelled),
+            (b"1\x04".as_slice(), CliError::Cancelled),
+            (b"1\x1a".as_slice(), CliError::Cancelled),
+            (b"12".as_slice(), CliError::InputTooLong),
+        ] {
+            let (mut master, mut slave) = pty();
+            let before = tcgetattr(&slave).unwrap();
+            {
+                let mut private = PrivateMode::new(&mut slave).unwrap();
+                master.write_all(bytes).unwrap();
+                assert_eq!(
+                    read_bounded_input(
+                        &mut private,
+                        1,
+                        Deadline::after(std::time::Duration::from_secs(1)),
+                        None,
+                        InputStyle::VisibleChoice,
+                    )
+                    .err(),
+                    Some(error)
+                );
+            }
+            assert_eq!(tcgetattr(&slave).unwrap().local_modes, before.local_modes);
+            let mut echoed = [0; 64];
+            assert_eq!(master.read(&mut echoed).unwrap(), 1);
+            assert_eq!(echoed[0], b'1');
+        }
+    }
+
+    #[test]
+    fn pty_visible_choice_flushes_paste_and_following_secrets_stay_hidden() {
+        let (mut master, mut slave) = pty();
+        let deadline = Deadline::after(std::time::Duration::from_secs(1));
+        {
+            let mut private = PrivateMode::new(&mut slave).unwrap();
+            master.write_all(b"1\nsynthetic-queued-secret\n").unwrap();
+            assert_eq!(
+                read_bounded_input(&mut private, 1, deadline, None, InputStyle::VisibleChoice)
+                    .unwrap()
+                    .expose(),
+                b"1"
+            );
+        }
+        {
+            let mut private = PrivateMode::new(&mut slave).unwrap();
+            master.write_all(b"synthetic-private-secret\n").unwrap();
+            assert_eq!(
+                read_bounded(&mut private, 64, deadline, None)
+                    .unwrap()
+                    .expose(),
+                b"synthetic-private-secret"
+            );
+        }
+        let mut echoed = [0; 64];
+        assert_eq!(master.read(&mut echoed).unwrap(), 1);
+        assert_eq!(echoed[0], b'1');
     }
 
     #[test]
