@@ -25,6 +25,7 @@ experiment inputs remain separate from production dependencies.
 | C compiler and system C library | Developer distribution; `gcc` and `glibc` from Fedora 44 in CI | Link Rust executables and test binaries |
 | cargo-deny | `0.20.2`, installed with `--locked` | Advisory, license, duplicate/wildcard, and source checks |
 | GitHub checkout action | `v7.0.1` at `3d3c42e5aac5ba805825da76410c181273ba90b1` | Fetch the source without retaining checkout credentials |
+| GitHub artifact upload action | `v7.0.2` at `cf430e030ddbb5b0abf93d22962f4752f3646cd9` | Publish unsigned Fedora testing RPMs, build metadata, and checksums with 14-day retention |
 | Linux CI environments | GitHub `ubuntu-24.04`; official `fedora:44` container on x86_64 | General quality checks and a separate Fedora build/test job |
 
 Toolchain and dependency versions belong in their authoritative files. Keep the
@@ -34,6 +35,8 @@ than keeping a second Rust version in workflow YAML.
 
 The [checkout release](https://github.com/actions/checkout/releases/tag/v7.0.1)
 links to the [pinned commit](https://github.com/actions/checkout/commit/3d3c42e5aac5ba805825da76410c181273ba90b1).
+The [artifact upload release](https://github.com/actions/upload-artifact/releases/tag/v7.0.2)
+links to its [pinned commit](https://github.com/actions/upload-artifact/commit/cf430e030ddbb5b0abf93d22962f4752f3646cd9).
 The [cargo-deny release](https://github.com/EmbarkStudios/cargo-deny/releases/tag/0.20.2)
 and [release manifest](https://github.com/EmbarkStudios/cargo-deny/blob/0.20.2/Cargo.toml)
 record the selected checker and its Rust requirement. Fedora supplies
@@ -176,8 +179,9 @@ The Fedora M1 CI container installs distribution tools and runs isolated suites
 without host credentials, a real TPM, privileged mode or a desktop session. It
 does not enable the optional bubblewrap suite, because unprivileged namespaces
 depend on the runner's container restrictions. Local optional-suite results and
-enforcing-VM results must be recorded separately. M1 CI execution has not yet
-been verified on GitHub.
+enforcing-VM results must be recorded separately. Consult the
+[hosted workflow runs](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml)
+for current M1 CI execution results.
 
 ## Guarded M1 VM fixtures
 
@@ -199,11 +203,21 @@ all test state were removed through the recorded final snapshot restoration.
 
 ## CI limits
 
-CI runs formatting, Clippy with warnings denied, tests and doctests, and release
-builds with the committed lockfile. The Fedora job also runs tests in a disposable
-Fedora 44 x86_64 container and records its compiler and native package versions.
-It provides initial build evidence, not evidence of KDE, PAM, TPM, SELinux, RPM,
-or recovery behavior. Add those jobs when their isolated harnesses exist.
+Ubuntu CI runs formatting, Clippy with warnings denied, Python checks, and release
+builds with the committed lockfile. Full workspace tests and doctests run in the
+disposable Fedora 44 x86_64 job with native PAM inputs. That job also records
+compiler and native package versions, tests the PAM ABI and disposable TPM
+simulators, compiles SELinux policy, and builds an RPM without installing it.
+The Fedora build explicitly installs `systemd` and `selinux-policy-targeted`
+alongside development tools so the package-input manifest can query them.
+
+Successful Fedora jobs publish an unsigned RPM, its original `BUILD-INPUTS.json`,
+a `CI-BUILD.json` recording the tested commit/run/release, and SHA256 checksums.
+The [packaging guide](../../packaging/fedora/README.md#download-a-ci-testing-rpm)
+describes downloads, provenance, CI upgrade sequencing, and the 14-day retention.
+These checks and artifacts provide scoped container evidence; they do not
+establish installed KDE, enforcing SELinux, RPM lifecycle/recovery, or physical
+hardware behavior.
 
 Jobs have read-only repository permissions, use `pull_request` rather than
 `pull_request_target`, and do not use self-hosted runners, privileged containers,

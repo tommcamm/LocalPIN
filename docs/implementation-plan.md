@@ -1,7 +1,7 @@
 # LocalPIN implementation plan
 
 - Date: 2026-10-17
-- Status: M0–M8 implemented with historical appliance acceptance; M8.1 final source checks and targeted installed RPM acceptance passed on Fedora KDE 44 x86_64 with SELinux enforcing and a private TPM emulator. The [M8.1 report](development/m8.1-desktop-compatibility.md) records evidence and each installed case's build scope. GUI/DBus AccountsService, full old-TPM-credential migration and physical hardware remain unvalidated. M9 independent human/specialist review and release gates remain open. [Hosted CI at baseline `a066099`](https://github.com/tommcamm/LocalPIN/actions/runs/39042452799) failed Ubuntu native PAM loading and the Fedora RPM runtime-package input check; recorded local/VM acceptance is separate.
+- Status: M0–M8 implemented with historical appliance acceptance; M8.1 final source checks and targeted installed RPM acceptance passed on Fedora KDE 44 x86_64 with SELinux enforcing and a private TPM emulator. The [M8.1 report](development/m8.1-desktop-compatibility.md) records evidence and each installed case's build scope. GUI/DBus AccountsService, full old-TPM-credential migration and physical hardware remain unvalidated. M9 independent human/specialist review and release gates remain open. [Hosted CI](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml) and its unsigned testing RPMs provide separate build/test evidence; recorded local/VM acceptance does not imply a passing workflow run.
 - Source of requirements: [product-specification.md](product-specification.md), version 1.5. ADR 0017 replaces the frozen lifecycle domain with native shadow-record markers and locking; ADR 0018 defines KDE/native-update compatibility.
 
 
@@ -494,11 +494,15 @@ RPM, desktop, reboot and recovery matrix passed for that same restricted domain.
 The [M8.1 report](development/m8.1-desktop-compatibility.md) supplies fresh
 targeted installed evidence for the current account/KDE/update architecture,
 including passed final source checks and targeted final RPM acceptance. M9 retains independent review, missing
-administration/migration coverage and physical hardware/release gates. The
-[baseline hosted run](https://github.com/tommcamm/LocalPIN/actions/runs/39042452799)
-failed Ubuntu PAM loading and Fedora RPM input checks. Consult
-[GitHub Actions](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml)
-for subsequent results; local and installed evidence does not imply passing CI.
+administration/migration coverage and physical hardware/release gates. Ubuntu
+CI checks lint/build quality; Fedora 44 runs full workspace and native tests,
+simulator checks, and the RPM build with explicit runtime-package inputs.
+Successful Fedora jobs publish an unsigned testing RPM with provenance and
+checksums for 14 days; see the
+[download guide](../packaging/fedora/README.md#download-a-ci-testing-rpm).
+Consult [GitHub Actions](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml)
+for actual results; artifacts and local checks do not establish installed
+desktop or physical hardware acceptance.
 
 No calendar estimate is committed before the feasibility work. Subsequent estimates should use measured test infrastructure effort and availability of independent review/hardware, with review and recovery work included in the schedule.
 

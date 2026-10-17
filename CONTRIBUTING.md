@@ -70,7 +70,9 @@ and pull request targeting `main`. Do not commit or push changes directly to
 ## Validation
 
 The [CI workflow](.github/workflows/ci.yml) is the source of truth for automated
-checks. Its general workspace checks are:
+checks. Ubuntu runs Rust formatting, Clippy, Python checks, and the release build;
+Fedora 44 runs the full workspace tests and doctests with native PAM inputs,
+simulator checks, and packaging checks. The corresponding local commands are:
 
 ```sh
 cargo fmt --all -- --check
@@ -88,11 +90,16 @@ cargo install cargo-deny --version 0.20.2 --locked
 cargo deny --locked check advisories licenses bans sources
 ```
 
-Use Fedora 44 x86_64 for native validation, matching the current target. At
-baseline commit `a066099`, [hosted CI run 39042452799](https://github.com/tommcamm/LocalPIN/actions/runs/39042452799)
-failed in Ubuntu PAM loading and the Fedora package-input check. The commands
-above describe the configured checks; report their actual results in your
-environment.
+Use Fedora 44 x86_64 for native validation, matching the current target. Some
+native PAM tests load Fedora's `libpam.so.0` path; a passing build on another
+distribution does not establish native test compatibility. The commands above
+describe the configured checks; report their actual results in your environment.
+
+Successful Fedora jobs publish an unsigned testing RPM, build provenance, and
+SHA256 checksums for 14 days. Follow the
+[artifact download and testing instructions](packaging/fedora/README.md#download-a-ci-testing-rpm)
+and link the workflow run and tested commit in testing reports. Pull-request
+builds test GitHub's merge commit; the bundle records the PR head separately.
 
 Advisory checks need access to the configured advisory database. Workspace
 storage tests require Linux with `openat2`; local socket and `SO_PEERPIDFD`

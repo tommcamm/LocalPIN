@@ -6,6 +6,9 @@ Changes will be recorded here before versioned releases. There are no releases y
 
 ### Added
 
+- Downloadable unsigned Fedora 44 x86_64 CI testing RPMs with build provenance,
+  SHA256 checksums, 14-day retention, and a versioned release sequence for testing
+  successive CI upgrades. See the [artifact guide](packaging/fedora/README.md#download-a-ci-testing-rpm).
 - M8.1 ordinary Fedora KDE 44 x86_64 compatibility: native shadow-record
   account markers and account-tool locking replace the global immutable
   appliance; Linux-PAM's stable ABI replaces reference-build fingerprints.
@@ -115,6 +118,9 @@ Changes will be recorded here before versioned releases. There are no releases y
 
 ### Changed
 
+- Run full workspace runtime tests on the Fedora target while retaining Ubuntu
+  formatting, Clippy, Python checks, and release builds. Install the native RPM
+  manifest inputs explicitly in Fedora CI.
 - Refresh the project overview, contributor and security guidance, issue/PR
   templates, and build/runbook introductions for the current M8.1 implementation.
   Require a dedicated branch and a pull request for maintainer review for every
@@ -156,4 +162,6 @@ M8 installed broker/password-worker confinement, staged activation, RPM lifecycl
 ordinary reboot and interrupted-upgrade recovery passed the recorded matrix for
 the restricted Fedora 44 x86_64 Btrfs appliance. The unsafe fingerprint/faillock
 composition remains activation-refused. Physical TPM validation and M9 independent
-human/specialist review remain open; hosted CI execution remains unverified.
+human/specialist review remain open. Current
+[hosted CI results](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml)
+and testing RPMs are separate from installed acceptance and release certification.

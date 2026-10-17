@@ -7,6 +7,7 @@ password as the recovery route.**
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 
 [Build from source](#build-from-source) ·
+[Download a testing RPM](packaging/fedora/README.md#download-a-ci-testing-rpm) ·
 [Installation and recovery](docs/integration-administration.md) ·
 [Contribute](CONTRIBUTING.md) ·
 [Report a security issue](SECURITY.md)
@@ -41,11 +42,11 @@ GUI/DBus administration, and the full hardware matrix still need validation.
 [M9](docs/implementation-plan.md#m9--review-hardware-validation-and-versioned-release)
 covers independent review and the remaining release gates.
 
-Hosted CI is separate from that recorded evidence. The audited
-[main run at `a066099`](https://github.com/tommcamm/LocalPIN/actions/runs/39042452799)
-failed native PAM loading on Ubuntu and the Fedora RPM build's runtime-package
-input check. See the badge above and [GitHub Actions](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml)
-for subsequent results.
+Hosted CI checks Rust lint/build quality on Ubuntu and runs the full workspace
+tests, native PAM/TPM checks, and RPM build on Fedora 44. Successful Fedora jobs
+provide an unsigned testing RPM with build metadata and checksums. See
+[GitHub Actions](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml)
+for results; CI is separate from installed desktop and hardware evidence.
 
 ## Scope and security model
 
@@ -113,10 +114,12 @@ establish installed desktop or physical hardware compatibility.
 
 ## Experimental installation
 
-The [Fedora packaging guide](packaging/fedora/README.md) explains how to build an
-experimental, unsigned RPM. Installation starts no services and leaves PIN
-integration disabled. Preparation, enrollment, a timed trial, password/recovery
-tests, and explicit activation are separate steps in the
+Download an experimental, unsigned RPM from a successful Fedora CI job or build
+one yourself using the [Fedora packaging guide](packaging/fedora/README.md).
+CI artifacts are retained for 14 days and identify the tested commit.
+Installation starts no services and leaves PIN integration disabled.
+Preparation, enrollment, a timed trial, password/recovery tests, and explicit
+activation are separate steps in the
 [installation and recovery runbook](docs/integration-administration.md).
 
 Use a disposable enforcing Fedora KDE VM first. The runbook includes the required

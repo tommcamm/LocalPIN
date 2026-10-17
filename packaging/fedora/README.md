@@ -16,8 +16,58 @@ checks and the compatible `.5` → `.6` RPM upgrade passed with exact protected-
 preservation and automatic restoration of prior activation; each earlier
 installed case retains its recorded build scope in the report. GUI/DBus AccountsService, full
 old-TPM-credential migration, alternate filesystems and physical devices remain
-untested. M9 independent review and release gates remain open; hosted CI
-execution remains unverified.
+untested. M9 independent review and release gates remain open. Current hosted
+build and test results are available in
+[GitHub Actions](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml);
+package builds do not extend the recorded installed evidence.
+
+## Download a CI testing RPM
+
+CI builds an experimental, unsigned RPM for Fedora KDE 44 x86_64 without
+installing it. Use a disposable VM with SELinux enforcing and a recoverable
+snapshot for testing. There is no supported production release.
+
+1. Open the pull request's **Checks**, then the CI workflow run, or choose a run
+   in [GitHub Actions](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml).
+2. Check the Fedora job result and the tested commit. Under **Artifacts**, download
+   `localpin-fedora44-x86_64-<tested-commit>-<attempt>`; the Fedora job summary also
+   links the download. GitHub requires sign-in, and artifacts expire after 14 days.
+3. Extract the download. It contains the RPM, `BUILD-INPUTS.json`, `CI-BUILD.json`,
+   and `SHA256SUMS`. In that directory, verify and inspect it:
+
+   ```sh
+   sha256sum --check SHA256SUMS
+   cat CI-BUILD.json
+   rpm -qpi ./localpin-*.x86_64.rpm
+   rpm -qpl ./localpin-*.x86_64.rpm
+   ```
+
+`BUILD-INPUTS.json` matches the manifest embedded in the RPM and records native
+artifact hashes, the Rust compiler, lockfile hash, and native package inputs.
+`CI-BUILD.json` identifies the tested commit, workflow run, and RPM release.
+Pull-request runs build GitHub's merge commit with the base branch; the PR head
+commit is recorded separately. Checksums detect damaged or changed downloads;
+they are not a package signature or independent security review. Artifacts from
+unreviewed pull requests contain that pull request's code.
+
+To install in the disposable Fedora KDE VM, from the extracted directory:
+
+```sh
+sudo dnf install ./localpin-*.x86_64.rpm
+```
+
+Installation leaves PIN integration disabled and starts no broker services.
+Follow the [installation and recovery runbook](../../docs/integration-administration.md)
+for persistent native accounting, preparation, enrollment, a timed trial,
+password fallback, console recovery, and explicit activation. Record the tested
+commit and package version with your results.
+
+CI uses RPM release `0.1.alpha1.ci.<run-number>.<attempt>` so successive workflow
+runs and reruns can upgrade earlier CI packages. This sequence does not promise
+an upgrade from arbitrary historical fixtures, including `0.2.alpha1` or the
+recorded `.5`/`.6` builds; start with a fresh disposable guest for those cases.
+The artifact is a testing convenience, not a signed release or installed
+desktop/hardware acceptance result.
 
 ## Build without installing
 
