@@ -6,11 +6,12 @@ contributions are welcome.
 
 LocalPIN is experimental authentication software with no supported production
 release. The current target is an existing Fedora KDE 44 x86_64 session. Targeted
-M8.1 desktop and package tests passed in a disposable guest with SELinux enforcing
-and a private TPM emulator; independent review, physical hardware validation,
-and release gates remain open. See the [README](README.md) for an overview and
-the [M8.1 report](docs/development/m8.1-desktop-compatibility.md) for the exact
-evidence and its limits.
+M8.1 desktop/package and M8.2 guided-setup cases passed in disposable guests with
+SELinux enforcing and private TPM emulators; independent review, physical
+hardware validation and release gates remain open. See the [README](README.md)
+for an overview and the [M8.1](docs/development/m8.1-desktop-compatibility.md) and
+[M8.2 reports](docs/development/m8.2-installed-acceptance.md) for the exact
+evidence and scope limits.
 
 ## Choose a contribution
 
@@ -125,6 +126,7 @@ cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --all-features --locked
 python3 -m unittest discover -s tools/tests -p 'test_*.py' -v
 python3 -m unittest discover -s experiments/m8 -p 'test_*.py' -v
+python3 -m unittest discover -s experiments/m82 -p 'test_*.py' -v
 cargo build --workspace --all-features --release --locked
 ```
 

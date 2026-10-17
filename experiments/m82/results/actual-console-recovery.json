@@ -1,0 +1,27 @@
+{
+  "phase": "m82-actual-console-recovery-completion-review",
+  "passed": true,
+  "selinux": "Enforcing",
+  "command_runner_sha256": "42b0b4e7feec09c9e6d609320d1384563c29cf8052ecf4ab2513b9c3a1344539",
+  "observer_runner_sha256": "e48d54646ac76b2e391b5957b17cabf3a696d7d266b91494abe709840bcf814f",
+  "actual_recovery_commands_repeated": false,
+  "original_failure_preserved": true,
+  "observations": {
+    "actual_administrator_tty3_recovery": true,
+    "boot_unchanged": true,
+    "actual_recover_dry_run_unchanged": true,
+    "actual_recover_completed": true,
+    "original_kde_services_and_private_policies_restored": true,
+    "restored_policy_count": 6,
+    "account_authority_revoked": true,
+    "gate_and_manifest_disabled": true,
+    "native_counter_bytes_and_metadata_unchanged": true,
+    "gate_representation": "absent",
+    "broker_units_inactive": true,
+    "socket_boot_opt_in_disabled": true,
+    "service_not_boot_enabled": true,
+    "missing_module_fault_retained_for_password_ui": true,
+    "password_or_attestation_input_performed": false
+  },
+  "raw_snapshots_and_operation_output_guest_root_only": true
+}

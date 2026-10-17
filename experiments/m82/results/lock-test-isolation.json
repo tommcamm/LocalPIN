@@ -1,0 +1,151 @@
+{
+  "schema": 1,
+  "date": "2026-10-17",
+  "scope": "Source-level synthetic regression evidence for test-only account-lock subprocess isolation.",
+  "base_source_commit": "578d94bc7670f0b951d18865d71e039259babd74",
+  "source_change": {
+    "path": "crates/localpind/src/accounts.rs",
+    "insertions": 37,
+    "deletions": 0,
+    "reviewed_file_sha256": "9c243a4ca4fa9f86dc9bce0cfddffc5994f21c1c1a724982dacc4e58f1c0269b",
+    "patch_sha256": "910bf3952fc89f0f339384bfee8f2708bb5d43d2d800f259eb5f464a23b0b7fe",
+    "entirely_inside_cfg_test": true,
+    "production_locking_unchanged": true,
+    "original_lock_lifetime_assertions_unchanged": true,
+    "implementation": "Create the fixture and exercise the complete lock lifecycle inside a separate exact-test process. Preserve parallel execution for other tests; no retries or global serialization.",
+    "isolated_tests": [
+      "accounts::tests::integration_lock_adoption_retains_parent_lock_until_every_duplicate_closes",
+      "accounts::tests::native_shared_ofd_lease_conflicts_with_posix_and_ofd_writers_and_survives_other_close",
+      "accounts::tests::permanent_shared_lease_excludes_revocation_until_all_readers_drop"
+    ]
+  },
+  "original_hosted_failure": {
+    "url": "https://github.com/tommcamm/LocalPIN/actions/runs/39061507074",
+    "reported_candidate_commit_prefix": "026c2867",
+    "test": "accounts::tests::integration_lock_adoption_retains_parent_lock_until_every_duplicate_closes",
+    "location_at_original_source": "crates/localpind/src/accounts.rs:1550",
+    "error": "Result::unwrap() received AccountError::Busy at final lock reacquisition.",
+    "status": "Original failure retained; local validation does not rerun or replace this hosted release result.",
+    "candidate_scope": "Reported version-only child of the base source; original candidate was not checked out for the local reproduction."
+  },
+  "cause_assessment": {
+    "classification": "Parallel-test descriptor inheritance race.",
+    "mechanism": "Another test can fork while a lock descriptor is open. The child retains the same open-file description until exec or exit, so closing only the test-owned descriptors does not prove that the lock has been released. The adoption test deliberately clears CLOEXEC; even descriptors with CLOEXEC set can remain open between fork and exec.",
+    "evidence": "Source inspection, exact panic reproduction and serial/skip-spawn controls. No syscall trace was available.",
+    "feature_scope": "No default-feature-specific branch exists in the affected lock path; feature selection can change scheduling and expose the race."
+  },
+  "baseline_reproduction": {
+    "source_commit": "578d94bc7670f0b951d18865d71e039259babd74",
+    "feature_graph": "localpind default features",
+    "profile": "release",
+    "isolated_adoption_test": {
+      "runs": 200,
+      "failures": 0
+    },
+    "parallel_accounts_suite": {
+      "test_threads": 16,
+      "runs": 14,
+      "failures": 5,
+      "failure": "All five reproduce the original Busy panic at accounts.rs:1550."
+    },
+    "serial_accounts_suite": {
+      "test_threads": 1,
+      "runs": 200,
+      "failures": 0
+    },
+    "parallel_accounts_suite_without_python_subprocess_test": {
+      "test_threads": 16,
+      "runs": 200,
+      "failures": 0,
+      "excluded_test": "accounts::tests::integration_python_parent_hands_off_lock_and_direct_native_process_is_busy"
+    }
+  },
+  "intermediate_adoption_only_fix": {
+    "feature_graph": "workspace default features",
+    "profile": "debug",
+    "parallel_accounts_suite_runs": 200,
+    "original_adoption_failures": 0,
+    "native_ofd_lifetime_failures": 5,
+    "failure_iterations": [
+      65,
+      81,
+      94,
+      97,
+      134
+    ],
+    "result": "The same immediate post-drop lifetime assumption also affected the native OFD test. Final isolation covers that test and the equivalent permanent shared-lease contract."
+  },
+  "sandbox_attempts": {
+    "full_localpind_unit_suite_runs": 20,
+    "passed_runs": 0,
+    "limitation": "The syscall sandbox denied SO_PEERPIDFD/local IPC and prevented native fixture execution. These attempts are recorded as failed or unavailable checks, not passing validation.",
+    "resolution": "Final source tests used approved execution outside the syscall sandbox and only synthetic fixtures; installed host authentication helpers were not executed."
+  },
+  "final_validation": {
+    "profile": "debug",
+    "environment": "Fedora 44 x86_64 source-build workspace; synthetic fixtures outside the syscall sandbox.",
+    "native_pam_headers": "pam-devel-1.7.2-2.fc44.x86_64",
+    "native_pam_runtime": "pam-libs-1.7.2-2.fc44.x86_64",
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+    "workspace_default": {
+      "command": "cargo test --workspace --locked --offline",
+      "exit_code": 0,
+      "passed": 359,
+      "failed": 0,
+      "ignored": 7
+    },
+    "workspace_all_features": {
+      "command": "cargo test --workspace --all-features --locked --offline",
+      "exit_code": 0,
+      "passed": 359,
+      "failed": 0,
+      "ignored": 10
+    },
+    "parallel_accounts_repetitions": {
+      "feature_graphs": [
+        "workspace default",
+        "workspace all-features"
+      ],
+      "test_threads": 16,
+      "tests_per_run": 21,
+      "runs_per_graph": 200,
+      "failed_runs_per_graph": 0
+    },
+    "parallel_full_localpind_unit_repetitions": {
+      "feature_graphs": [
+        "workspace default",
+        "workspace all-features"
+      ],
+      "test_threads": 16,
+      "tests_per_run": 62,
+      "runs_per_graph": 3,
+      "failed_runs_per_graph": 0
+    },
+    "clippy": {
+      "command": "cargo clippy --workspace --all-targets --all-features --locked --offline -- -D warnings",
+      "exit_code": 0
+    },
+    "format": {
+      "command": "cargo fmt --all -- --check",
+      "exit_code": 0
+    },
+    "whitespace": {
+      "command": "git diff --check",
+      "exit_code": 0
+    },
+    "command_note": "Cargo used a private target directory and JSON build messages for evidence collection; private absolute paths are omitted."
+  },
+  "diagnostic_sha256": {
+    "original_parallel_failure_6": "0246538875393102dea5118add8d6881e45045632192fea73dced4943e5984f2",
+    "intermediate_native_ofd_failure_65": "4ec92be9d726fd950df0dd4c7b47ad1520f024f818e9d82b8f0f59174218de6b",
+    "final_workspace_default": "d3e7445a4de60d56bbc497d1e520f59435f8c6c7845724ec1ad215c0444c529d",
+    "final_workspace_all_features": "467cdf4b08c2b6859f34b5f43f3c517747db3da667b8d57875be6b3e450ce66c",
+    "final_clippy": "f85ba6571e0799e2325a37bbbe6fc4f3a3ff0a5a21bb6aa471f70ce65e69e198"
+  },
+  "limits": [
+    "Local source validation is separate from the failed hosted release run and subsequent hosted CI results.",
+    "These tests do not establish installed KDE behavior, enforcing SELinux acceptance, physical hardware support or independent security review.",
+    "Ignored tests were not counted as passing tests.",
+    "No real credentials, installed host authentication helpers, host PAM edits, service changes, policy loads or physical TPM operations were used."
+  ]
+}

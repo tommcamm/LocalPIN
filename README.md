@@ -41,10 +41,19 @@ Use a disposable **Fedora KDE 44 x86_64 VM with SELinux enforcing** and a
 recoverable snapshot first. Setup requires administrator access and the supported
 local account and authentication policy described in the installation guide.
 
-1. **Download and verify.** Get the experimental RPM and `SHA256SUMS` from
-   [GitHub Releases](https://github.com/tommcamm/LocalPIN/releases). Follow the
-   [download verification instructions](docs/releasing.md#verify-and-test-a-download),
-   including checking the RPM signature against a separately trusted signing key.
+The published `v0.1.0-alpha.1` predates guided setup; use the
+[manual setup checklist](docs/integration-administration.md#manual-setup-checklist)
+and `localpinctl` for that release. The steps below require a build containing
+the M8.2 guided CLI.
+
+1. **Choose and verify the matching build.** For the current guided flow, use a
+   [CI testing RPM](packaging/fedora/README.md#download-a-ci-testing-rpm) from a
+   successful run for your intended source commit. Check its `CI-BUILD.json`;
+   these unsigned artifacts are for disposable VM testing. For a versioned
+   release that includes guided setup, get its RPM and `SHA256SUMS` from
+   [GitHub Releases](https://github.com/tommcamm/LocalPIN/releases) and follow the
+   [verification instructions](docs/releasing.md#verify-and-test-a-download),
+   including the RPM signature and a separately trusted signing key.
 2. **Install, then start setup** from your own foreground KDE terminal:
 
    ```sh
@@ -66,11 +75,10 @@ local account and authentication policy described in the installation guide.
 [installation and recovery runbook](docs/integration-administration.md) explains
 all prerequisites and retains the manual administrator procedure. The new guided
 flow has passed [local source, terminal and package checks](docs/development/m8.2-guided-setup.md)
-and still needs installed Fedora KDE acceptance; historical M8.1 evidence does
-not validate this change.
-
-Testing a particular commit? [Unsigned CI testing RPMs](packaging/fedora/README.md#download-a-ci-testing-rpm)
-are a separate option for disposable test environments.
+and [targeted installed VM acceptance](docs/development/m8.2-installed-acceptance.md)
+for TPM setup, console recovery, an identical-payload RPM update, reboot and
+removal. Independent review, physical hardware and signed-release gates remain
+open; historical M8.1 evidence retains its tested scope.
 
 ## Everyday use
 

@@ -31,8 +31,11 @@ volume, emulator storage or host directory with the clone.
 Before any managed account incarnation exists, with the display manager stopped
 and no user sessions, migrate any existing native `/run/faillock` records byte
 for byte to `/var/lib/faillock` on the clone's persistent Btrfs filesystem.
-Preserve ownership, modes and SELinux labels. Do not reset, replace with empty
-records, or recreate lost counters. Install the exact reviewed configuration
+Preserve counter bytes, UID, modes, extended attributes and SELinux labels.
+Back up the exact original GID. If native login created a primary-group tally,
+follow the administrator runbook's explicit offline destination-only GID-0
+conversion; production provisioning never normalizes it. Do not reset, replace
+with empty records, or recreate lost counters. Install the exact reviewed configuration
 `dir = /var/lib/faillock\n` in `/etc/security/faillock.conf`. This offline fixture
 preparation establishes the persistent accounting boundary; `prepare` refuses a
 volatile configuration. The real migration procedure is documented with the

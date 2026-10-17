@@ -1511,8 +1511,35 @@ mod tests {
         )
     }
 
+    // Return true after the parent has checked the exact-test child. Only the
+    // child creates its fixture: subprocesses from parallel tests could retain
+    // an inherited lock beyond our final drop, until exec or process exit.
+    fn run_in_subprocess(test: &str) -> bool {
+        const CHILD: &str = "LOCALPIN_TEST_ACCOUNT_LOCK_CHILD";
+        if std::env::var_os(CHILD).as_deref() == Some(std::ffi::OsStr::new(test)) {
+            return false;
+        }
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", test, "--nocapture"])
+            .env(CHILD, test)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        true
+    }
+
     #[test]
     fn integration_lock_adoption_retains_parent_lock_until_every_duplicate_closes() {
+        if run_in_subprocess(
+            "accounts::tests::integration_lock_adoption_retains_parent_lock_until_every_duplicate_closes",
+        ) {
+            return;
+        }
         let fixture = integration_fixture();
         let parent = integration_test_lease(&fixture, None).unwrap().unwrap();
         assert!(matches!(
@@ -2091,6 +2118,11 @@ probe('acquired')
 
     #[test]
     fn native_shared_ofd_lease_conflicts_with_posix_and_ofd_writers_and_survives_other_close() {
+        if run_in_subprocess(
+            "accounts::tests::native_shared_ofd_lease_conflicts_with_posix_and_ofd_writers_and_survives_other_close",
+        ) {
+            return;
+        }
         let fixture = Fixture::new();
         let path = fixture.path.join("native-lock");
         let first = std::fs::OpenOptions::new()
@@ -2187,6 +2219,11 @@ probe('acquired')
     }
     #[test]
     fn permanent_shared_lease_excludes_revocation_until_all_readers_drop() {
+        if run_in_subprocess(
+            "accounts::tests::permanent_shared_lease_excludes_revocation_until_all_readers_drop",
+        ) {
+            return;
+        }
         let fixture = Fixture::new();
         let path = fixture.path.join("lock");
         let first = std::fs::OpenOptions::new()
