@@ -1,7 +1,7 @@
 # LocalPIN implementation plan
 
 - Date: 2026-10-17
-- Status: Accepted roadmap; M0 implemented locally; M1 feasibility complete; M2 policy/protocol contracts, M3 protected storage, M4 credential primitives, M5 bounded broker and M6 enrollment worker/CLI implemented locally. Installed password policy/sandbox, physical resource-manager and later review gates remain open. Hosted CI execution remains unverified. Permanent account records remain gated on production lifecycle support.
+- Status: Accepted roadmap; M0 implemented locally; M1 feasibility complete; M2 policy/protocol contracts, M3 protected storage, M4 credential primitives, M5 bounded broker and M6 enrollment worker/CLI implemented locally. M6.1 production account lifecycle and eligibility is the next implementation milestone and a prerequisite for M7's real-account completion gate. Installed password policy/sandbox, physical resource-manager and later review gates remain open. Hosted CI execution remains unverified. Permanent account records remain gated on production lifecycle support.
 - Source of requirements: [product-specification.md](product-specification.md), version 1.2. M1 clarifies password/PIN accounting; M2 settles time boundaries and narrows lifecycle support explicitly.
 
 This plan turns the specification into independently reviewable changes and evidence gates. The specification remains authoritative. An unresolved design question below must be resolved in an architecture decision record (ADR), with a specification amendment if necessary, rather than silently changing the requirements.
@@ -37,6 +37,7 @@ M0 repository foundation
   -> M4 credential backends
   -> M5 bounded broker
   -> M6 enrollment worker and CLI
+  -> M6.1 production account lifecycle and eligibility
   -> M7 production PAM integration
   -> M8 Fedora packaging and recovery
   -> M9 independent review and staged release
@@ -180,8 +181,9 @@ The [M5 report](development/m5-bounded-broker.md) and
 client, native logind routing, process identity and bounded worker implementation.
 Local tests cover actual Unix IPC and native stalls; account lifecycle/policy
 defaults remain unavailable. Installed unit/SELinux and full production account
-flows are not established by these tests. M6/M8/M9 retain their integration,
-packaging and independent hardware/security gates.
+flows are not established by these tests. M6.1 owns production account lifecycle
+and policy adapters; M6/M8/M9 retain their enrollment integration, packaging and
+independent hardware/security gates.
 
 ### M6 — Add trusted enrollment and the usable CLI
 
@@ -202,9 +204,103 @@ use isolated synthetic account authorities; ADR 0006 still refuses unmanaged
 production accounts. Installed password-policy/confinement evidence remains an
 explicit M8 gate, and enrollment does not activate desktop integration.
 
+### M6.1 — Implement production account lifecycle and eligibility
+
+Status: planned; required next before M7's real-account integration and acceptance
+work. M6 completed its test-broker gate using synthetic authorities. The installed
+broker still uses `UnmanagedUnixAccounts`, and `SystemEligibility` returns
+unavailable after live-session routing. This milestone owns both missing
+production adapters; session metadata or successful enrollment-password PAM
+authentication cannot stand in for either authority.
+
+Design and implementation:
+
+- Choose and document an enforceable local-account lifecycle mechanism in a new
+  ADR that satisfies [ADR 0006](adr/0006-account-incarnation-support.md). Define
+  the supported account domain, trusted source, administration paths, privilege
+  boundary, lock order and durable revocation point before freezing a permanent
+  identity schema. Enumerate creation, deletion, UID changes, rename, recovery
+  and any supported GUI/AccountsService, shadow-utils or other mutation paths.
+- Implement the production `LifecycleAuthority`: opaque account incarnations,
+  durable revocation before deletion/reuse, and serialization with enrollment
+  publication and PIN authorization. Preserve continuity on rename only when
+  proved. UID/name/home equality, a random identifier stored only in the
+  credential, polling and asynchronous file-change notifications cannot by
+  themselves establish the required guarantee. Refuse unmanaged or out-of-band
+  changes whenever continuity cannot be proved.
+- Provide the privileged lifecycle provisioning path for a protected disabled
+  account baseline, with explicit authority and crash recovery. Missing or
+  corrupt required state must never be repaired by an own-user enrollment
+  request, even after fresh-password authentication. Fence old credentials,
+  staged generations, fresh-password grants and in-flight results when an
+  incarnation is revoked or replaced.
+  Define versioned compatibility/re-enrollment behavior without adopting
+  synthetic development identities as production continuity evidence.
+- Implement password-free `EligibilityAuthority` checks for the exact supported
+  Fedora account/PAM policy, following
+  [ADR 0001](adr/0001-pam-candidate-and-account-policy.md) and
+  [ADR 0003](adr/0003-session-and-worker-boundaries.md). Cover locked/empty or
+  unusable passwords, supported password-hash formats, account/password expiry,
+  forced password change, nologin/access restrictions and applicable faillock
+  state. Review the real policy graph; `pam_acct_mgmt` alone or a fixture-only
+  SHA512 profile is not proof of complete supported policy. Unknown policy,
+  format, account source or unreadable authoritative state makes PIN unavailable.
+- Wire both adapters into `SystemAuthorities` only for the demonstrated domain.
+  Preserve kernel peer/account binding and stable logind session checks, and
+  repeat lifecycle/policy checks at existing enrollment/verification publication
+  and delivery fences. Account checks must never prompt for a password, invoke
+  an alternate authentication factor, reset/add password failure counters or
+  bypass the original password route. Preserve resource/deadline/cancellation
+  guarantees and supervise blocking native policy work as required.
+- Extend doctor/status with actionable supported/unsupported/unavailable account
+  diagnostics, keeping identities and secret account material out of public
+  output. Record the architecture, actual evidence and remaining limitations in
+  `docs/development/m6.1-account-authorities.md`; update affected decisions and
+  specification text only after their guarantees have evidence. Obtain separate
+  development review, fix findings and commit the implementation and evidence.
+
+Required evidence:
+
+- Delete and recreate an account with identical UID/name/home; rename and other
+  supported identity mutations; every supported administrative path and attempts
+  to bypass it; revocation concurrent with backend success, enrollment staging,
+  pointer publication and response delivery. A reused account cannot inherit a
+  PIN or a previously issued password grant.
+- Missing/corrupt authority state, authority restart, crash at each durable
+  revocation/provisioning boundary, reboot and interrupted account mutation.
+  Required state failures refuse authorization; they cannot invent continuity,
+  revive a revoked incarnation or turn missing state into a new enrollment.
+- Real allowed, locked, expired, forced-change, restricted and policy-unknown
+  accounts, plus relevant faillock states and supported hash formats. Prove
+  policy checks are password-free and leave password accounting unchanged;
+  preserve bounded failure behavior and unrelated-UID responsiveness.
+- Complete enroll/change/disable/recover and broker PIN-verification flows with
+  the actual production authorities and dedicated test accounts in a disposable
+  Fedora KDE VM with SELinux enforcing. Include the existing password-only
+  enrollment service and prove password recovery; synthetic-only authorities do
+  not pass this gate. Keep the everyday host's PAM, accounts, enrolled state and
+  TPM guess budget untouched.
+
+Exit gate: at least one explicitly defined real local-account domain has an
+enforcing lifecycle authority and complete supported eligibility policy, with
+the deletion/reuse, crash, concurrency and real-account evidence above. Permanent
+records are permitted only inside that proven domain; other accounts remain
+unavailable. If the lifecycle guarantee cannot be enforced, record the blocker
+and resolve it through a reviewed design or specification amendment; do not mark
+M6.1 complete or weaken the existing default to proceed to M7.
+
+M6.1 supplies the account authorities; M7 owns the unlock PAM adapter and actual
+stock KDE success/fallback matrix. M8 retains installed password-worker/systemd
+confinement, full SELinux/RPM lifecycle and activation/recovery validation.
+Component-level VM setup needed to test M6.1 does not satisfy those M7/M8 gates
+or authorize everyday-system activation.
+
 ### M7 — Complete the small PAM adapter and KDE integration contract
 
 Implement `localpin-pam` using the behavior proven in M1.
+Complete M6.1 before this milestone's real-account integration/acceptance work;
+isolated ABI/parser development may proceed independently, but cannot substitute
+for the production authorities or pass the M7 gate.
 
 - Keep the C ABI and unsafe surface small, documented and reviewed. Validate ABI inputs within the PAM contract, match allocator ownership, contain Rust panics, and clean up sensitive buffers without unwinding across FFI.
 - Enforce the supported screen-lock service, target identity and real/effective UID rules. Do not expose this module as an alternative for sudo, SSH, login, or another account.
@@ -250,12 +346,12 @@ Exit gate: all specification completion gates have evidence and no unresolved se
 | Decision | Resolution required | When |
 |---|---|---|
 | PAM token reuse and UI | Does the actual Fedora stack consume the candidate without a second password prompt? If not, prove an explicit password-selection conversation or refuse activation. | M1, before M7 |
-| Account eligibility | Identify lock/expiry/restriction checks and how PIN success preserves them when KDE does not run account management. No permissive substitute for failed checks. | M1 |
+| Account eligibility | M1 supplies feasibility evidence; M6.1 must implement and demonstrate password-free production lock/expiry/restriction checks before M7's real-account gate. No permissive substitute for failed checks. | M1 feasibility; M6.1 implementation, before M7 |
 | Failure accounting | A six-digit account password is indistinguishable from a PIN candidate until tested. Document potential PIN-budget consumption, wrong-PIN effects on password lockout counters, supported authselect features, and the exact fifth-attempt boundary. Reconcile ambiguous wording in specification section 11 without bypassing existing lockout policy. | M1/M2 |
 | TPM authorization and parent | Fix the reviewed object template, parent recreation, object identity checks, salted sessions, DA-budget inspection and behavior under unavailable hierarchy authorization. | M1/M4 |
 | Blocking backends | Prove how hard LocalPIN deadlines survive a blocked native call, discard late authorization, and clean up workers/handles/reservations without unbounded spawning. Measure total fallback latency separately, including delays in the original password stack. | M1/M5 |
 | Reboot throttling | Define conservative behavior for recent attempts even if no cooldown was active; a boot-ID change must not allow reboot-assisted unlimited guesses. | M2/M3 |
-| UID reuse | Ordinary account fields may not distinguish deleting and recreating an identical UID/name/home. Choose a demonstrable lifecycle/identity mechanism or explicitly narrow support; do not claim this solved with a username comparison. | M1/M2 |
+| UID reuse | ADR 0006 restricts support; M6.1 must choose and demonstrate an enforcing lifecycle/identity mechanism for a defined real-account domain. Ordinary UID/name/home equality cannot establish continuity. | M1/M2 restriction; M6.1 implementation, before M7 |
 | Local-session identity | Define eligible logind sessions/seats and the user-manager lookup policy; do not equate a claimed service name with a genuine locker. | M1/M5 |
 | Integration authority | Decide the narrow root/admin path for PAM changes and recovery, separate from fresh own-user password enrollment. | M1/M6 |
 | Revocation races | Define the durable commit point for disable/rotation versus a verification already in flight; fence later results by generation while acknowledging that previously delivered authorization can finish. | M2/M3 |

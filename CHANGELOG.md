@@ -65,6 +65,9 @@ Changes will be recorded here before versioned releases. There are no releases y
 
 ### Changed
 
+- Roadmap adds M6.1 for enforcing production account lifecycle and password-free
+  eligibility, with real-account evidence required before M7's completion gate;
+  installed password-worker/SELinux/RPM validation remains assigned to M8.
 - Fresh M6 review hardened CLI, broker and credential-helper entry points against
   secret-bearing core dumps before input; subprocess regressions verify process
   dumpability and limits without generating crash artifacts.

@@ -34,6 +34,15 @@ Pure storage crash-consistency work can proceed with simulated identities.
 
 ## Required evidence before lifting the restriction
 
+Implementation ownership is assigned to
+[M6.1 in the roadmap](../implementation-plan.md#m61--implement-production-account-lifecycle-and-eligibility),
+before M7's real-account integration/acceptance gate. That milestone must select
+and demonstrate the mechanism in a new ADR, implement the production lifecycle
+and password-free eligibility adapters, and provide real-account evidence.
+Adding the milestone does not lift this restriction or establish a permanent
+identity schema. Installed policy/confinement and package activation retain
+their M8 gates.
+
 Delete/recreate with identical UID/name/home; deletion concurrent with a backend
 success or enrollment commit; rename; missing/corrupt authority state; authority
 restart and crash between revocation and account mutation; bypass through every
