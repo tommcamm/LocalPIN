@@ -1,0 +1,400 @@
+use super::*;
+use std::collections::VecDeque;
+
+fn report(phase: Phase, enrolled: bool, trial: bool) -> SetupReport {
+    SetupReport {
+        schema_version: 1,
+        phase,
+        blocker: Blocker::None,
+        enrolled,
+        trial_valid: trial,
+        trial_remaining_seconds: if trial { 590 } else { 0 },
+        trial_ref: trial.then(|| "a".repeat(64)),
+        tests_recorded: false,
+    }
+}
+
+struct Fake {
+    state: SetupReport,
+    actions: Vec<Operation>,
+    backends: Vec<BackendPreference>,
+    inspections: usize,
+    change_on_inspection: Option<(usize, SetupReport)>,
+    fail: Option<Operation>,
+    enrollment_error: Option<CliError>,
+    account_error: Option<CliError>,
+}
+
+impl Fake {
+    fn new(state: SetupReport) -> Self {
+        Self {
+            state,
+            actions: vec![],
+            backends: vec![],
+            inspections: 0,
+            change_on_inspection: None,
+            fail: None,
+            enrollment_error: None,
+            account_error: None,
+        }
+    }
+}
+
+impl Host for Fake {
+    fn check_account(&mut self) -> Result<(), CliError> {
+        self.account_error.map_or(Ok(()), Err)
+    }
+    fn inspect(&mut self) -> Result<SetupReport, CliError> {
+        self.inspections += 1;
+        if let Some((at, state)) = &self.change_on_inspection
+            && self.inspections == *at
+        {
+            self.state = state.clone();
+        }
+        Ok(self.state.clone())
+    }
+
+    fn action(
+        &mut self,
+        operation: Operation,
+        trial_ref: Option<&str>,
+    ) -> Result<Option<String>, CliError> {
+        self.actions.push(operation);
+        if self.fail == Some(operation) {
+            return Err(CliError::Administrator);
+        }
+        if matches!(operation, Operation::RecordTests | Operation::Activate) {
+            assert_eq!(trial_ref, self.state.trial_ref.as_deref());
+        } else {
+            assert_eq!(trial_ref, None);
+        }
+        match operation {
+            Operation::Preview => return Ok(Some("synthetic policy diff".to_owned())),
+            Operation::Prepare => self.state = report(Phase::Prepared, false, false),
+            Operation::Trial => self.state = report(Phase::Prepared, true, true),
+            Operation::RecordTests => self.state.tests_recorded = true,
+            Operation::Activate => {
+                self.state.phase = Phase::Active;
+                self.state.trial_valid = false;
+                self.state.trial_remaining_seconds = 0;
+                self.state.trial_ref = None;
+            }
+            Operation::Inspect => panic!("inspect is a separate method"),
+        }
+        Ok(None)
+    }
+
+    fn enroll(&mut self, backend: BackendPreference) -> Result<(), CliError> {
+        self.backends.push(backend);
+        if let Some(error) = self.enrollment_error {
+            return Err(error);
+        }
+        self.state.enrolled = true;
+        Ok(())
+    }
+}
+
+struct Script {
+    answers: VecDeque<Result<usize, CliError>>,
+    messages: Vec<String>,
+}
+
+impl Script {
+    fn new(answers: &[usize]) -> Self {
+        Self {
+            answers: answers.iter().copied().map(Ok).collect(),
+            messages: vec![],
+        }
+    }
+    fn contains(&self, text: &str) -> bool {
+        self.messages.iter().any(|message| message.contains(text))
+    }
+}
+
+impl Ui for Script {
+    fn say(&mut self, text: &str) -> Result<(), CliError> {
+        self.messages.push(text.to_owned());
+        Ok(())
+    }
+    fn choose(&mut self, prompt: &str, _choices: &[&str]) -> Result<usize, CliError> {
+        self.messages.push(prompt.to_owned());
+        self.answers
+            .pop_front()
+            .expect("unexpected wizard question")
+    }
+}
+
+#[test]
+fn initial_setup_stops_for_real_console_recovery_without_attesting_it() {
+    let mut host = Fake::new(report(Phase::Unprepared, false, false));
+    let mut ui = Script::new(&[0, 1, 0, 0, 0, 0, 0]);
+    drive(&mut host, &mut ui).unwrap();
+    assert_eq!(
+        host.actions,
+        [Operation::Preview, Operation::Prepare, Operation::Trial]
+    );
+    assert_eq!(host.backends, [BackendPreference::Tpm]);
+    assert!(ui.contains("TEXT CONSOLE"));
+    assert!(ui.contains("Recovery revokes this PIN enrollment"));
+    assert!(!ui.contains("LocalPIN is active"));
+}
+
+#[test]
+fn completed_recovery_reprepares_enrolls_tests_and_activates() {
+    let mut host = Fake::new(report(Phase::Disabled, false, false));
+    let mut ui = Script::new(&[0, 0, 0, 1, 0, 0, 0, 0]);
+    drive(&mut host, &mut ui).unwrap();
+    assert_eq!(host.backends, [BackendPreference::Software]);
+    assert_eq!(
+        host.actions,
+        [
+            Operation::Preview,
+            Operation::Prepare,
+            Operation::Trial,
+            Operation::RecordTests,
+            Operation::Activate
+        ]
+    );
+    assert_eq!(host.state.phase, Phase::Active);
+    assert!(ui.contains("administrator attestation"));
+    assert!(ui.contains("LocalPIN is active"));
+    assert!(ui.answers.is_empty());
+}
+
+#[test]
+fn resume_does_not_repeat_preparation_or_enrollment() {
+    let mut host = Fake::new(report(Phase::Prepared, true, true));
+    let mut ui = Script::new(&[0, 0, 0, 0, 0]);
+    drive(&mut host, &mut ui).unwrap();
+    assert!(host.backends.is_empty());
+    assert_eq!(host.actions, [Operation::RecordTests, Operation::Activate]);
+    assert!(ui.contains("enrollment is retained"));
+}
+
+#[test]
+fn existing_root_recorded_tests_are_retained_only_during_the_same_live_trial() {
+    let mut state = report(Phase::Prepared, true, true);
+    state.tests_recorded = true;
+    let mut host = Fake::new(state);
+    let mut ui = Script::new(&[0, 0]);
+    drive(&mut host, &mut ui).unwrap();
+    assert_eq!(host.actions, [Operation::Activate]);
+}
+
+#[test]
+fn active_enrolled_installation_is_a_no_op() {
+    let mut host = Fake::new(report(Phase::Active, true, false));
+    let mut ui = Script::new(&[0]);
+    drive(&mut host, &mut ui).unwrap();
+    assert!(host.actions.is_empty());
+    assert!(host.backends.is_empty());
+    assert_eq!(host.inspections, 1);
+}
+
+#[test]
+fn active_unenrolled_installation_enrolls_without_changing_integration() {
+    let mut host = Fake::new(report(Phase::Active, false, false));
+    let mut ui = Script::new(&[0, 0, 1]);
+    drive(&mut host, &mut ui).unwrap();
+    assert!(host.actions.is_empty());
+    assert_eq!(host.backends, [BackendPreference::Software]);
+    assert_eq!(host.inspections, 2);
+    assert_eq!(host.state, report(Phase::Active, true, false));
+    assert!(ui.contains("Your new PIN is ready"));
+    assert!(ui.contains("Desktop integration remains active"));
+    assert!(ui.answers.is_empty());
+}
+
+#[test]
+fn declining_active_reenrollment_leaves_the_account_unchanged() {
+    let initial = report(Phase::Active, false, false);
+    let mut host = Fake::new(initial.clone());
+    let mut ui = Script::new(&[0, 1]);
+    drive(&mut host, &mut ui).unwrap();
+    assert_eq!(host.state, initial);
+    assert!(host.actions.is_empty());
+    assert!(host.backends.is_empty());
+    assert_eq!(host.inspections, 1);
+    assert!(!ui.contains("Your new PIN is ready"));
+    assert!(ui.answers.is_empty());
+}
+
+#[test]
+fn cancelled_active_reenrollment_does_not_start_enrollment() {
+    for confirmed in [false, true] {
+        let initial = report(Phase::Active, false, false);
+        let mut host = Fake::new(initial.clone());
+        let mut ui = Script::new(if confirmed { &[0, 0] } else { &[0] });
+        ui.answers.push_back(Err(CliError::Cancelled));
+        assert_eq!(drive(&mut host, &mut ui), Err(CliError::Cancelled));
+        assert_eq!(host.state, initial);
+        assert!(host.actions.is_empty());
+        assert!(host.backends.is_empty());
+        assert_eq!(host.inspections, 1);
+        assert!(!ui.contains("Your new PIN is ready"));
+        assert!(ui.answers.is_empty());
+    }
+}
+
+#[test]
+fn active_reenrollment_failure_does_not_retry_or_claim_success() {
+    let initial = report(Phase::Active, false, false);
+    let mut host = Fake::new(initial.clone());
+    host.enrollment_error = Some(CliError::Backend);
+    let mut ui = Script::new(&[0, 0, 0]);
+    assert_eq!(drive(&mut host, &mut ui), Err(CliError::Backend));
+    assert_eq!(host.state, initial);
+    assert!(host.actions.is_empty());
+    assert_eq!(host.backends, [BackendPreference::Tpm]);
+    assert_eq!(host.inspections, 1);
+    assert!(!ui.contains("Your new PIN is ready"));
+    assert!(ui.answers.is_empty());
+}
+
+#[test]
+fn active_reenrollment_requires_fresh_active_enrollment_and_broker_readiness() {
+    for changed in [
+        report(Phase::Prepared, true, false),
+        report(Phase::Active, false, false),
+    ] {
+        let mut host = Fake::new(report(Phase::Active, false, false));
+        host.change_on_inspection = Some((2, changed));
+        let mut ui = Script::new(&[0, 0, 1]);
+        assert_eq!(drive(&mut host, &mut ui), Err(CliError::SetupReport));
+        assert!(host.actions.is_empty());
+        assert_eq!(host.backends, [BackendPreference::Software]);
+        assert_eq!(host.inspections, 2);
+        assert!(!ui.contains("Your new PIN is ready"));
+        assert!(ui.answers.is_empty());
+    }
+
+    let mut host = Fake::new(report(Phase::Active, false, false));
+    host.account_error = Some(CliError::Service);
+    let mut ui = Script::new(&[0, 0, 1]);
+    assert_eq!(drive(&mut host, &mut ui), Err(CliError::Service));
+    assert!(host.actions.is_empty());
+    assert_eq!(host.backends, [BackendPreference::Software]);
+    assert_eq!(host.inspections, 2);
+    assert!(!ui.contains("Your new PIN is ready"));
+    assert!(ui.answers.is_empty());
+}
+
+#[test]
+fn every_blocker_stops_before_any_mutation() {
+    for blocker in [
+        Blocker::Accounting,
+        Blocker::Multiuser,
+        Blocker::Recovery,
+        Blocker::Policy,
+    ] {
+        let mut state = report(Phase::Unprepared, false, false);
+        state.blocker = blocker;
+        let mut host = Fake::new(state);
+        let mut ui = Script::new(&[0]);
+        assert_eq!(drive(&mut host, &mut ui), Err(CliError::SetupBlocked));
+        assert!(host.actions.is_empty());
+        assert!(host.backends.is_empty());
+        assert!(ui.contains("Guide:"));
+    }
+}
+
+#[test]
+fn incomplete_and_suspended_states_never_reprepare() {
+    for phase in [Phase::Preparing, Phase::Suspended, Phase::Unknown] {
+        let mut host = Fake::new(report(phase, false, false));
+        let mut ui = Script::new(&[0]);
+        assert_eq!(drive(&mut host, &mut ui), Err(CliError::SetupBlocked));
+        assert!(host.actions.is_empty());
+    }
+}
+
+#[test]
+fn declining_readiness_does_not_invoke_sudo() {
+    let mut host = Fake::new(report(Phase::Unprepared, false, false));
+    let mut ui = Script::new(&[1]);
+    drive(&mut host, &mut ui).unwrap();
+    assert_eq!(host.inspections, 0);
+    assert!(host.actions.is_empty());
+}
+
+#[test]
+fn declining_preparation_only_runs_the_read_only_preview() {
+    let mut host = Fake::new(report(Phase::Unprepared, false, false));
+    let mut ui = Script::new(&[0, 1, 1]);
+    drive(&mut host, &mut ui).unwrap();
+    assert_eq!(host.actions, [Operation::Preview]);
+    assert_eq!(host.state.phase, Phase::Unprepared);
+}
+
+#[test]
+fn declining_trial_or_final_activation_retains_committed_state() {
+    let mut host = Fake::new(report(Phase::Prepared, true, false));
+    let mut ui = Script::new(&[0, 0, 1]);
+    drive(&mut host, &mut ui).unwrap();
+    assert!(host.actions.is_empty());
+    assert!(host.state.enrolled);
+    let mut host = Fake::new(report(Phase::Prepared, true, true));
+    let mut ui = Script::new(&[0, 0, 0, 0, 1]);
+    drive(&mut host, &mut ui).unwrap();
+    assert!(host.actions.is_empty());
+    assert!(host.state.trial_valid);
+    assert!(ui.contains("expires automatically"));
+}
+
+#[test]
+fn cancelled_choice_does_not_mutate_or_retry() {
+    let mut host = Fake::new(report(Phase::Unprepared, false, false));
+    let mut ui = Script::new(&[]);
+    ui.answers.push_back(Err(CliError::Cancelled));
+    assert_eq!(drive(&mut host, &mut ui), Err(CliError::Cancelled));
+    assert_eq!(host.inspections, 0);
+    assert!(host.actions.is_empty());
+}
+
+#[test]
+fn tpm_failure_never_retries_with_software_or_starts_a_trial() {
+    let mut host = Fake::new(report(Phase::Prepared, false, false));
+    host.enrollment_error = Some(CliError::Backend);
+    let mut ui = Script::new(&[0, 0, 0]);
+    assert_eq!(drive(&mut host, &mut ui), Err(CliError::Backend));
+    assert_eq!(host.backends, [BackendPreference::Tpm]);
+    assert!(host.actions.is_empty());
+}
+
+#[test]
+fn expired_or_replaced_trial_cannot_receive_the_users_previous_confirmations() {
+    for state in [report(Phase::Prepared, true, false), {
+        let mut state = report(Phase::Prepared, true, true);
+        state.trial_ref = Some("b".repeat(64));
+        state
+    }] {
+        let mut host = Fake::new(report(Phase::Prepared, true, true));
+        host.change_on_inspection = Some((2, state));
+        let mut ui = Script::new(&[0, 0, 0, 0, 0]);
+        assert_eq!(drive(&mut host, &mut ui), Err(CliError::SetupBlocked));
+        assert!(host.actions.is_empty());
+        assert!(ui.contains("trial expired or enrollment changed"));
+    }
+}
+
+#[test]
+fn activation_error_does_not_claim_success_or_retry() {
+    let mut host = Fake::new(report(Phase::Prepared, true, true));
+    host.fail = Some(Operation::Activate);
+    let mut ui = Script::new(&[0, 0, 0, 0, 0]);
+    assert_eq!(drive(&mut host, &mut ui), Err(CliError::Administrator));
+    assert_eq!(host.actions, [Operation::RecordTests, Operation::Activate]);
+    assert!(!ui.contains("LocalPIN is active"));
+}
+
+#[test]
+fn unavailable_broker_or_account_authority_stops_resumed_setup_before_trial() {
+    for error in [CliError::Service, CliError::SetupBlocked] {
+        let mut host = Fake::new(report(Phase::Prepared, true, false));
+        host.account_error = Some(error);
+        let mut ui = Script::new(&[0, 0]);
+        assert_eq!(drive(&mut host, &mut ui), Err(error));
+        assert!(host.actions.is_empty());
+        assert!(ui.contains("broker cannot currently establish"));
+    }
+}

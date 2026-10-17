@@ -2,7 +2,7 @@
 
 - Date: 2026-10-17
 - Status: M0–M8 implemented with historical appliance acceptance; M8.1 final source checks and targeted installed RPM acceptance passed on Fedora KDE 44 x86_64 with SELinux enforcing and a private TPM emulator. The [M8.1 report](development/m8.1-desktop-compatibility.md) records evidence and each installed case's build scope. GUI/DBus AccountsService, full old-TPM-credential migration and physical hardware remain unvalidated. M9 independent human/specialist review and release gates remain open. [Hosted CI](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml) and its unsigned testing RPMs provide separate build/test evidence; recorded local/VM acceptance does not imply a passing workflow run.
-- Source of requirements: [product-specification.md](product-specification.md), version 1.5. ADR 0017 replaces the frozen lifecycle domain with native shadow-record markers and locking; ADR 0018 defines KDE/native-update compatibility.
+- Source of requirements: [product-specification.md](product-specification.md), version 1.6. ADR 0017 replaces the frozen lifecycle domain with native shadow-record markers and locking; ADR 0018 defines KDE/native-update compatibility; ADR 0019 defines fixed guided-setup orchestration.
 
 
 This plan turns the specification into independently reviewable changes and evidence gates. The specification remains authoritative. An unresolved design question below must be resolved in an architecture decision record (ADR), with a specification amendment if necessary, rather than silently changing the requirements.
@@ -42,6 +42,7 @@ M0 repository foundation
   -> M7 production PAM integration
   -> M8 Fedora packaging and recovery
   -> M8.1 ordinary Fedora desktop and distribution-update acceptance
+  -> M8.2 guided installation and terminal onboarding
   -> M9 independent review and staged release
 ```
 
@@ -427,6 +428,41 @@ acceptance passed; the report retains each case's build scope. Untested
 administration, old credential migration and hardware
 cases remain explicit coverage limits. Physical hardware and independent review
 remain M9 work.
+
+### M8.2 — Guided installation and terminal onboarding
+
+The source change introduces [ADR 0019](adr/0019-guided-setup-orchestration.md)'s
+`localpin` primary command and interactive menu, while preserving `localpinctl`
+and schema-version-1 status/doctor JSON. The
+[M8.2 validation report](development/m8.2-guided-setup.md) records passing local
+source, terminal and RPM checks. Installed acceptance of this guided flow is
+still outstanding; historical M8.1 results retain their recorded scope.
+
+- Offer `dnf install` followed by `localpin setup` for one desktop owner. Guide
+  readiness checks, preparation preview/confirmation, explicit TPM or software
+  enrollment, real trial/recovery tests, renewed enrollment/tests after recovery,
+  operator attestation and activation. Retain the complete manual procedure.
+- Keep secrets in the existing normal-user password/PIN conversation. Use only
+  fixed packaged helper operations through absolute sudo with closed arguments,
+  a controlled environment and no shell. Check setup UID against both protected
+  integration and account scope inside each privileged mutation transaction.
+  Recheck the live trial/enrollment and the exact confirmed trial reference
+  inside the root transaction before test attestation and activation.
+- Report read-only versioned setup state separately from public CLI status.
+  Resume from authoritative state, preserve healthy active installations and
+  stop for incompatible/multiuser/recovery state. Keep persistent-accounting
+  migration offline; a missing prerequisite produces a maintenance handoff.
+  Check broker account/session/enrollment readiness before trial and activation;
+  protected pointer inspection alone does not establish account continuity.
+- Verify synthetic state-machine/fixed-invocation/UID-guard cases, PTY input and
+  terminal restoration, packaging invariants and source checks. Repeat the new
+  clean-install, recovery/resume and compatible-update flow in a disposable
+  enforcing Fedora KDE VM with a private TPM emulator before claiming installed
+  acceptance. Record unavailable checks without treating them as passes.
+
+Exit gate: the guided flow passes appropriate source checks and new installed
+Fedora KDE acceptance with actual PIN/password, console recovery and resume
+observations. This does not complete M9 independent review or hardware gates.
 
 ### M9 — Review, hardware validation and versioned release
 

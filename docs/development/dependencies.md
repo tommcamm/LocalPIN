@@ -1,5 +1,42 @@
 # Build inputs and dependency policy
 
+## Guided setup JSON dependencies
+
+The onboarding CLI adds exact direct `serde 1.0.229` (already in the workspace
+lockfile, with `derive` and standard-library support) and `serde_json 1.0.150`
+with its default `std` feature. The maintained serde-rs implementation parses
+the fixed administrator helper's bounded nonsecret report; closed derived
+types reject unknown/duplicate fields and incompatible schema versions. It is
+not used to serialize passwords, PINs, or broker authorization messages. Public
+status/doctor schema-1 output remains unchanged. No terminal UI framework is
+added, and the helper adds no Python dependencies.
+
+The lockfile adds `serde_json 1.0.150`, `itoa 1.0.18` and `zmij 1.0.23`;
+`memchr`, serde core and derive dependencies were already locked. Serde and
+serde_json/itoa use MIT OR Apache-2.0; zmij uses MIT. Their declared Rust minimums
+are 1.56 (serde), 1.71 (serde_json and zmij), and 1.68 (itoa), below the pinned
+1.99.1 toolchain. These crates add no native-library requirements. Serde_json's
+build script selects target arithmetic configuration without downloading or
+building native code. Optional arbitrary precision, unbounded-depth parsing,
+raw values and order-preserving maps are not enabled.
+
+The CLI bounds helper stdout at 64 KiB and uses a small closed setup report.
+Mutation output is also bounded and parsed only for the preparation preview;
+it never substitutes for a fresh authoritative report. The local locked
+`cargo-deny 0.20.2` check passed advisories, licenses, bans and sources after
+refresh on 2026-10-17, with no policy exception. This is dependency-policy
+evidence, not independent review of the new orchestration boundary.
+
+The PR review follow-up adds no dependencies. The native account tool's
+integration-lock adapter has a narrowly scoped `fcntl` FFI boundary to validate
+and duplicate an inherited numeric descriptor, set close-on-exec, and transfer
+only the newly allocated descriptor into a Rust `File`. Invalid descriptors
+produce an error without creating a borrowed Rust descriptor from an unchecked
+integer. Canonical root-owned directories, lock metadata and inode identity are
+checked around nonblocking lock acquisition. The duplicate retains the parent's
+open-file description and is closed on drop without explicitly unlocking it.
+This boundary remains an input to independent human/native review.
+
 The current workspace has nine crates covering policy, IPC, protected storage,
 software and TPM credentials, the broker, password/eligibility workers, CLI, and
 PAM adapter. Native builds require TPM2-TSS 4.x and libdbus development libraries,

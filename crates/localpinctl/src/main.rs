@@ -2,7 +2,7 @@
 
 fn main() {
     if let Err(error) = localpinctl::workflow::run() {
-        eprintln!("localpinctl: {error}");
+        eprintln!("LocalPIN: {error}");
         std::process::exit(if error == localpinctl::CliError::Cancelled {
             130
         } else {

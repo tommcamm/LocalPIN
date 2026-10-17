@@ -86,13 +86,13 @@ pub fn text(status: Option<Status>, doctor: bool) -> String {
 
 fn text_with_gate(status: Option<Status>, doctor: bool, gate: Gate) -> String {
     let Some(status) = status else {
-        return "Installed: CLI present\nBroker: unavailable; ask the administrator to check the LocalPIN service\nEnrolled: unknown\nTested: not recorded\nActive: unknown; verify the existing password recovery route".to_owned();
+        return "LocalPIN\n\nInstalled: CLI present\nBroker: unavailable\nEnrolled: unknown\nTested: not recorded\nActive: unknown\n\nNext: run localpin setup to check readiness, or ask an administrator to inspect the LocalPIN service. Keep the existing password recovery route available.".to_owned();
     };
     let enrollment_unknown = enrollment_uninspected(status);
     let integration_unknown = status.availability == Availability::Unavailable;
     let tested = tested(Some(status), gate);
     let mut output = format!(
-        "Installed: CLI present; broker reachable\nEnrolled: {}\nTested: {}\nActive: {}\nConfigured backend: {}\nAvailability: {}\nCooldown: {}\nIntegration: {}\nTPM detected: {}; usable: {}\nReason: {}",
+        "LocalPIN\n\nInstalled: CLI present; broker reachable\nEnrolled: {}\nTested: {}\nActive: {}",
         if enrollment_unknown {
             "unknown"
         } else {
@@ -109,62 +109,84 @@ fn text_with_gate(status: Option<Status>, doctor: bool, gate: Gate) -> String {
             "yes"
         } else {
             "no"
-        },
-        if enrollment_unknown {
-            "unknown"
-        } else {
-            preference(status.configured)
-        },
-        available(status.availability),
-        if enrollment_unknown {
-            "unknown".to_owned()
-        } else {
-            format!("{} ms", status.cooldown_ms)
-        },
-        if integration_unknown {
-            "unknown"
-        } else {
-            integrated(status.integration, gate)
-        },
-        status.tpm_detected,
-        if status.tpm_usable {
-            "established"
-        } else {
-            "not-established"
-        },
-        failure(status.reason)
+        }
     );
     if doctor {
+        output.push_str(&format!(
+            "\n\nConfigured backend: {}\nAvailability: {}\nCooldown: {}\nIntegration: {}\nTPM detected: {}; usable: {}\nReason: {}",
+            if enrollment_unknown { "unknown" } else { preference(status.configured) },
+            available(status.availability),
+            if enrollment_unknown { "unknown".to_owned() } else { format!("{} ms", status.cooldown_ms) },
+            if integration_unknown { "unknown" } else { integrated(status.integration, gate) },
+            status.tpm_detected,
+            if status.tpm_usable { "established" } else { "not-established" },
+            failure(status.reason)
+        ));
         output.push_str(if tested == "operator-attested" {
             "\nPassword recovery and desktop unlock tests: administrator attested at activation; this status check does not repeat those tests."
         } else {
             "\nPassword recovery and desktop unlock tests: not recorded; verify both before activation"
         });
-        output.push_str(match status.reason {
-            Reason::None => "\nThe broker reports no current availability failure.",
-            Reason::Account => "\nAccount policy denies PIN use. Ask the administrator to inspect locks, expiry, required password changes and applicable restrictions; use the existing password recovery route.",
-            Reason::AccountUnsupported => "\nAccount unsupported: only explicitly provisioned accounts in the sealed Fedora account domain are supported. The administrator must establish a disabled baseline; enrollment cannot create lifecycle state.",
-            Reason::LifecycleUnavailable => "\nLifecycle unavailable: the domain is revoked, busy, unsealed, or its required state is missing or corrupt. Ask the administrator to recover and reseal the domain; this requires fresh enrollment.",
-            Reason::EligibilityUnavailable => "\nAccount eligibility unavailable: the reviewed Fedora policy, password format or authoritative restriction state could not be established. Ask the administrator to inspect the supported policy and faillock state.",
-            Reason::Session => "\nUse the account's supported local graphical session.",
-            Reason::Storage => {
-                "\nAsk the administrator to inspect protected state ownership and permissions."
-            }
-            Reason::Backend => "\nCheck TPM usability or explicitly choose software enrollment.",
-            Reason::Policy => "\nAsk the administrator to inspect LocalPIN policy and integration.",
-            Reason::Busy => "\nWait for the current bounded operation to finish, then retry.",
-            Reason::Protocol => "\nCheck that the CLI and broker versions are compatible.",
-        });
     }
+    output.push_str("\n\nNext: ");
+    output.push_str(next_action(status, gate));
     output
+}
+
+fn next_action(status: Status, gate: Gate) -> &'static str {
+    match status.reason {
+        Reason::Account => {
+            "Account policy denies PIN use. Ask an administrator to inspect locks, expiry, required password changes, and restrictions; use the existing password recovery route."
+        }
+        Reason::AccountUnsupported => {
+            "Run localpin setup to check account preparation. An administrator must establish a disabled baseline; enrollment cannot create account authority."
+        }
+        Reason::LifecycleUnavailable => {
+            "Ask an administrator to inspect the account registry and native shadow-record binding. Missing, revoked, legacy, or corrupt authority requires deliberate recovery and fresh enrollment."
+        }
+        Reason::EligibilityUnavailable => {
+            "Ask an administrator to inspect the supported Fedora policy, password format, authoritative restrictions, and persistent faillock state."
+        }
+        Reason::Session => {
+            "Use this account's supported local graphical session, then run localpin setup."
+        }
+        Reason::Storage => {
+            "Ask an administrator to inspect protected state ownership and permissions."
+        }
+        Reason::Backend => {
+            "Run localpin doctor to inspect TPM readiness. Choosing software protection requires explicit enrollment and fresh password verification."
+        }
+        Reason::Policy => {
+            "Ask an administrator to inspect LocalPIN policy with sudo localpin-integration status."
+        }
+        Reason::Busy => "Wait for the current bounded operation to finish, then retry.",
+        Reason::Protocol => "Check that the CLI and broker versions are compatible.",
+        Reason::None => {
+            if status.availability == Availability::Cooldown {
+                "Wait for the cooldown to finish before trying your PIN again. Password recovery remains available."
+            } else if status.availability == Availability::Unavailable {
+                "Ask an administrator to inspect the LocalPIN service; the available status does not establish readiness."
+            } else if status.integration == Integration::NeedsAttention {
+                "Inspect desktop integration with sudo localpin-integration status and follow its recovery guidance."
+            } else if status.enrolled.is_none() {
+                "run localpin setup to prepare your account and create a PIN."
+            } else if status.integration == Integration::Active && gate == Gate::Active {
+                "Your PIN is active. Use localpin change to choose a new PIN, or localpin doctor for details."
+            } else if status.integration == Integration::Active && gate == Gate::Trial {
+                "A bounded test window is open. Run localpin setup to finish desktop and password recovery tests before activation."
+            } else {
+                "run localpin setup to test desktop unlocking and password recovery, then activate integration."
+            }
+        }
+    }
 }
 
 /// Inspect only the sanitized, fixed root gate; no broker or enrollment needed.
 pub fn integration_text(gate: Gate) -> String {
     match gate {
-        Gate::Disabled => "Desktop integration gate: disabled or unavailable\nActive: no\nTests: not established by the readable activation state\nAdministrator details: sudo /usr/libexec/localpin/localpin-integration status",
-        Gate::Trial => "Desktop integration gate: trial\nActive: no; a bounded current-boot test window permits PIN testing\nTests: not recorded as complete; final activation is separate\nAdministrator details: sudo /usr/libexec/localpin/localpin-integration status",
-        Gate::Active => "Desktop integration gate: active\nActive: yes\nTests: administrator attested at activation; this status check does not repeat them\nAdministrator details: sudo /usr/libexec/localpin/localpin-integration status",
+        Gate::Disabled => "Desktop integration gate: disabled or unavailable\nActive: no\nTests: not established by the readable activation state\nNext: run localpin setup to check readiness and continue onboarding\nAdministrator details: sudo localpin-integration status",
+        Gate::Trial => "Desktop integration gate: trial\nActive: no; a bounded current-boot test window permits PIN testing\nTests: not recorded as complete; final activation is separate\nNext: run localpin setup to continue the required tests\nAdministrator details: sudo localpin-integration status",
+        Gate::Active => "Desktop integration gate: active\nActive: yes\nTests: administrator attested at activation; this status check does not repeat them\nAdministrator details: sudo localpin-integration status",
     }.to_owned()
 }
 
@@ -272,6 +294,30 @@ mod tests {
         }
     }
     #[test]
+    fn schema_one_output_remains_byte_compatible() {
+        let expected = "{\"schema_version\":1,\"command\":\"status\",\"installed\":\"client-present\",\"broker_available\":true,\"enrolled\":true,\"tested\":\"not-recorded\",\"active\":false,\"configured_backend\":\"tpm2-required\",\"enrolled_backend\":\"tpm2\",\"availability\":\"available\",\"cooldown_ms\":0,\"integration\":\"inactive\",\"tpm_detected\":true,\"tpm_usable\":true,\"tpm_usability\":\"established\",\"reason\":\"none\"}";
+        assert_eq!(json(Some(enrolled()), false), expected);
+        assert_eq!(
+            json(Some(enrolled()), true),
+            expected.replace("\"command\":\"status\"", "\"command\":\"doctor\"")
+        );
+    }
+    #[test]
+    fn concise_status_guides_setup_and_distinguishes_trial_from_activation() {
+        let mut status = enrolled();
+        let report = text(Some(status), false);
+        assert!(report.contains("Next: run localpin setup"));
+        assert!(!report.contains("Configured backend:"));
+        assert!(text(Some(status), true).contains("Configured backend:"));
+        status.integration = Integration::Active;
+        let trial = text_with_gate(Some(status), false, Gate::Trial);
+        assert!(trial.contains("Active: no"));
+        assert!(trial.contains("A bounded test window is open"));
+        let active = text_with_gate(Some(status), false, Gate::Active);
+        assert!(active.contains("Active: yes"));
+        assert!(active.contains("Your PIN is active"));
+    }
+    #[test]
     fn trial_is_distinct_from_administrator_attested_activation() {
         let mut status = enrolled();
         status.integration = Integration::Active;
@@ -367,6 +413,8 @@ mod tests {
             status.reason = reason;
             assert!(json(Some(status), true).contains(code));
             assert!(text(Some(status), true).contains(guidance));
+            assert!(!text(Some(status), true).contains("sealed Fedora account domain"));
+            assert!(!text(Some(status), true).contains("reseal the domain"));
             assert!(json(Some(status), true).contains("\"enrolled\":null"));
         }
     }

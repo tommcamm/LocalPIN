@@ -8,6 +8,16 @@ experimental builds.
 
 ### Added
 
+- Primary `localpin` CLI alias and inline terminal menu with guided
+  `localpin setup`: readiness checks, preparation preview, explicit backend
+  enrollment, trial/recovery guidance, resume and final activation. Privileged
+  steps use a fixed sudo/helper interface with transaction-scoped single-account
+  guards; secrets keep the existing private broker path. Existing `localpinctl`
+  commands and status/doctor JSON stay compatible. Persistent accounting still
+  requires an offline maintenance handoff and real recovery revokes enrollment.
+  [ADR 0019](docs/adr/0019-guided-setup-orchestration.md) defines the boundary;
+  new installed onboarding acceptance and all M9 gates remain outstanding.
+
 - Manual main-only experimental GitHub prereleases for Fedora KDE 44 x86_64,
   gated on CI, with RPM/source assets, SPDX dependency/native inventory,
   provenance/checksums and mandatory verified OpenPGP signing. Stable publication
@@ -126,6 +136,13 @@ experimental builds.
 - Genuine same-UID KDE ambiguity/fallback and independently routed second-seat
   desktop/locker tests, guarded clone tooling and final recovery evidence,
   completing M1 feasibility.
+
+### Fixed
+
+- Guided setup can enroll a new PIN after own-user disable while preserving
+  active desktop integration. Native account administration now shares the
+  integration transaction lock, preventing concurrent provisioning from
+  invalidating setup's single-account scope check before mutation.
 
 ### Changed
 

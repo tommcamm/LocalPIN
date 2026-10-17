@@ -67,10 +67,20 @@ sudo dnf install ./localpin-*.x86_64.rpm
 ```
 
 Installation leaves PIN integration disabled and starts no broker services.
-Follow the [installation and recovery runbook](../../docs/integration-administration.md)
-for persistent native accounting, preparation, enrollment, a timed trial,
-password fallback, console recovery, and explicit activation. Record the tested
-commit and package version with your results.
+From your own foreground KDE terminal, run:
+
+```sh
+localpin setup
+```
+
+The guide checks prerequisites, previews preparation and guides enrollment,
+a timed trial, actual password/PIN tests, console recovery, fresh enrollment and
+final activation. The one-time persistent-accounting migration still needs an
+offline maintenance console; setup stops with that handoff when needed. The
+[installation and recovery runbook](../../docs/integration-administration.md)
+retains the complete manual administrator procedure. Record the tested commit
+and package version with your results. The guided workflow requires fresh
+installed acceptance; historical M8.1 evidence does not validate it.
 
 CI uses RPM release `0.1.alpha1.ci.<run-number>.<attempt>` so successive workflow
 runs and reruns can upgrade earlier CI packages. This sequence does not promise
@@ -101,12 +111,17 @@ controlled signing. A successful local RPM build is not release certification.
 
 ## Installation and confinement
 
-Installation supplies broker/workers, the root-only integration tool, CLI, PAM
+Installation supplies broker/workers, the root-only integration tool, the shared
+`localpin` / `localpinctl` CLI, PAM
 adapter, four fail-closed private PAM services, reviewed policy templates,
 systemd units, tmpfiles rules, a disabled preset and SELinux policy. It starts
-nothing and changes no KDE/authselect/faillock policy. Follow the
-[administration runbook](../../docs/integration-administration.md) for explicit
-persistent-accounting setup, preparation, enrollment, trial and activation.
+nothing and changes no KDE/authselect/faillock policy. `/usr/bin/localpin` is a
+symlink to `localpinctl`; both names preserve the command interface. The RPM
+requires sudo for the explicit foreground setup wizard and installs no sudoers
+rule. The wizard uses absolute fixed paths, a closed operation set and no shell;
+sudo handles its own password prompt and credential enrollment remains a
+normal-user broker transaction. See [ADR 0019](../../docs/adr/0019-guided-setup-orchestration.md)
+and the [administration runbook](../../docs/integration-administration.md).
 
 The broker and each worker have distinct SELinux domains. Clients receive only
 socket contact and public gate reads, with no credential, shadow, registry,
@@ -156,7 +171,7 @@ substack refuse removal. Never force erase with `--noscripts`. Protected state,
 tallies and backups are retained. The short console recovery command is:
 
 ```sh
-sudo /usr/libexec/localpin/localpin-integration disable
+sudo localpin-integration disable
 ```
 
 Changed owned directives or missing/corrupt backups require a reviewed console

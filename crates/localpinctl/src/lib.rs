@@ -1,6 +1,9 @@
 //! Non-setuid LocalPIN CLI: private terminal enrollment and nonsecret status.
 
+mod admin;
 pub mod args;
+mod menu;
+mod setup;
 pub mod status;
 pub mod terminal;
 pub mod workflow;
@@ -46,12 +49,18 @@ pub enum CliError {
     Integration,
     /// System integration disable requires the separate root administration tool.
     IntegrationDisable,
+    /// Administrator helper was unavailable or refused the fixed operation.
+    Administrator,
+    /// The administrator helper returned an invalid or incompatible report.
+    SetupReport,
+    /// Setup needs an explicitly described maintenance or recovery action.
+    SetupBlocked,
 }
 
 impl fmt::Display for CliError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Self::Arguments => "unsupported arguments; run localpinctl --help; secret arguments are not accepted",
+            Self::Arguments => "unsupported arguments; run localpin --help; secret arguments are not accepted",
             Self::SecretEnvironment => "secret or simulator environment variables are not accepted; remove them and use the terminal prompts",
             Self::Terminal => "a real foreground terminal is required; secrets cannot be read from stdin or a pipe",
             Self::Process => "process secret-protection setup failed; no interactive input was accepted",
@@ -64,11 +73,14 @@ impl fmt::Display for CliError {
             Self::Protocol => "the broker exchange was invalid; check client and service versions",
             Self::PasswordRejected => "password authentication was rejected; the credential was not changed",
             Self::Forbidden => "the account or session is not permitted to perform this operation",
-            Self::Backend => "TPM protection is unavailable; inspect localpinctl doctor, or explicitly choose --backend software",
+            Self::Backend => "TPM protection is unavailable; inspect localpin doctor, or explicitly choose --backend software",
             Self::NotEnrolled => "no existing enrollment is available for this action",
             Self::Account => "select one existing, non-root local account by its account name",
-            Self::Integration => "root activation tooling requires prepare, a bounded trial, and administrator-recorded desktop/password tests first; then run sudo /usr/libexec/localpin/localpin-integration activate; enrollment does not activate desktop integration",
-            Self::IntegrationDisable => "run sudo /usr/libexec/localpin/localpin-integration disable to disable system desktop integration; this is separate from disabling an account's PIN credential",
+            Self::Integration => "root activation tooling requires prepare, a bounded trial, and administrator-recorded desktop/password tests first; use localpin setup, or then run sudo localpin-integration activate; enrollment does not activate desktop integration",
+            Self::IntegrationDisable => "run sudo localpin-integration disable to disable system desktop integration; this is separate from disabling an account's PIN credential",
+            Self::Administrator => "the administrator operation was not confirmed; rerun localpin setup to inspect saved state before retrying",
+            Self::SetupReport => "setup could not establish authoritative system state; use localpin doctor and the administrator recovery guide",
+            Self::SetupBlocked => "setup is paused; complete the maintenance or recovery action shown above, then rerun localpin setup",
         })
     }
 }

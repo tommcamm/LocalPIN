@@ -13,14 +13,46 @@ validation remain outstanding; the
 [desktop compatibility report](development/m8.1-desktop-compatibility.md)
 describes the recorded testing and its limits.
 
-## Before enrolling
+## Start with guided setup
 
-An administrator must first follow the
-[installation and recovery runbook](integration-administration.md), including
-the one-time offline preparation of persistent native password accounting.
-The current target uses supported local accounts, reviewed Fedora authentication
-policy and SELinux enforcing. Network accounts, systemd-homed and arbitrary PAM
-customizations are outside the supported domain.
+After [verifying and installing the RPM](integration-administration.md#install-without-activation),
+open a foreground terminal in your own local KDE session and run:
+
+```sh
+localpin setup
+```
+
+Run setup as your normal user, with administrator access available through sudo.
+It checks readiness, previews preparation changes, asks for confirmation before
+system changes, and guides private PIN enrollment, trial tests, console recovery
+and final activation. Sudo owns any administrator-password prompt; enrollment
+separately verifies your account password through the existing broker.
+
+The one-time persistent password-accounting migration still requires an
+[offline maintenance console](integration-administration.md#prepare-native-accounting-once).
+Setup explains the handoff and stops when accounting is missing. It does not
+copy live tallies or reset counters. The target requires supported local
+accounts, reviewed Fedora authentication policy and SELinux enforcing. Network
+accounts, systemd-homed and arbitrary PAM customizations are outside this domain.
+The guided flow supports one owner account; installations managing additional
+accounts use the [manual administrator procedure](integration-administration.md#prepare-and-enroll).
+
+You can cancel and run `localpin setup` again. It inspects protected system state
+rather than a saved user checkpoint. Completed stages remain complete; cancelling
+can leave a trial open until its reported expiry. If an operation's result is
+uncertain, setup checks state before offering another action. A healthy active
+installation is shown without repeating preparation. Incomplete transactions,
+suspended updates, incompatible state or corrupt authority require the runbook.
+
+If you previously disabled your own PIN while desktop integration remains
+active, `localpin setup` offers to create a new PIN. It keeps the active
+integration in place and uses fresh account-password verification.
+
+Run `localpin` without arguments in a terminal for a numbered menu covering
+setup/resume, status, diagnostics and credential management. Outside a terminal,
+it shows help without prompting. Output uses subtle colors when supported and
+plain text with `NO_COLOR`, `TERM=dumb` or redirected output. All existing
+`localpinctl` commands remain available; `localpin` is the packaged primary name.
 
 Setup has separate stages:
 
@@ -34,17 +66,20 @@ Setup has separate stages:
 
 Keep a known working full-password route and an administrator console available
 during setup. The runbook requires a recovery rehearsal before activation;
-recovery revokes the prepared account bindings, so the administrator must
-prepare again, you must enroll again, and the desktop tests must be repeated
-with the final enrollment.
+recovery revokes the prepared account bindings. Run `localpin setup` again to
+prepare and enroll, then repeat the desktop tests with the final enrollment.
+A live trial is reused only while its boot, time and enrollment bindings remain
+valid. An expired or changed trial requires fresh testing. The final prompts
+record your explicit attestation of real tests; setup cannot observe or perform
+the console rehearsal and does not treat your answers as automated evidence.
 
 ## Enroll your PIN
 
-Open a foreground terminal in your own eligible local KDE session. Run own-user
-commands as yourself, without `sudo`:
+For manual enrollment, open a foreground terminal in your own eligible local KDE
+session. Run own-user commands as yourself, without `sudo`:
 
 ```sh
-localpinctl doctor
+localpin doctor
 ```
 
 Resolve any account, session or service problem before enrolling. Choose one
@@ -52,10 +87,10 @@ backend explicitly:
 
 | Backend | Command | Tradeoff |
 | --- | --- | --- |
-| TPM | `localpinctl enroll --backend tpm2-required` | Binds the credential to the enrolled TPM. Use only with a separately validated TPM deployment. |
-| Software | `localpinctl enroll --backend software` | Uses protected system storage and online throttling, without TPM binding. Copied verifier material remains susceptible to offline guessing. |
+| TPM | `localpin enroll --backend tpm2-required` | Binds the credential to the enrolled TPM. Use only with a separately validated TPM deployment. |
+| Software | `localpin enroll --backend software` | Uses protected system storage and online throttling, without TPM binding. Copied verifier material remains susceptible to offline guessing. |
 
-`localpinctl enroll --backend auto` also attempts TPM creation and a trial. It
+`localpin enroll --backend auto` also attempts TPM creation and a trial. It
 does **not** fall back to software if the TPM is unsuitable. Software enrollment
 always requires your explicit choice and confirmation. A detected TPM device
 alone does not establish that enrollment will work.
@@ -72,12 +107,12 @@ committed.
 
 Cancelling before commit leaves the existing credential unchanged. If a
 connection fails around commit, the change may already be durable even though
-the CLI did not confirm success. Run `localpinctl status` before retrying.
+the CLI did not confirm success. Run `localpin status` before retrying.
 Status does not identify the PIN value; if the outcome remains unclear, use
 your full password and ask the administrator for help.
 
-Enrollment leaves testing and activation to the administrator. Continue with
-the runbook's [trial and activation procedure](integration-administration.md#test-and-activate).
+After manual enrollment, run `localpin setup` to continue, or follow the
+runbook's [trial and activation procedure](integration-administration.md#test-and-activate).
 
 ## Unlock your KDE session
 
@@ -103,7 +138,7 @@ five-minute PIN cooldown. A successful PIN verification durably resets
 LocalPIN's attempt history and cooldown. Once an attempt is durably reserved,
 cancellation or a backend error does not refund it. Restarting the service or
 rebooting does not reset the recorded budget. Use your full password during
-cooldown and check `localpinctl doctor` for its remaining duration.
+cooldown and check `localpin doctor` for its remaining duration.
 
 Because the field is shared, a wrong PIN can count as a native password failure,
 and a six-digit account password can consume a PIN attempt. PIN success never
@@ -121,10 +156,10 @@ not sufficient.
 
 | Task | Command | Result |
 | --- | --- | --- |
-| Change the PIN | `localpinctl change` | Prompts for a new PIN on the currently enrolled backend. |
-| Stop using your PIN | `localpinctl disable` | Disables your credential; use your account password. |
-| Move to TPM protection | `localpinctl migrate --backend tpm2-required` | Replaces the existing credential with a new TPM-backed PIN. |
-| Move to software protection | `localpinctl migrate --backend software` | Replaces the existing credential with a new software PIN after explicit acceptance. |
+| Change the PIN | `localpin change` | Prompts for a new PIN on the currently enrolled backend. |
+| Stop using your PIN | `localpin disable` | Disables your credential; use your account password. |
+| Move to TPM protection | `localpin migrate --backend tpm2-required` | Replaces the existing credential with a new TPM-backed PIN. |
+| Move to software protection | `localpin migrate --backend software` | Replaces the existing credential with a new software PIN after explicit acceptance. |
 
 `change`, `disable` and `migrate` require an existing enrollment. Use `enroll`
 only when no PIN is enrolled. Migration accepts only `tpm2-required` or
@@ -142,9 +177,9 @@ protected-state problems need administrator recovery first.
 ## Inspect status and solve common problems
 
 ```sh
-localpinctl status
-localpinctl doctor
-localpinctl integration status
+localpin status
+localpin doctor
+localpin integration status
 ```
 
 `status` summarizes your enrollment, availability, backend, cooldown and
@@ -182,9 +217,9 @@ Read these fields separately:
 ## Choose the right recovery route
 
 If you forgot your PIN but can authenticate with your account password, use
-`localpinctl change` or `localpinctl disable` from your supported session.
+`localpin change` or `localpin disable` from your supported session.
 
-An administrator can use `localpinctl recover --user <account>` as root to
+An administrator can use `localpin recover --user <account>` as root to
 disable an existing account's PIN through the working broker. This does not
 retrieve a PIN, repair account lifecycle authority or restore desktop policies.
 Missing or corrupt account authority requires the separate
@@ -197,6 +232,6 @@ The privileged integration tool can close the gate and restore owned policies
 without a working broker, TPM or PIN module. Keep the package installed while
 reviewing a failed recovery.
 
-`localpinctl integration enable` and `localpinctl integration disable` only print
+`localpin integration enable` and `localpin integration disable` only print
 the required administrator guidance and command; they do not change system
 integration. Follow the runbook for preparation, testing, activation and recovery.

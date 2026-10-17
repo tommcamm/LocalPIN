@@ -61,6 +61,18 @@ class PackagingTests(unittest.TestCase):
         self.assertNotIn("%{_sysconfdir}/security/faillock.conf", spec)
         self.assertNotRegex(spec, r"chmod (?:[0-7]*[46][0-7]{3}|u\+s)")
 
+    def test_primary_cli_alias_and_fixed_setup_dependency(self):
+        spec = (FEDORA / "localpin.spec").read_text()
+        install = spec.split("%install\n", 1)[1].split("%check\n", 1)[0]
+        files = spec.split("%files\n", 1)[1].split("%changelog\n", 1)[0]
+        self.assertIn("ln -s localpinctl %{buildroot}%{_bindir}/localpin", install)
+        self.assertIn("%{_bindir}/localpinctl\n%{_bindir}/localpin\n", files)
+        self.assertRegex(spec, r"(?m)^Requires:\s+sudo$")
+        self.assertNotRegex(spec, r"sudoers|chmod\s+u\+s|%attr\([2467][0-7]{3}")
+        # Installing remains separate from running the interactive wizard.
+        scriptlets = spec.split("%pre\n", 1)[1].split("%files\n", 1)[0]
+        self.assertNotRegex(scriptlets, r"localpin(?:ctl)?\s+setup")
+
     def test_native_and_policy_builder_are_host_read_only(self):
         source = (FEDORA / "build-rpm.py").read_text()
         self.assertIn('"--release", "--workspace", "--locked", "--offline"', source)
