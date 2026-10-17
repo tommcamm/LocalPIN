@@ -1,9 +1,9 @@
 {
   "schema": 1,
   "date": "2026-10-17",
-  "status": "in-progress",
-  "passed": null,
-  "scope": "Partial actual installed M8.2 guided-setup acceptance in the independently guarded enforcing Fedora KDE44 emulator clone; final acceptance and cleanup remain pending.",
+  "status": "targeted-installed-acceptance-passed",
+  "passed": true,
+  "scope": "Targeted actual installed M8.2 guided-setup, recovery, real expiry, compatible RPM upgrade, reboot and removal acceptance for the exact unsigned production-default test RPMs.",
   "provenance": {
     "production_source_commit": "578d94bc7670f0b951d18865d71e039259babd74",
     "project_version": "0.1.0-alpha.1",
@@ -91,7 +91,8 @@
       "case": "missing-accounting",
       "program": "localpin",
       "mode": "setup",
-      "passed": true,
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "runner_sha256": "5dcca2a4ef165c4e882cd03b28e5b7d09852659efdc5d189a8056d48a2c5793c",
       "complete": true,
       "exit_code": 1,
       "secret_echo_absent": true,
@@ -108,13 +109,17 @@
         "enrollment_retained": false,
         "paused": false,
         "trial_changed": false
-      }
+      },
+      "observed_utc": "2026-10-17T19:28:53.047092+00:00",
+      "fixture_completion_verified": true,
+      "intended_case_passed": true
     },
     {
       "case": "cancel-readiness",
       "program": "localpin",
       "mode": "setup",
-      "passed": true,
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "runner_sha256": "5dcca2a4ef165c4e882cd03b28e5b7d09852659efdc5d189a8056d48a2c5793c",
       "complete": true,
       "exit_code": 130,
       "secret_echo_absent": true,
@@ -131,13 +136,17 @@
         "enrollment_retained": false,
         "paused": true,
         "trial_changed": false
-      }
+      },
+      "observed_utc": "2026-10-17T19:31:37.386183+00:00",
+      "fixture_completion_verified": true,
+      "intended_case_passed": true
     },
     {
       "case": "menu-smoke",
       "program": "localpin",
       "mode": "menu",
-      "passed": true,
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "runner_sha256": "5dcca2a4ef165c4e882cd03b28e5b7d09852659efdc5d189a8056d48a2c5793c",
       "complete": true,
       "exit_code": 0,
       "secret_echo_absent": true,
@@ -154,13 +163,17 @@
         "enrollment_retained": false,
         "paused": false,
         "trial_changed": false
-      }
+      },
+      "observed_utc": "2026-10-17T19:31:43.648204+00:00",
+      "fixture_completion_verified": true,
+      "intended_case_passed": true
     },
     {
       "case": "cancel-preparation",
       "program": "localpin",
       "mode": "setup",
-      "passed": true,
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "runner_sha256": "5dcca2a4ef165c4e882cd03b28e5b7d09852659efdc5d189a8056d48a2c5793c",
       "complete": true,
       "exit_code": 0,
       "secret_echo_absent": true,
@@ -177,13 +190,17 @@
         "enrollment_retained": false,
         "paused": true,
         "trial_changed": false
-      }
+      },
+      "observed_utc": "2026-10-17T19:43:15.404229+00:00",
+      "fixture_completion_verified": true,
+      "intended_case_passed": true
     },
     {
       "case": "cancel-backend",
       "program": "localpin",
       "mode": "setup",
-      "passed": true,
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "runner_sha256": "5dcca2a4ef165c4e882cd03b28e5b7d09852659efdc5d189a8056d48a2c5793c",
       "complete": true,
       "exit_code": 130,
       "secret_echo_absent": true,
@@ -200,13 +217,17 @@
         "enrollment_retained": false,
         "paused": true,
         "trial_changed": false
-      }
+      },
+      "observed_utc": "2026-10-17T19:44:01.336431+00:00",
+      "fixture_completion_verified": true,
+      "intended_case_passed": true
     },
     {
       "case": "cancel-trial",
       "program": "localpin",
       "mode": "setup",
-      "passed": true,
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "runner_sha256": "5dcca2a4ef165c4e882cd03b28e5b7d09852659efdc5d189a8056d48a2c5793c",
       "complete": true,
       "exit_code": 0,
       "secret_echo_absent": true,
@@ -223,13 +244,17 @@
         "enrollment_retained": false,
         "paused": true,
         "trial_changed": false
-      }
+      },
+      "observed_utc": "2026-10-17T19:44:43.570194+00:00",
+      "fixture_completion_verified": true,
+      "intended_case_passed": true
     },
     {
       "case": "service-unavailable",
       "program": "localpin",
       "mode": "setup",
-      "passed": true,
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "runner_sha256": "5dcca2a4ef165c4e882cd03b28e5b7d09852659efdc5d189a8056d48a2c5793c",
       "complete": true,
       "exit_code": 1,
       "secret_echo_absent": true,
@@ -246,13 +271,17 @@
         "enrollment_retained": true,
         "paused": false,
         "trial_changed": false
-      }
+      },
+      "observed_utc": "2026-10-17T19:45:13.367050+00:00",
+      "fixture_completion_verified": true,
+      "intended_case_passed": true
     },
     {
       "case": "trial-before-reboot",
       "program": "localpin",
       "mode": "setup",
-      "passed": true,
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "runner_sha256": "5dcca2a4ef165c4e882cd03b28e5b7d09852659efdc5d189a8056d48a2c5793c",
       "complete": true,
       "exit_code": 0,
       "secret_echo_absent": true,
@@ -269,13 +298,17 @@
         "enrollment_retained": true,
         "paused": true,
         "trial_changed": false
-      }
+      },
+      "observed_utc": "2026-10-17T19:46:33.519945+00:00",
+      "fixture_completion_verified": true,
+      "intended_case_passed": true
     },
     {
       "case": "reboot-broker-stopped",
       "program": "localpin",
       "mode": "setup",
-      "passed": true,
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "runner_sha256": "5dcca2a4ef165c4e882cd03b28e5b7d09852659efdc5d189a8056d48a2c5793c",
       "complete": true,
       "exit_code": 1,
       "secret_echo_absent": true,
@@ -292,13 +325,17 @@
         "enrollment_retained": true,
         "paused": false,
         "trial_changed": false
-      }
+      },
+      "observed_utc": "2026-10-17T19:48:50.252449+00:00",
+      "fixture_completion_verified": true,
+      "intended_case_passed": true
     },
     {
       "case": "trial-after-reboot",
       "program": "localpin",
       "mode": "setup",
-      "passed": true,
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "runner_sha256": "5dcca2a4ef165c4e882cd03b28e5b7d09852659efdc5d189a8056d48a2c5793c",
       "complete": true,
       "exit_code": 0,
       "secret_echo_absent": true,
@@ -315,12 +352,17 @@
         "enrollment_retained": true,
         "paused": true,
         "trial_changed": false
-      }
+      },
+      "observed_utc": "2026-10-17T19:51:46.732696+00:00",
+      "fixture_completion_verified": true,
+      "intended_case_passed": true
     },
     {
       "case": "post-recovery-enroll",
       "program": "localpin",
       "mode": "setup",
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "runner_sha256": "5dcca2a4ef165c4e882cd03b28e5b7d09852659efdc5d189a8056d48a2c5793c",
       "complete": true,
       "exit_code": 130,
       "secret_echo_absent": true,
@@ -338,6 +380,7 @@
         "paused": false,
         "trial_changed": false
       },
+      "observed_utc": "2026-10-17T19:59:42.911751+00:00",
       "fixture_completion_verified": true,
       "intended_case_passed": false,
       "outcome": "aborted-native-lockout"
@@ -346,7 +389,8 @@
       "case": "compatible-alias-menu",
       "program": "localpinctl",
       "mode": "menu",
-      "passed": true,
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "runner_sha256": "5dcca2a4ef165c4e882cd03b28e5b7d09852659efdc5d189a8056d48a2c5793c",
       "complete": true,
       "exit_code": 0,
       "secret_echo_absent": true,
@@ -363,13 +407,17 @@
         "enrollment_retained": false,
         "paused": false,
         "trial_changed": false
-      }
+      },
+      "observed_utc": "2026-10-17T20:02:01.556030+00:00",
+      "fixture_completion_verified": true,
+      "intended_case_passed": true
     },
     {
       "case": "natural-cooldown-enroll",
       "program": "localpin",
       "mode": "setup",
-      "passed": true,
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "runner_sha256": "5dcca2a4ef165c4e882cd03b28e5b7d09852659efdc5d189a8056d48a2c5793c",
       "complete": true,
       "exit_code": 1,
       "secret_echo_absent": true,
@@ -387,16 +435,16 @@
         "paused": false,
         "trial_changed": true
       },
-      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
       "observed_utc": "2026-10-17T20:20:51.068008+00:00",
-      "outcome": "stale-confirmation-refused-after-trial-replacement-during-sudo-reauthentication",
-      "isolated_deadline_only_refusal_claimed": false
+      "fixture_completion_verified": true,
+      "intended_case_passed": true
     },
     {
       "case": "final-activation",
       "program": "localpin",
       "mode": "setup",
-      "passed": true,
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "runner_sha256": "5dcca2a4ef165c4e882cd03b28e5b7d09852659efdc5d189a8056d48a2c5793c",
       "complete": true,
       "exit_code": 0,
       "secret_echo_absent": true,
@@ -414,14 +462,16 @@
         "paused": false,
         "trial_changed": false
       },
-      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
-      "observed_utc": "2026-10-17T20:21:58.665789+00:00"
+      "observed_utc": "2026-10-17T20:21:58.665789+00:00",
+      "fixture_completion_verified": true,
+      "intended_case_passed": true
     },
     {
       "case": "active-noop",
       "program": "localpin",
       "mode": "setup",
-      "passed": true,
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "runner_sha256": "5dcca2a4ef165c4e882cd03b28e5b7d09852659efdc5d189a8056d48a2c5793c",
       "complete": true,
       "exit_code": 0,
       "secret_echo_absent": true,
@@ -439,14 +489,16 @@
         "paused": false,
         "trial_changed": false
       },
-      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
-      "observed_utc": "2026-10-17T20:22:20.094290+00:00"
+      "observed_utc": "2026-10-17T20:22:20.094290+00:00",
+      "fixture_completion_verified": true,
+      "intended_case_passed": true
     },
     {
       "case": "active-noop-repeat",
       "program": "localpin",
       "mode": "setup",
-      "passed": true,
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "runner_sha256": "5dcca2a4ef165c4e882cd03b28e5b7d09852659efdc5d189a8056d48a2c5793c",
       "complete": true,
       "exit_code": 0,
       "secret_echo_absent": true,
@@ -464,14 +516,16 @@
         "paused": false,
         "trial_changed": false
       },
-      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
-      "observed_utc": "2026-10-17T20:23:15.371059+00:00"
+      "observed_utc": "2026-10-17T20:23:15.371059+00:00",
+      "fixture_completion_verified": true,
+      "intended_case_passed": true
     },
     {
       "case": "own-pin-disable",
       "program": "localpin",
       "mode": "disable",
-      "passed": true,
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "runner_sha256": "5dcca2a4ef165c4e882cd03b28e5b7d09852659efdc5d189a8056d48a2c5793c",
       "complete": true,
       "exit_code": 0,
       "secret_echo_absent": true,
@@ -489,14 +543,16 @@
         "paused": false,
         "trial_changed": false
       },
-      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
-      "observed_utc": "2026-10-17T20:23:45.812657+00:00"
+      "observed_utc": "2026-10-17T20:23:45.812657+00:00",
+      "fixture_completion_verified": true,
+      "intended_case_passed": true
     },
     {
       "case": "active-reenroll",
       "program": "localpin",
       "mode": "setup",
-      "passed": true,
+      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
+      "runner_sha256": "5dcca2a4ef165c4e882cd03b28e5b7d09852659efdc5d189a8056d48a2c5793c",
       "complete": true,
       "exit_code": 0,
       "secret_echo_absent": true,
@@ -514,14 +570,16 @@
         "paused": false,
         "trial_changed": false
       },
-      "evr": "0.1.0-0.1.alpha1.vm82.1.fc44",
-      "observed_utc": "2026-10-17T20:24:02.219598+00:00"
+      "observed_utc": "2026-10-17T20:24:02.219598+00:00",
+      "fixture_completion_verified": true,
+      "intended_case_passed": true
     },
     {
       "case": "after-upgrade-noop",
       "program": "localpin",
       "mode": "setup",
-      "passed": true,
+      "evr": "0.1.0-0.1.alpha1.vm82.2.fc44",
+      "runner_sha256": "5dcca2a4ef165c4e882cd03b28e5b7d09852659efdc5d189a8056d48a2c5793c",
       "complete": true,
       "exit_code": 0,
       "secret_echo_absent": true,
@@ -539,24 +597,14 @@
         "paused": false,
         "trial_changed": false
       },
-      "evr": "0.1.0-0.1.alpha1.vm82.2.fc44",
-      "observed_utc": "2026-10-17T20:28:23.822169+00:00"
+      "observed_utc": "2026-10-17T20:28:23.822169+00:00",
+      "fixture_completion_verified": true,
+      "intended_case_passed": true
     }
   ],
   "actual_ui_cases": [
     {
-      "case_file": "ui-baseline.json",
-      "phase": "baseline",
-      "passed": true,
-      "selinux": "Enforcing",
-      "observations": {
-        "unlocked": true,
-        "enter_required_observed": false,
-        "locked_before_enter": false
-      }
-    },
-    {
-      "case_file": "ui-trial-pin.json",
+      "case_file": "ui-active-reenroll-pin.json",
       "phase": "pin",
       "passed": true,
       "selinux": "Enforcing",
@@ -564,44 +612,87 @@
         "unlocked": true,
         "enter_required_observed": true,
         "locked_before_enter": true,
+        "unlock_elapsed_seconds": 0.873,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        },
         "native_password_tally_unchanged": true
       }
     },
     {
-      "case_file": "ui-trial-password.json",
+      "case_file": "ui-after-active-reboot-password.json",
       "phase": "password",
       "passed": true,
       "selinux": "Enforcing",
       "observations": {
         "unlocked": true,
         "enter_required_observed": false,
-        "locked_before_enter": false
+        "locked_before_enter": false,
+        "unlock_elapsed_seconds": 0.307,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        }
       }
     },
     {
-      "case_file": "ui-missing-module-fallback.json",
-      "phase": "recovery",
+      "case_file": "ui-after-active-reboot-pin.json",
+      "phase": "pin",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "unlock_elapsed_seconds": 0.764,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        },
+        "native_password_tally_unchanged": true
+      }
+    },
+    {
+      "case_file": "ui-after-console-recovery-existing.json",
+      "phase": "unlock-existing",
       "passed": true,
       "selinux": "Enforcing",
       "observations": {
         "unlocked": true,
         "enter_required_observed": false,
         "locked_before_enter": false,
-        "wrong_candidate_denied": true,
-        "same_greeter_after_denial": true,
-        "gui_submissions": 2,
-        "native_failure_journal_greeter_verified": true
+        "unlock_elapsed_seconds": 0.306,
+        "before_enter_tally": {
+          "bytes": 192
+        },
+        "after_tally": {
+          "bytes": 192
+        }
       }
     },
     {
-      "case_file": "ui-after-trial-reboot-password.json",
-      "phase": "restored-password",
+      "case_file": "ui-after-reboot-password.json",
+      "phase": "password",
       "passed": true,
       "selinux": "Enforcing",
       "observations": {
         "unlocked": true,
         "enter_required_observed": false,
-        "locked_before_enter": false
+        "locked_before_enter": false,
+        "unlock_elapsed_seconds": 0.332,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        }
       }
     },
     {
@@ -613,71 +704,54 @@
         "unlocked": true,
         "enter_required_observed": true,
         "locked_before_enter": true,
+        "unlock_elapsed_seconds": 0.793,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        },
         "native_password_tally_unchanged": true
       }
     },
     {
-      "case_file": "ui-after-reboot-password.json",
-      "phase": "password",
-      "passed": true,
-      "selinux": "Enforcing",
-      "observations": {
-        "unlocked": true,
-        "enter_required_observed": false,
-        "locked_before_enter": false
-      }
-    },
-    {
-      "case_file": "ui-after-console-recovery-existing.json",
-      "phase": "unlock-existing",
-      "passed": true,
-      "selinux": "Enforcing",
-      "observations": {
-        "unlocked": true,
-        "enter_required_observed": false,
-        "locked_before_enter": false
-      }
-    },
-    {
-      "case_file": "ui-post-recovery-pin.json",
-      "phase": "pin",
-      "passed": true,
-      "selinux": "Enforcing",
-      "observations": {
-        "unlocked": true,
-        "enter_required_observed": true,
-        "locked_before_enter": true,
-        "native_password_tally_unchanged": true
-      }
-    },
-    {
-      "case_file": "ui-post-recovery-password.json",
-      "phase": "password",
-      "passed": true,
-      "selinux": "Enforcing",
-      "observations": {
-        "unlocked": true,
-        "enter_required_observed": false,
-        "locked_before_enter": false
-      }
-    },
-    {
-      "case_file": "ui-post-recovery-fallback.json",
-      "phase": "recovery",
+      "case_file": "ui-after-trial-reboot-password.json",
+      "phase": "restored-password",
       "passed": true,
       "selinux": "Enforcing",
       "observations": {
         "unlocked": true,
         "enter_required_observed": false,
         "locked_before_enter": false,
-        "wrong_candidate_denied": true,
-        "same_greeter_after_denial": true,
-        "gui_submissions": 2,
-        "native_failure_journal_greeter_verified": true
+        "unlock_elapsed_seconds": 0.288,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        }
       }
     },
     {
-      "case_file": "ui-final-trial-pin.json",
+      "case_file": "ui-after-upgrade-password.json",
+      "phase": "password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false,
+        "unlock_elapsed_seconds": 0.35,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "case_file": "ui-after-upgrade-pin.json",
       "phase": "pin",
       "passed": true,
       "selinux": "Enforcing",
@@ -685,18 +759,64 @@
         "unlocked": true,
         "enter_required_observed": true,
         "locked_before_enter": true,
+        "unlock_elapsed_seconds": 0.906,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        },
         "native_password_tally_unchanged": true
       }
     },
     {
-      "case_file": "ui-final-trial-password.json",
-      "phase": "password",
+      "case_file": "ui-baseline.json",
+      "phase": "baseline",
       "passed": true,
       "selinux": "Enforcing",
       "observations": {
         "unlocked": true,
         "enter_required_observed": false,
-        "locked_before_enter": false
+        "locked_before_enter": false,
+        "unlock_elapsed_seconds": 0.313,
+        "before_enter_tally": null,
+        "after_tally": null
+      }
+    },
+    {
+      "case_file": "ui-before-postupgrade-pin-password.json",
+      "phase": "unlock-existing",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false,
+        "unlock_elapsed_seconds": 0.356,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "case_file": "ui-erased-password.json",
+      "phase": "restored-password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false,
+        "unlock_elapsed_seconds": 0.31,
+        "before_enter_tally": {
+          "bytes": 64
+        },
+        "after_tally": {
+          "bytes": 64
+        }
       }
     },
     {
@@ -708,14 +828,49 @@
         "unlocked": true,
         "enter_required_observed": false,
         "locked_before_enter": false,
+        "unlock_elapsed_seconds": 0.354,
+        "before_enter_tally": {
+          "bytes": 128
+        },
+        "after_tally": {
+          "bytes": 128
+        },
         "wrong_candidate_denied": true,
         "same_greeter_after_denial": true,
+        "greeter_pid": 15250,
         "gui_submissions": 2,
-        "native_failure_journal_greeter_verified": true
+        "before_tally": {
+          "bytes": 0
+        },
+        "denied_tally": {
+          "bytes": 128
+        },
+        "native_auth_failure_events_before": 2,
+        "native_auth_failure_events_after_denial": 3,
+        "native_failure_journal_greeter_verified": true,
+        "stock_password_stack": false
       }
     },
     {
-      "case_file": "ui-active-reenroll-pin.json",
+      "case_file": "ui-final-trial-password.json",
+      "phase": "password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false,
+        "unlock_elapsed_seconds": 0.352,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "case_file": "ui-final-trial-pin.json",
       "phase": "pin",
       "passed": true,
       "selinux": "Enforcing",
@@ -723,6 +878,114 @@
         "unlocked": true,
         "enter_required_observed": true,
         "locked_before_enter": true,
+        "unlock_elapsed_seconds": 0.857,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        },
+        "native_password_tally_unchanged": true
+      }
+    },
+    {
+      "case_file": "ui-missing-module-fallback.json",
+      "phase": "recovery",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false,
+        "unlock_elapsed_seconds": 0.338,
+        "before_enter_tally": {
+          "bytes": 128
+        },
+        "after_tally": {
+          "bytes": 128
+        },
+        "wrong_candidate_denied": true,
+        "same_greeter_after_denial": true,
+        "greeter_pid": 5601,
+        "gui_submissions": 2,
+        "before_tally": {
+          "bytes": 0
+        },
+        "denied_tally": {
+          "bytes": 128
+        },
+        "native_auth_failure_events_before": 0,
+        "native_auth_failure_events_after_denial": 1,
+        "native_failure_journal_greeter_verified": true,
+        "stock_password_stack": false
+      }
+    },
+    {
+      "case_file": "ui-post-recovery-fallback.json",
+      "phase": "recovery",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false,
+        "unlock_elapsed_seconds": 0.326,
+        "before_enter_tally": {
+          "bytes": 128
+        },
+        "after_tally": {
+          "bytes": 128
+        },
+        "wrong_candidate_denied": true,
+        "same_greeter_after_denial": true,
+        "greeter_pid": 12193,
+        "gui_submissions": 2,
+        "before_tally": {
+          "bytes": 0
+        },
+        "denied_tally": {
+          "bytes": 128
+        },
+        "native_auth_failure_events_before": 1,
+        "native_auth_failure_events_after_denial": 2,
+        "native_failure_journal_greeter_verified": true,
+        "stock_password_stack": false
+      }
+    },
+    {
+      "case_file": "ui-post-recovery-password.json",
+      "phase": "password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false,
+        "unlock_elapsed_seconds": 0.379,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "case_file": "ui-post-recovery-pin.json",
+      "phase": "pin",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "unlock_elapsed_seconds": 0.847,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        },
         "native_password_tally_unchanged": true
       }
     },
@@ -734,7 +997,51 @@
       "observations": {
         "unlocked": true,
         "enter_required_observed": false,
-        "locked_before_enter": false
+        "locked_before_enter": false,
+        "unlock_elapsed_seconds": 0.358,
+        "before_enter_tally": {
+          "bytes": 128
+        },
+        "after_tally": {
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "case_file": "ui-trial-password.json",
+      "phase": "password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "locked_before_enter": false,
+        "unlock_elapsed_seconds": 0.328,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        }
+      }
+    },
+    {
+      "case_file": "ui-trial-pin.json",
+      "phase": "pin",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "unlock_elapsed_seconds": 0.945,
+        "before_enter_tally": {
+          "bytes": 0
+        },
+        "after_tally": {
+          "bytes": 0
+        },
+        "native_password_tally_unchanged": true
       }
     }
   ],
@@ -802,8 +1109,8 @@
     },
     {
       "case": "post-recovery-native-sudo-lockout",
-      "status": "natural-cooldown-observed-and-resolved-by-ordinary-authentication",
-      "disposition": "Native sudo respected three valid failure records after the original KDE graph retained history. Repeated test-driver prompts were stopped and the first wizard canceled130, preserving the tally. After natural waiting, latest record age622seconds exceeded the native600second unlock interval. One ordinary sudo authentication succeeded and its native account phase legitimately cleared the tally to0; no counter reset, factor disable or policy editing occurred. Fresh wizard preparation/TPM enrollment then succeeded."
+      "status": "resolved-by-natural-cooldown",
+      "disposition": "Original canceled130 native-lockout attempt retained as aborted. After latest valid record aged622seconds, ordinary sudo succeeded once and its normal native account phase cleared the tally. No reset command, counter edit or factor disable was used. Fresh preparation/enrollment and desktop tests then passed."
     },
     {
       "case": "premature-expiry-case-completion-check",
@@ -815,17 +1122,12 @@
     },
     {
       "case": "first-post-upgrade-correct-candidate-pin",
-      "status": "unresolved-awaiting-natural-tpm-recovery-and-actual-ui-retry",
-      "disposition": "The actual graphical correct-candidate attempt remained locked for15seconds and its empty result file is not a pass. Read-only TPM counter1/max3 leaves2attempts; source requires remaining>reserve2. This is a source-backed expected DA-reserve assessment, not a captured Error::Budget trace. Actual full-password unlock passed. No TPM reset/configuration change occurred; actual post-upgrade PIN success remains pending."
+      "status": "resolved-after-observed-natural-tpm-recovery",
+      "disposition": "The first actual graphical correct-candidate attempt remained locked for15seconds and remains a failed observation. TPM counter1/max3 left2attempts while source requires remaining>reserve2: source-backed reserve assessment, not a captured Error::Budget trace. Full-password fallback passed. The counter later returned to0 naturally with unchanged parameters and no reset/configuration; the same original enrollment then passed actual PIN/password UI, active reboot and removal checks."
     }
   ],
-  "pending": [
-    "Actual post-upgrade PIN success after natural TPM budget recovery; the first locked observation is retained and is not a passing UI case.",
-    "Active reboot continuity, actual RPM erase and restored original password UI.",
-    "Final inspected evidence export and guarded clone/access cleanup."
-  ],
+  "pending": [],
   "limits": [
-    "This is an incomplete local installed run, not a passing complete acceptance record.",
     "No physical TPM/fingerprint, wider hardware matrix or independent human/specialist review established.",
     "Unsigned local RPMs do not establish published signature trust, hosted CI or a supported release.",
     "Private credential/account/native tally bytes, snapshots, transcripts, keys and raw logs are excluded.",
@@ -1014,7 +1316,7 @@
       "new_preparation_or_enrollment_performed": false
     },
     "post_upgrade_pin": {
-      "status": "pending-after-first-locked-observation",
+      "status": "passed-after-observed-natural-tpm-recovery",
       "first_correct_candidate_remained_locked": true,
       "first_observation_interval_seconds": 15,
       "first_attempt_result_file_empty": true,
@@ -1035,7 +1337,7 @@
       "actual_existing_lock_full_password_unlock_passed": true,
       "native_tally_cleared_by_ordinary_successful_password_authentication": true,
       "tpm_reset_or_configuration_change_performed": false,
-      "natural_recovery_and_actual_pin_retry_pending": true,
+      "natural_recovery_and_actual_pin_retry_pending": false,
       "readonly_properties_observation": {
         "phase": "m82-tpm-da-properties",
         "passed": true,
@@ -1065,7 +1367,904 @@
         "tpm_or_native_counter_reset_performed": false,
         "followup": "Real full-password unlock passed; wait for natural TPM counter decay before another PIN attempt.",
         "observed_utc": "2026-10-17T20:29:30.955071+00:00"
+      },
+      "natural_counter_recovery_observed_before_pin_retry": true,
+      "recovered_readonly_properties_observation": {
+        "phase": "m82-tpm-da-properties",
+        "passed": true,
+        "tpm_capability_tool_available": true,
+        "query_success": true,
+        "dictionary_attack_properties": {
+          "TPM2_PT_LOCKOUT_COUNTER": 0,
+          "TPM2_PT_MAX_AUTH_FAIL": 3,
+          "TPM2_PT_LOCKOUT_INTERVAL": 1000,
+          "TPM2_PT_LOCKOUT_RECOVERY": 1000
+        },
+        "in_lockout": false,
+        "authentication_attempt_performed": false,
+        "budget_reset_or_configuration_performed": false,
+        "observed_utc": "2026-10-17T20:41:35.245798+00:00"
+      },
+      "same_original_enrollment_verified": true,
+      "post_recovery_observation": {
+        "phase": "m82-post-upgrade-recovered-pin",
+        "passed": true,
+        "same_enrollment_registry_and_policies_as_before_upgrade": true,
+        "fresh_enrollment_performed": false,
+        "actual_pin_and_full_password_ui_passed_after_natural_tpm_recovery": true,
+        "tpm_budget_reset_or_configuration_performed": false,
+        "selinux": "Enforcing",
+        "observed_utc": "2026-10-17T20:42:28.405611+00:00"
       }
+    },
+    "active_reboot": {
+      "phase": "active-reboot-complete",
+      "passed": true,
+      "boot_changed": true,
+      "actual_kde_session_verified_before_marker_recreation": true,
+      "markers_recreated_with_exclusive_create": true,
+      "original_checkpoint_unmodified": true,
+      "fresh_enrollment_performed": false,
+      "installed_reboot_verification": {
+        "native_package_versions": {
+          "authselect": "0:1.7.1-1.fc44.x86_64",
+          "glibc-common": "0:2.43-9.fc44.x86_64",
+          "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+          "pam": "0:1.7.2-2.fc44.x86_64",
+          "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+          "systemd": "0:259.9-1.fc44.x86_64",
+          "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+        },
+        "observations": {
+          "boot_changed": true,
+          "fresh_enrollment_performed": false,
+          "gate": "active",
+          "native_kde_pam_pin_verified": true,
+          "same_enrollment_registry_throttle_tally_and_policies": true
+        },
+        "passed": true,
+        "phase": "reboot-verify",
+        "raw_snapshots_guest_root_only": true,
+        "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+        "selinux": "Enforcing"
+      },
+      "selinux": "Enforcing",
+      "observed_utc": "2026-10-17T20:43:02.106174+00:00"
+    },
+    "rpm_erase": {
+      "native_package_versions": {
+        "authselect": "0:1.7.1-1.fc44.x86_64",
+        "glibc-common": "0:2.43-9.fc44.x86_64",
+        "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+        "pam": "0:1.7.2-2.fc44.x86_64",
+        "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+        "systemd": "0:259.9-1.fc44.x86_64",
+        "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+      },
+      "observations": {
+        "authority_revoked": true,
+        "both_original_kde_services_restored": true,
+        "native_password_tally_preserved": true,
+        "package_and_module_removed": true
+      },
+      "passed": true,
+      "phase": "erase",
+      "raw_snapshots_guest_root_only": true,
+      "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+      "selinux": "Enforcing",
+      "observed_utc": "2026-10-17T20:44:03.257024+00:00"
     }
+  },
+  "runtime_phase_observations": [
+    {
+      "phase": "m82-state-save",
+      "case": "declined-preparation",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "private_checkpoint_saved": true
+      },
+      "runner_sha256": "75b927a7a08d1ae8070cde94f7a3cf608308f10bb04bac003af74d1da061c46f",
+      "observed_utc": "2026-10-17T19:43:14.679322+00:00"
+    },
+    {
+      "phase": "m82-state-same",
+      "case": "declined-preparation",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "protected_bytes_ownership_modes_and_services_equal": true
+      },
+      "runner_sha256": "75b927a7a08d1ae8070cde94f7a3cf608308f10bb04bac003af74d1da061c46f",
+      "observed_utc": "2026-10-17T19:43:15.668708+00:00"
+    },
+    {
+      "phase": "m82-state-busy",
+      "case": "prepared-lock-contention",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "installed_native_mutations": [
+          {
+            "operation": "begin-mutation",
+            "busy": true,
+            "state_equal": true
+          },
+          {
+            "operation": "seal",
+            "busy": true,
+            "state_equal": true
+          },
+          {
+            "operation": "recover",
+            "busy": true,
+            "state_equal": true
+          },
+          {
+            "operation": "cache-window-begin",
+            "busy": true,
+            "state_equal": true
+          },
+          {
+            "operation": "cache-window-finish",
+            "busy": true,
+            "state_equal": true
+          }
+        ],
+        "production_locking_unchanged": true
+      },
+      "runner_sha256": "75b927a7a08d1ae8070cde94f7a3cf608308f10bb04bac003af74d1da061c46f",
+      "observed_utc": "2026-10-17T19:43:52.254510+00:00"
+    },
+    {
+      "phase": "m82-state-save",
+      "case": "cancelled-backend",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "private_checkpoint_saved": true
+      },
+      "runner_sha256": "75b927a7a08d1ae8070cde94f7a3cf608308f10bb04bac003af74d1da061c46f",
+      "observed_utc": "2026-10-17T19:44:00.579034+00:00"
+    },
+    {
+      "phase": "m82-state-same",
+      "case": "cancelled-backend",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "protected_bytes_ownership_modes_and_services_equal": true
+      },
+      "runner_sha256": "75b927a7a08d1ae8070cde94f7a3cf608308f10bb04bac003af74d1da061c46f",
+      "observed_utc": "2026-10-17T19:44:01.598428+00:00"
+    },
+    {
+      "phase": "m82-state-save",
+      "case": "declined-trial",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "private_checkpoint_saved": true
+      },
+      "runner_sha256": "75b927a7a08d1ae8070cde94f7a3cf608308f10bb04bac003af74d1da061c46f",
+      "observed_utc": "2026-10-17T19:44:42.871433+00:00"
+    },
+    {
+      "phase": "m82-state-same",
+      "case": "declined-trial",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "protected_bytes_ownership_modes_and_services_equal": true
+      },
+      "runner_sha256": "75b927a7a08d1ae8070cde94f7a3cf608308f10bb04bac003af74d1da061c46f",
+      "observed_utc": "2026-10-17T19:44:43.833719+00:00"
+    },
+    {
+      "phase": "m82-state-save",
+      "case": "enrolled-before-outage",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "private_checkpoint_saved": true
+      },
+      "runner_sha256": "75b927a7a08d1ae8070cde94f7a3cf608308f10bb04bac003af74d1da061c46f",
+      "observed_utc": "2026-10-17T19:44:44.099266+00:00"
+    },
+    {
+      "phase": "m82-state-save",
+      "case": "stopped-broker",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "private_checkpoint_saved": true
+      },
+      "runner_sha256": "75b927a7a08d1ae8070cde94f7a3cf608308f10bb04bac003af74d1da061c46f",
+      "observed_utc": "2026-10-17T19:44:56.716848+00:00"
+    },
+    {
+      "phase": "m82-state-same",
+      "case": "stopped-broker",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "protected_bytes_ownership_modes_and_services_equal": true
+      },
+      "runner_sha256": "75b927a7a08d1ae8070cde94f7a3cf608308f10bb04bac003af74d1da061c46f",
+      "observed_utc": "2026-10-17T19:45:13.648883+00:00"
+    },
+    {
+      "phase": "m82-state-same",
+      "case": "enrolled-before-outage",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "protected_bytes_ownership_modes_and_services_equal": true
+      },
+      "runner_sha256": "75b927a7a08d1ae8070cde94f7a3cf608308f10bb04bac003af74d1da061c46f",
+      "observed_utc": "2026-10-17T19:45:14.186425+00:00"
+    },
+    {
+      "phase": "trial-reboot-request",
+      "passed": true,
+      "original_vm_off": true,
+      "observed_utc": "2026-10-17T19:46:34.155910+00:00"
+    },
+    {
+      "phase": "trial-reboot-complete",
+      "passed": true,
+      "boot_changed": true,
+      "same_registry_credentials_throttle_tally_policies": true,
+      "expired_trial_gate_closed": true,
+      "fresh_enrollment_performed": false,
+      "selinux": "Enforcing",
+      "observed_utc": "2026-10-17T19:47:00.445031+00:00"
+    },
+    {
+      "phase": "fault-missing-module",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "module_absent": true,
+        "durable_fault_intent": true
+      },
+      "observed_utc": "2026-10-17T19:51:15.870342+00:00"
+    },
+    {
+      "phase": "repair-fault",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "exact_component_restored": true,
+        "selinux": "Enforcing"
+      },
+      "observed_utc": "2026-10-17T19:58:45.725169+00:00"
+    },
+    {
+      "phase": "native-lockout-observation",
+      "passed": true,
+      "total_records": 3,
+      "valid_records": 3,
+      "latest_valid_age_seconds": 256,
+      "seconds_until_default_native_unlock": 345,
+      "counter_reset_performed": false,
+      "pam_authentication_performed": false,
+      "desktop_locked": false,
+      "observed_utc": "2026-10-17T20:02:52.471309+00:00"
+    },
+    {
+      "phase": "native-lockout-observation",
+      "passed": true,
+      "total_records": 3,
+      "valid_records": 3,
+      "latest_valid_age_seconds": 387,
+      "seconds_until_default_native_unlock": 214,
+      "counter_reset_performed": false,
+      "pam_authentication_performed": false,
+      "desktop_locked": false,
+      "observed_utc": "2026-10-17T20:05:02.811110+00:00"
+    },
+    {
+      "phase": "native-lockout-observation",
+      "passed": true,
+      "total_records": 3,
+      "valid_records": 3,
+      "latest_valid_age_seconds": 622,
+      "seconds_until_default_native_unlock": 0,
+      "counter_reset_performed": false,
+      "pam_authentication_performed": false,
+      "desktop_locked": false,
+      "observed_utc": "2026-10-17T20:08:57.587678+00:00"
+    },
+    {
+      "phase": "fault-missing-module",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "module_absent": true,
+        "durable_fault_intent": true
+      },
+      "observed_utc": "2026-10-17T20:09:53.062000+00:00"
+    },
+    {
+      "phase": "repair-fault",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "exact_component_restored": true,
+        "selinux": "Enforcing"
+      },
+      "observed_utc": "2026-10-17T20:10:05.077690+00:00"
+    },
+    {
+      "phase": "m82-natural-trial-clock",
+      "action": "begin",
+      "passed": true,
+      "same_exact_trial": true,
+      "boot_unchanged": true,
+      "duration_seconds": 600,
+      "elapsed_seconds": 82,
+      "remaining_seconds": 518,
+      "natural_expiry_observed": false,
+      "gate": "trial",
+      "same_registry_credentials_throttle_tally_policies": true,
+      "desktop_locked": false,
+      "clock_or_authoritative_state_edits_performed": false,
+      "selinux": "Enforcing",
+      "observed_utc": "2026-10-17T20:10:50.738834+00:00"
+    },
+    {
+      "phase": "m82-natural-trial-clock",
+      "action": "observe",
+      "passed": true,
+      "same_exact_trial": true,
+      "boot_unchanged": true,
+      "duration_seconds": 600,
+      "elapsed_seconds": 235,
+      "remaining_seconds": 365,
+      "natural_expiry_observed": false,
+      "gate": "trial",
+      "same_registry_credentials_throttle_tally_policies": true,
+      "desktop_locked": false,
+      "clock_or_authoritative_state_edits_performed": false,
+      "selinux": "Enforcing",
+      "observed_utc": "2026-10-17T20:13:23.221381+00:00"
+    },
+    {
+      "phase": "m82-natural-trial-clock",
+      "action": "observe",
+      "passed": true,
+      "same_exact_trial": true,
+      "boot_unchanged": true,
+      "duration_seconds": 600,
+      "elapsed_seconds": 348,
+      "remaining_seconds": 252,
+      "natural_expiry_observed": false,
+      "gate": "trial",
+      "same_registry_credentials_throttle_tally_policies": true,
+      "desktop_locked": false,
+      "clock_or_authoritative_state_edits_performed": false,
+      "selinux": "Enforcing",
+      "observed_utc": "2026-10-17T20:15:16.631737+00:00"
+    },
+    {
+      "phase": "m82-natural-trial-clock",
+      "action": "observe",
+      "passed": true,
+      "same_exact_trial": true,
+      "boot_unchanged": true,
+      "duration_seconds": 600,
+      "elapsed_seconds": 548,
+      "remaining_seconds": 52,
+      "natural_expiry_observed": false,
+      "gate": "trial",
+      "same_registry_credentials_throttle_tally_policies": true,
+      "desktop_locked": false,
+      "clock_or_authoritative_state_edits_performed": false,
+      "selinux": "Enforcing",
+      "observed_utc": "2026-10-17T20:18:37.051627+00:00"
+    },
+    {
+      "phase": "m82-natural-trial-clock",
+      "action": "observe",
+      "passed": true,
+      "same_exact_trial": true,
+      "boot_unchanged": true,
+      "duration_seconds": 600,
+      "elapsed_seconds": 606,
+      "remaining_seconds": 0,
+      "natural_expiry_observed": true,
+      "gate": "disabled",
+      "same_registry_credentials_throttle_tally_policies": true,
+      "desktop_locked": false,
+      "clock_or_authoritative_state_edits_performed": false,
+      "selinux": "Enforcing",
+      "observed_utc": "2026-10-17T20:19:34.457501+00:00"
+    },
+    {
+      "phase": "fault-missing-module",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "module_absent": true,
+        "durable_fault_intent": true
+      },
+      "observed_utc": "2026-10-17T20:21:26.509011+00:00"
+    },
+    {
+      "phase": "repair-fault",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "exact_component_restored": true,
+        "selinux": "Enforcing"
+      },
+      "observed_utc": "2026-10-17T20:21:38.412023+00:00"
+    },
+    {
+      "phase": "m82-state-save",
+      "case": "active-noop",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "private_checkpoint_saved": true
+      },
+      "runner_sha256": "75b927a7a08d1ae8070cde94f7a3cf608308f10bb04bac003af74d1da061c46f",
+      "observed_utc": "2026-10-17T20:22:14.427036+00:00"
+    },
+    {
+      "phase": "m82-active-noop-native-accounting-review",
+      "passed": true,
+      "only_changed_path_is_native_tally": true,
+      "ordinary_sudo_native_account_phase_cleared_tally": true,
+      "all_other_protected_bytes_metadata_services_equal": true,
+      "setup_preserved_active_integration": true,
+      "counter_reset_command_performed": false,
+      "selinux": "Enforcing",
+      "observed_utc": "2026-10-17T20:23:09.572729+00:00"
+    },
+    {
+      "phase": "m82-state-save",
+      "case": "active-noop-empty-tally",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "private_checkpoint_saved": true
+      },
+      "runner_sha256": "75b927a7a08d1ae8070cde94f7a3cf608308f10bb04bac003af74d1da061c46f",
+      "observed_utc": "2026-10-17T20:23:09.868030+00:00"
+    },
+    {
+      "phase": "m82-state-same",
+      "case": "active-noop-empty-tally",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "protected_bytes_ownership_modes_and_services_equal": true
+      },
+      "runner_sha256": "75b927a7a08d1ae8070cde94f7a3cf608308f10bb04bac003af74d1da061c46f",
+      "observed_utc": "2026-10-17T20:23:15.637534+00:00"
+    },
+    {
+      "phase": "m82-active-management-save",
+      "passed": true,
+      "active_gate_registry_manifest_policies_and_boot_opt_in_preserved": true,
+      "enrollment_absent": false,
+      "fresh_tpm_enrollment": false,
+      "selinux": "Enforcing",
+      "observed_utc": "2026-10-17T20:23:40.704821+00:00"
+    },
+    {
+      "phase": "m82-active-management-disabled",
+      "passed": true,
+      "active_gate_registry_manifest_policies_and_boot_opt_in_preserved": true,
+      "enrollment_absent": true,
+      "fresh_tpm_enrollment": false,
+      "selinux": "Enforcing",
+      "observed_utc": "2026-10-17T20:23:46.151134+00:00"
+    },
+    {
+      "phase": "m82-active-management-reenrolled",
+      "passed": true,
+      "active_gate_registry_manifest_policies_and_boot_opt_in_preserved": true,
+      "enrollment_absent": false,
+      "fresh_tpm_enrollment": true,
+      "selinux": "Enforcing",
+      "observed_utc": "2026-10-17T20:24:02.564798+00:00"
+    },
+    {
+      "phase": "m82-pre-upgrade-native-history",
+      "passed": true,
+      "actual_native_kde_pam_wrong_pin_denied": true,
+      "native_tally_nonempty": true,
+      "native_record_count": 1,
+      "synthetic_counter_bytes_written": false,
+      "reset_or_counter_edit_performed": false,
+      "private_snapshot_saved": true,
+      "selinux": "Enforcing",
+      "observed_utc": "2026-10-17T20:24:21.753992+00:00"
+    },
+    {
+      "native_package_versions": {
+        "authselect": "0:1.7.1-1.fc44.x86_64",
+        "glibc-common": "0:2.43-9.fc44.x86_64",
+        "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+        "pam": "0:1.7.2-2.fc44.x86_64",
+        "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+        "systemd": "0:259.9-1.fc44.x86_64",
+        "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+      },
+      "observations": {
+        "automatic_active_gate_preserved": true,
+        "compatible_upgrade_completed": true,
+        "explicit_downgrade_refused": false,
+        "same_enrollment_registry_throttle_tally_and_policies": true,
+        "version_after": "0.1.0-0.1.alpha1.vm82.2.fc44",
+        "version_before": "0.1.0-0.1.alpha1.vm82.1.fc44"
+      },
+      "passed": true,
+      "phase": "package-upgrade",
+      "raw_snapshots_guest_root_only": true,
+      "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+      "selinux": "Enforcing",
+      "observed_utc": "2026-10-17T20:24:28.892238+00:00"
+    },
+    {
+      "native_package_versions": {
+        "authselect": "0:1.7.1-1.fc44.x86_64",
+        "glibc-common": "0:2.43-9.fc44.x86_64",
+        "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+        "pam": "0:1.7.2-2.fc44.x86_64",
+        "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+        "systemd": "0:259.9-1.fc44.x86_64",
+        "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+      },
+      "observations": {
+        "automatic_active_gate_preserved": true,
+        "compatible_upgrade_completed": false,
+        "explicit_downgrade_refused": true,
+        "same_enrollment_registry_throttle_tally_and_policies": true,
+        "version_after": "0.1.0-0.1.alpha1.vm82.2.fc44",
+        "version_before": "0.1.0-0.1.alpha1.vm82.2.fc44"
+      },
+      "passed": true,
+      "phase": "downgrade-refusal",
+      "raw_snapshots_guest_root_only": true,
+      "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+      "selinux": "Enforcing",
+      "observed_utc": "2026-10-17T20:24:29.782209+00:00"
+    },
+    {
+      "phase": "native-lockout-observation",
+      "passed": true,
+      "total_records": 2,
+      "valid_records": 2,
+      "latest_valid_age_seconds": 40,
+      "seconds_until_default_native_unlock": 0,
+      "counter_reset_performed": false,
+      "pam_authentication_performed": false,
+      "desktop_locked": true,
+      "observed_utc": "2026-10-17T20:25:31.416452+00:00"
+    },
+    {
+      "phase": "m82-state-save",
+      "case": "after-upgrade-noop",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "private_checkpoint_saved": true
+      },
+      "runner_sha256": "75b927a7a08d1ae8070cde94f7a3cf608308f10bb04bac003af74d1da061c46f",
+      "observed_utc": "2026-10-17T20:28:18.105213+00:00"
+    },
+    {
+      "phase": "m82-state-same",
+      "case": "after-upgrade-noop",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "protected_bytes_ownership_modes_and_services_equal": true
+      },
+      "runner_sha256": "75b927a7a08d1ae8070cde94f7a3cf608308f10bb04bac003af74d1da061c46f",
+      "observed_utc": "2026-10-17T20:28:24.107828+00:00"
+    },
+    {
+      "phase": "m82-tpm-da-properties",
+      "passed": true,
+      "tpm_capability_tool_available": true,
+      "query_success": true,
+      "dictionary_attack_properties": {
+        "TPM2_PT_LOCKOUT_COUNTER": 1,
+        "TPM2_PT_MAX_AUTH_FAIL": 3,
+        "TPM2_PT_LOCKOUT_INTERVAL": 1000,
+        "TPM2_PT_LOCKOUT_RECOVERY": 1000
+      },
+      "in_lockout": false,
+      "authentication_attempt_performed": false,
+      "budget_reset_or_configuration_performed": false,
+      "observed_utc": "2026-10-17T20:29:19.540426+00:00"
+    },
+    {
+      "phase": "m82-post-upgrade-first-pin-attempt",
+      "passed": false,
+      "outcome": "desktop-remained-locked",
+      "error_category": "expected-unlock-not-observed-within-15-seconds",
+      "submitted_fixture_selector": "pin",
+      "native_valid_records_after": 2,
+      "assessment": "Consistent with DA reserve: TPM counter1/max3 leaves2; production requiresremaining>2. Source-backed inference, no captured Error::Budget trace.",
+      "protected_package_state_comparison_passed": true,
+      "public_broker_status_was_available": true,
+      "tpm_or_native_counter_reset_performed": false,
+      "followup": "Real full-password unlock passed; wait for natural TPM counter decay before another PIN attempt.",
+      "observed_utc": "2026-10-17T20:29:30.955071+00:00"
+    },
+    {
+      "phase": "m82-tpm-da-properties",
+      "passed": true,
+      "tpm_capability_tool_available": true,
+      "query_success": true,
+      "dictionary_attack_properties": {
+        "TPM2_PT_LOCKOUT_COUNTER": 1,
+        "TPM2_PT_MAX_AUTH_FAIL": 3,
+        "TPM2_PT_LOCKOUT_INTERVAL": 1000,
+        "TPM2_PT_LOCKOUT_RECOVERY": 1000
+      },
+      "in_lockout": false,
+      "authentication_attempt_performed": false,
+      "budget_reset_or_configuration_performed": false,
+      "observed_utc": "2026-10-17T20:35:49.560598+00:00"
+    },
+    {
+      "phase": "m82-tpm-da-properties",
+      "passed": true,
+      "tpm_capability_tool_available": true,
+      "query_success": true,
+      "dictionary_attack_properties": {
+        "TPM2_PT_LOCKOUT_COUNTER": 1,
+        "TPM2_PT_MAX_AUTH_FAIL": 3,
+        "TPM2_PT_LOCKOUT_INTERVAL": 1000,
+        "TPM2_PT_LOCKOUT_RECOVERY": 1000
+      },
+      "in_lockout": false,
+      "authentication_attempt_performed": false,
+      "budget_reset_or_configuration_performed": false,
+      "observed_utc": "2026-10-17T20:40:32.671556+00:00"
+    },
+    {
+      "phase": "m82-tpm-da-properties",
+      "passed": true,
+      "tpm_capability_tool_available": true,
+      "query_success": true,
+      "dictionary_attack_properties": {
+        "TPM2_PT_LOCKOUT_COUNTER": 0,
+        "TPM2_PT_MAX_AUTH_FAIL": 3,
+        "TPM2_PT_LOCKOUT_INTERVAL": 1000,
+        "TPM2_PT_LOCKOUT_RECOVERY": 1000
+      },
+      "in_lockout": false,
+      "authentication_attempt_performed": false,
+      "budget_reset_or_configuration_performed": false,
+      "observed_utc": "2026-10-17T20:41:35.245798+00:00"
+    },
+    {
+      "phase": "m82-post-upgrade-recovered-pin",
+      "passed": true,
+      "same_enrollment_registry_and_policies_as_before_upgrade": true,
+      "fresh_enrollment_performed": false,
+      "actual_pin_and_full_password_ui_passed_after_natural_tpm_recovery": true,
+      "tpm_budget_reset_or_configuration_performed": false,
+      "selinux": "Enforcing",
+      "observed_utc": "2026-10-17T20:42:28.405611+00:00"
+    },
+    {
+      "native_package_versions": {
+        "authselect": "0:1.7.1-1.fc44.x86_64",
+        "glibc-common": "0:2.43-9.fc44.x86_64",
+        "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+        "pam": "0:1.7.2-2.fc44.x86_64",
+        "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+        "systemd": "0:259.9-1.fc44.x86_64",
+        "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+      },
+      "observations": {
+        "activation_gate_closed": false,
+        "private_continuity_checkpoint_durable": true,
+        "reboot_requested": false
+      },
+      "passed": true,
+      "phase": "reboot-prepare",
+      "raw_snapshots_guest_root_only": true,
+      "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+      "selinux": "Enforcing",
+      "observed_utc": "2026-10-17T20:42:28.795076+00:00"
+    },
+    {
+      "phase": "active-reboot-request",
+      "passed": true,
+      "original_vm_off": true,
+      "preexisting_checkpoint_verified": true,
+      "enrollment_performed": false,
+      "observed_utc": "2026-10-17T20:42:29.234642+00:00"
+    },
+    {
+      "phase": "active-reboot-complete",
+      "passed": true,
+      "boot_changed": true,
+      "actual_kde_session_verified_before_marker_recreation": true,
+      "markers_recreated_with_exclusive_create": true,
+      "original_checkpoint_unmodified": true,
+      "fresh_enrollment_performed": false,
+      "installed_reboot_verification": {
+        "native_package_versions": {
+          "authselect": "0:1.7.1-1.fc44.x86_64",
+          "glibc-common": "0:2.43-9.fc44.x86_64",
+          "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+          "pam": "0:1.7.2-2.fc44.x86_64",
+          "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+          "systemd": "0:259.9-1.fc44.x86_64",
+          "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+        },
+        "observations": {
+          "boot_changed": true,
+          "fresh_enrollment_performed": false,
+          "gate": "active",
+          "native_kde_pam_pin_verified": true,
+          "same_enrollment_registry_throttle_tally_and_policies": true
+        },
+        "passed": true,
+        "phase": "reboot-verify",
+        "raw_snapshots_guest_root_only": true,
+        "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+        "selinux": "Enforcing"
+      },
+      "selinux": "Enforcing",
+      "observed_utc": "2026-10-17T20:43:02.106174+00:00"
+    },
+    {
+      "native_package_versions": {
+        "authselect": "0:1.7.1-1.fc44.x86_64",
+        "glibc-common": "0:2.43-9.fc44.x86_64",
+        "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+        "pam": "0:1.7.2-2.fc44.x86_64",
+        "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+        "systemd": "0:259.9-1.fc44.x86_64",
+        "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+      },
+      "observations": {
+        "authority_revoked": true,
+        "both_original_kde_services_restored": true,
+        "native_password_tally_preserved": true,
+        "package_and_module_removed": true
+      },
+      "passed": true,
+      "phase": "erase",
+      "raw_snapshots_guest_root_only": true,
+      "runner_sha256": "e2b3e6240aa07c737125d180e835746fa83c432dee017b4e16cbd902bd2c1beb",
+      "selinux": "Enforcing",
+      "observed_utc": "2026-10-17T20:44:03.257024+00:00"
+    }
+  ],
+  "readonly_tpm_da_observations": [
+    {
+      "phase": "m82-tpm-da-properties",
+      "passed": true,
+      "tpm_capability_tool_available": true,
+      "query_success": true,
+      "dictionary_attack_properties": {
+        "TPM2_PT_LOCKOUT_COUNTER": 1,
+        "TPM2_PT_MAX_AUTH_FAIL": 3,
+        "TPM2_PT_LOCKOUT_INTERVAL": 1000,
+        "TPM2_PT_LOCKOUT_RECOVERY": 1000
+      },
+      "in_lockout": false,
+      "authentication_attempt_performed": false,
+      "budget_reset_or_configuration_performed": false,
+      "observed_utc": "2026-10-17T20:29:19.540426+00:00"
+    },
+    {
+      "phase": "m82-tpm-da-properties",
+      "passed": true,
+      "tpm_capability_tool_available": true,
+      "query_success": true,
+      "dictionary_attack_properties": {
+        "TPM2_PT_LOCKOUT_COUNTER": 1,
+        "TPM2_PT_MAX_AUTH_FAIL": 3,
+        "TPM2_PT_LOCKOUT_INTERVAL": 1000,
+        "TPM2_PT_LOCKOUT_RECOVERY": 1000
+      },
+      "in_lockout": false,
+      "authentication_attempt_performed": false,
+      "budget_reset_or_configuration_performed": false,
+      "observed_utc": "2026-10-17T20:35:49.560598+00:00"
+    },
+    {
+      "phase": "m82-tpm-da-properties",
+      "passed": true,
+      "tpm_capability_tool_available": true,
+      "query_success": true,
+      "dictionary_attack_properties": {
+        "TPM2_PT_LOCKOUT_COUNTER": 1,
+        "TPM2_PT_MAX_AUTH_FAIL": 3,
+        "TPM2_PT_LOCKOUT_INTERVAL": 1000,
+        "TPM2_PT_LOCKOUT_RECOVERY": 1000
+      },
+      "in_lockout": false,
+      "authentication_attempt_performed": false,
+      "budget_reset_or_configuration_performed": false,
+      "observed_utc": "2026-10-17T20:40:32.671556+00:00"
+    },
+    {
+      "phase": "m82-tpm-da-properties",
+      "passed": true,
+      "tpm_capability_tool_available": true,
+      "query_success": true,
+      "dictionary_attack_properties": {
+        "TPM2_PT_LOCKOUT_COUNTER": 0,
+        "TPM2_PT_MAX_AUTH_FAIL": 3,
+        "TPM2_PT_LOCKOUT_INTERVAL": 1000,
+        "TPM2_PT_LOCKOUT_RECOVERY": 1000
+      },
+      "in_lockout": false,
+      "authentication_attempt_performed": false,
+      "budget_reset_or_configuration_performed": false,
+      "observed_utc": "2026-10-17T20:41:35.245798+00:00"
+    }
+  ],
+  "hosted_ci_checkpoint": {
+    "schema": 1,
+    "scope": "Hosted CI for the draft PR checkpoint; separate from installed VM RPM evidence and later documentation/evidence commits.",
+    "run_url": "https://github.com/tommcamm/LocalPIN/actions/runs/39067237416",
+    "event": "pull_request",
+    "reported_head_sha": "e2003e4615ec0883e1881a918425b991dbc46b3a",
+    "potential_merge_commit_at_read": "fe8f1b5326e7f97b506dd296d11ac7d7df951b39",
+    "conclusion": "success",
+    "jobs": {
+      "Dependency policy": "success",
+      "Fedora 44 x86_64": "success",
+      "Isolated M1 experiments (Fedora 44)": "success",
+      "Rust lint and build (Ubuntu)": "success"
+    },
+    "final_head_ci_claimed": false,
+    "installed_rpms_from_this_run_claimed": false
+  },
+  "fixture_sources": {
+    "wizard.py": "5dcca2a4ef165c4e882cd03b28e5b7d09852659efdc5d189a8056d48a2c5793c",
+    "state.py": "75b927a7a08d1ae8070cde94f7a3cf608308f10bb04bac003af74d1da061c46f",
+    "offline_accounting.py": "752f10ff086d41e26dfa7e3bec491f91498f60688309b6e40421087ff387ce30",
+    "console_recovery.py": "e48d54646ac76b2e391b5957b17cabf3a696d7d266b91494abe709840bcf814f"
+  },
+  "local_validation": {
+    "fixture_tests_passed": 13,
+    "existing_vm_guard_tests_passed": 21,
+    "python_compilation": "passed",
+    "whitespace": "passed",
+    "source_tests": "See lock-test-isolation.json; separate from installed RPM payload."
+  },
+  "cleanup": {
+    "passed": true,
+    "phase": "cleanup",
+    "physical_tpm_touched": false,
+    "reviewed_runner_sha256": "88072a70300bc6bbb53bd11f4aab8c1b6bcd9292281dfa5bde34dede30e44eb0",
+    "reviewed_pre_cleanup_export_sha256": "344e1f37bdf9786a1b223271cafd8c2e4eb7b090e63f2a612123453348b0284e",
+    "original_vm_claim": "Defined and off only; no initial disk hash was recorded.",
+    "temporary_ssh_key_removed": true,
+    "unrelated_authorized_key_bytes_preserved": true,
+    "clone_autologin_removed": true,
+    "guest_private_secrets_removed": true,
+    "m82_private_transcripts_absent": true,
+    "m82_private_accounting_recovery_records_removed": true,
+    "accounts_revoked": true,
+    "both_original_policy_bytes_and_modes_restored": true,
+    "original_policy_matches_install_and_preparation_snapshots": true,
+    "all_pam_references_absent": true,
+    "clone_undefined": true,
+    "private_emulator_state_removed_by_libvirt": true,
+    "clone_shutdown_graceful": true,
+    "owned_independent_volume_deleted": true,
+    "original_vm_remains_defined_and_off": true,
+    "temporary_host_access_removed": true,
+    "host_private_responses_removed": true,
+    "offline_bootstrap_copies_removed": true,
+    "sanitized_observations_results_session_state_preserved": true
   }
 }

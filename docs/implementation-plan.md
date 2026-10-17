@@ -1,7 +1,7 @@
 # LocalPIN implementation plan
 
 - Date: 2026-10-17
-- Status: M0–M8 implemented with historical appliance acceptance; M8.1 final source checks and targeted installed RPM acceptance passed on Fedora KDE 44 x86_64 with SELinux enforcing and a private TPM emulator. The [M8.1 report](development/m8.1-desktop-compatibility.md) records evidence and each installed case's build scope. GUI/DBus AccountsService, full old-TPM-credential migration and physical hardware remain unvalidated. M9 independent human/specialist review and release gates remain open. [Hosted CI](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml) and its unsigned testing RPMs provide separate build/test evidence; recorded local/VM acceptance does not imply a passing workflow run.
+- Status: M0–M8 implemented with historical appliance acceptance; M8.1 final source checks and targeted installed RPM acceptance passed on Fedora KDE 44 x86_64 with SELinux enforcing and a private TPM emulator. The [M8.1 report](development/m8.1-desktop-compatibility.md) records evidence and each installed case's build scope. [M8.2 targeted TPM-required guided setup, recovery and package acceptance](development/m8.2-installed-acceptance.md) also passed in a fresh enforcing VM. GUI/DBus AccountsService, full old-TPM-credential migration and physical hardware remain unvalidated. M9 independent human/specialist review and release gates remain open. [Hosted CI](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml) and its unsigned testing RPMs provide separate build/test evidence; recorded local/VM acceptance does not imply a passing workflow run.
 - Source of requirements: [product-specification.md](product-specification.md), version 1.6. ADR 0017 replaces the frozen lifecycle domain with native shadow-record markers and locking; ADR 0018 defines KDE/native-update compatibility; ADR 0019 defines fixed guided-setup orchestration.
 
 
@@ -436,9 +436,10 @@ The source change introduces [ADR 0019](adr/0019-guided-setup-orchestration.md)'
 and schema-version-1 status/doctor JSON. The
 [M8.2 validation report](development/m8.2-guided-setup.md) records passing local
 source, terminal and RPM checks. The
-[new installed acceptance run](development/m8.2-installed-acceptance.md) is in
-progress with measured cases and explicit pending completion; historical M8.1
-results retain their recorded scope.
+[installed acceptance report](development/m8.2-installed-acceptance.md) records
+passing targeted TPM-required onboarding, real console recovery, identical-payload
+RPM upgrade/downgrade refusal, active reboot, removal and guarded cleanup.
+Historical M8.1 results retain their recorded scope.
 
 - Offer `dnf install` followed by `localpin setup` for one desktop owner. Guide
   readiness checks, preparation preview/confirmation, explicit TPM or software
@@ -457,14 +458,17 @@ results retain their recorded scope.
   Check broker account/session/enrollment readiness before trial and activation;
   protected pointer inspection alone does not establish account continuity.
 - Verify synthetic state-machine/fixed-invocation/UID-guard cases, PTY input and
-  terminal restoration, packaging invariants and source checks. Repeat the new
-  clean-install, recovery/resume and compatible-update flow in a disposable
-  enforcing Fedora KDE VM with a private TPM emulator before claiming installed
-  acceptance. Record unavailable checks without treating them as passes.
+  terminal restoration, packaging invariants and source checks. The targeted
+  clean-install, recovery/resume and compatible-update flow passed in a disposable
+  enforcing Fedora KDE VM with a private TPM emulator. Retain exact build/case
+  scope and record unavailable checks without treating them as passes.
 
 Exit gate: the guided flow passes appropriate source checks and new installed
 Fedora KDE acceptance with actual PIN/password, console recovery and resume
-observations. This does not complete M9 independent review or hardware gates.
+observations. **Met for the recorded TPM-required VM cases.** A deadline-only
+activation refusal branch and installed software-backend onboarding were not
+isolated in this run. This does not complete M9 independent review, final signed
+candidate reconciliation or hardware gates.
 
 ### M9 — Review, hardware validation and versioned release
 

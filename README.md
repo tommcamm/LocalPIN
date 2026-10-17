@@ -74,10 +74,11 @@ the M8.2 guided CLI.
 **Installation and enrollment alone do not activate PIN unlocking.** The
 [installation and recovery runbook](docs/integration-administration.md) explains
 all prerequisites and retains the manual administrator procedure. The new guided
-flow has passed [local source, terminal and package checks](docs/development/m8.2-guided-setup.md).
-Its [current installed VM run](docs/development/m8.2-installed-acceptance.md)
-records measured cases and remaining acceptance work; historical M8.1 evidence
-retains its tested scope.
+flow has passed [local source, terminal and package checks](docs/development/m8.2-guided-setup.md)
+and [targeted installed VM acceptance](docs/development/m8.2-installed-acceptance.md)
+for TPM setup, console recovery, an identical-payload RPM update, reboot and
+removal. Independent review, physical hardware and signed-release gates remain
+open; historical M8.1 evidence retains its tested scope.
 
 ## Everyday use
 

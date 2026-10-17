@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "scope": "Hosted CI for the draft PR checkpoint; separate from installed VM RPM evidence and later documentation/evidence commits.",
+  "run_url": "https://github.com/tommcamm/LocalPIN/actions/runs/39067237416",
+  "event": "pull_request",
+  "reported_head_sha": "e2003e4615ec0883e1881a918425b991dbc46b3a",
+  "potential_merge_commit_at_read": "fe8f1b5326e7f97b506dd296d11ac7d7df951b39",
+  "conclusion": "success",
+  "jobs": {
+    "Dependency policy": "success",
+    "Fedora 44 x86_64": "success",
+    "Isolated M1 experiments (Fedora 44)": "success",
+    "Rust lint and build (Ubuntu)": "success"
+  },
+  "final_head_ci_claimed": false,
+  "installed_rpms_from_this_run_claimed": false
+}

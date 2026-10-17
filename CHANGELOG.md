@@ -17,11 +17,14 @@ experimental builds.
   requires an offline maintenance handoff and real recovery revokes enrollment.
   [ADR 0019](docs/adr/0019-guided-setup-orchestration.md) defines the boundary;
   [targeted installed VM evidence](docs/development/m8.2-installed-acceptance.md)
-  is in progress; final onboarding acceptance and all M9 gates remain open.
+  passed for the recorded TPM-required cases. M9 review, physical hardware and
+  final signed-release gates remain open.
 - Guarded M8.2 Konsole, accounting and real administrator-VT recovery fixtures,
-  with source/RPM-bound partial evidence from an enforcing Fedora KDE 44 VM and
-  private TPM emulator. Retained failures, native lockout/counter preservation
-  and incomplete final acceptance are recorded explicitly.
+  with source/RPM-bound evidence from an enforcing Fedora KDE 44 VM and private
+  TPM emulator: actual onboarding/recovery, natural expiry, compatible
+  identical-payload RPM update, reboot, removal and guarded cleanup. Retained
+  failures, native lockout, natural TPM reserve recovery and scope limits remain
+  explicit; no counter reset was used to advance the run.
 - Isolated coverage-guided fuzz targets, native instrumentation harnesses,
   dependency policy and recorded component validation for M9. See the
   [review and validation report](docs/development/m9-review-validation.md) for

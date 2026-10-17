@@ -64,9 +64,10 @@ work and remaining milestones.
 The [guided setup validation report](development/m8.2-guided-setup.md) records
 local source, terminal and RPM checks for the
 [guided setup contract](adr/0019-guided-setup-orchestration.md). The
-[new installed acceptance record](development/m8.2-installed-acceptance.md)
-separates observed guided-onboarding cases from pending completion; source
-checks do not extend prior installed results. The [desktop compatibility report](development/m8.1-desktop-compatibility.md)
+[installed acceptance record](development/m8.2-installed-acceptance.md)
+records passing targeted TPM onboarding, console recovery, identical-payload RPM
+update, reboot, removal and cleanup cases, with retained failures and explicit
+scope limits. Source checks do not extend prior installed results. The [desktop compatibility report](development/m8.1-desktop-compatibility.md)
 records targeted installed acceptance in a disposable enforcing Fedora KDE VM
 with a private TPM emulator. Historical reports in [development](development/)
 retain their recorded build and environment scope; that report supersedes the

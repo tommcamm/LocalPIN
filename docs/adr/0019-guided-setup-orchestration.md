@@ -2,7 +2,8 @@
 
 Date: 2026-10-17. Status: accepted for development implementation;
 [new installed Fedora KDE acceptance](../development/m8.2-installed-acceptance.md)
-is in progress, with compatible-update and final completion still pending.
+passed for the recorded TPM-required guided setup, recovery, compatible update,
+reboot and removal cases in a disposable enforcing VM.
 M9 independent review and physical hardware gates remain open.
 
 ## Context
@@ -110,8 +111,10 @@ short `localpin-integration` alias and console recovery path. The wizard adds a
 reviewable privilege boundary and cannot eliminate real tests or offline work.
 
 Synthetic parser/state-machine, fixed-process-invocation, transaction-scope and
-PTY checks can establish local behavior. Installed Fedora KDE with SELinux
-enforcing and a private TPM emulator must separately validate clean setup,
-recovery/resume, interrupted stages and compatible updates. Historical M8.1
-installed evidence and passing builds do not certify this new workflow or
-complete M9 independent review or physical hardware validation.
+PTY checks establish local behavior in their tested scope. The separate
+[installed record](../development/m8.2-installed-acceptance.md) covers actual
+TPM-required clean setup, recovery/resume, selected interrupted stages,
+identical-payload RPM update, reboot and removal with SELinux enforcing and a
+private TPM emulator. It retains failures and untested branches explicitly.
+Historical M8.1 evidence and passing builds do not extend those cases or
+complete M9 independent review, signed-candidate or physical hardware validation.
