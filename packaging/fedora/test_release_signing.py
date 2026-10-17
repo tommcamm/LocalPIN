@@ -18,6 +18,13 @@ KEY = "synthetic-secret-key"
 PASSPHRASE = "synthetic-passphrase"
 
 
+def record(kind, *, capability, marker):
+    fields = [kind] + [""] * 14
+    fields[11] = capability
+    fields[14] = marker
+    return ":".join(fields) + ":\n"
+
+
 class SigningTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="localpin-sign-test-")
@@ -31,6 +38,9 @@ class SigningTests(unittest.TestCase):
         self.homes = set()
         self.failure = None
         self.listed = FINGERPRINT
+        self.public_listed = FINGERPRINT
+        self.secret_present = True
+        self.signer_present = True
         self.environment = patch.dict(signing.os.environ, {
             "LOCALPIN_SIGNING_KEY": KEY,
             "LOCALPIN_SIGNING_FINGERPRINT": FINGERPRINT.lower(),
@@ -60,7 +70,11 @@ class SigningTests(unittest.TestCase):
         if argv[0] == "gpg" and "--import" in argv:
             self.assertEqual(kwargs["input"], KEY.encode())
         if argv[0] == "gpg" and "--list-secret-keys" in argv:
-            listing = f"sec:::::::::\nfpr:::::::::{self.listed}:\nssb:::::::::\nfpr:::::::::{SUBKEY}:\n"
+            listing = (record("sec", capability="cSC", marker="#") + f"fpr:::::::::{self.listed}:\n" +
+                       record("ssb", capability="s", marker="+" if self.signer_present else "#") + f"fpr:::::::::{SUBKEY}:\n") if self.secret_present else ""
+            return subprocess.CompletedProcess(argv, 0, stdout=listing)
+        if argv[0] == "gpg" and "--list-keys" in argv:
+            listing = f"pub:::::::::\nfpr:::::::::{self.public_listed}:\nuid:::::::::private-looking-untrusted-label:\n"
             return subprocess.CompletedProcess(argv, 0, stdout=listing)
         if argv[0] == "rpmsign":
             passfile = home / "passphrase"
@@ -107,11 +121,42 @@ class SigningTests(unittest.TestCase):
 
     def test_mismatched_primary_key_never_signs_or_marks_manifest(self):
         self.listed = "C" * 40
+        self.public_listed = self.listed
         with self.assertRaisesRegex(ValueError, "fingerprint"):
             signing.sign(self.directory)
         self.assertFalse(any(args[0] == "rpmsign" for args in self.calls))
         self.assertEqual(self.manifest()["signing"], {"signed": False, "fingerprint": None})
         self.assertEqual((self.directory / "RELEASE-NOTES.md").read_text(), "Experimental release.\n")
+        self.assert_cleanup()
+
+    def test_public_only_export_reports_missing_private_signer(self):
+        self.secret_present = False
+        with self.assertRaisesRegex(ValueError, "matches primary fingerprint.*no available private signing key") as raised:
+            signing.sign(self.directory)
+        self.assertIn("--export-secret-subkeys", str(raised.exception))
+        self.assertNotIn("private-looking-untrusted-label", str(raised.exception))
+        self.assertFalse(any(args[0] == "rpmsign" for args in self.calls))
+        self.assertFalse(self.manifest()["signing"]["signed"])
+        self.assert_cleanup()
+
+    def test_public_only_signing_subkey_does_not_use_aggregate_uppercase_capability(self):
+        self.signer_present = False
+        with self.assertRaisesRegex(ValueError, "no available private signing key"):
+            signing.sign(self.directory)
+        self.assertFalse(any(args[0] == "rpmsign" for args in self.calls))
+        self.assert_cleanup()
+
+    def test_mismatch_reports_only_public_primary_fingerprints(self):
+        self.listed = "C" * 40
+        self.public_listed = self.listed
+        with self.assertRaises(ValueError) as raised:
+            signing.sign(self.directory)
+        message = str(raised.exception)
+        self.assertIn(FINGERPRINT, message)
+        self.assertIn(self.listed, message)
+        self.assertIn("not a subkey fingerprint", message)
+        for secret in (KEY, PASSPHRASE, "private-looking-untrusted-label"):
+            self.assertNotIn(secret, message)
         self.assert_cleanup()
 
     def test_failed_rpm_signing_does_not_verify_or_mark_manifest(self):

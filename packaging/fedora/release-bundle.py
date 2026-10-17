@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import tarfile
 import tomllib
-from urllib.parse import quote
+from urllib.parse import quote, urljoin
 
 ROOT = Path(__file__).resolve().parents[2]
 TARGET = "x86_64-unknown-linux-gnu"
@@ -32,6 +32,86 @@ def digest(path):
 
 def write_json(path, value):
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
+
+
+def changelog_summary(text, version, source_url):
+    """Select a few committed changes without copying the historical changelog."""
+    sections = [section.partition("\n") for section in re.split(r"(?m)^## +", text)[1:]]
+    escaped_version = re.escape(version)
+    version_heading = re.compile(rf"(?:v?{escaped_version}|\[v?{escaped_version}\])(?:\s+-\s+.*)?")
+    released = [body for heading, _, body in sections if version_heading.fullmatch(heading.strip())]
+    unreleased = [body for heading, _, body in sections if heading.strip() in ("Unreleased", "[Unreleased]")]
+    selected = released or unreleased
+    if len(selected) != 1:
+        raise ValueError("Changelog must have one release version or Unreleased section")
+    entries = []
+    current = None
+    for line in selected[0].splitlines():
+        if line.startswith("- "):
+            current = [line.rstrip()]
+            entries.append(current)
+        elif line.startswith((" ", "\t")) and current is not None:
+            current.append(line.rstrip())
+        elif line.strip():
+            current = None
+    if not entries:
+        raise ValueError("Release changelog section must contain change bullets")
+    summary = "\n".join("\n".join(entry) for entry in entries[:3])
+    # Relative repository links otherwise resolve against the GitHub release URL.
+    return re.sub(r"(\[[^\]]+\]\()([^\s)]+)(\))",
+                  lambda match: match[1] + urljoin(source_url + "/CHANGELOG.md", match[2]) + match[3], summary)
+
+
+def release_notes(version, commit, rpm_name, archive_name, workflow_url):
+    source = f"https://github.com/tommcamm/LocalPIN/blob/{commit}"
+    changes = changelog_summary((ROOT / "CHANGELOG.md").read_text(), version, source)
+    return f"""LocalPIN {version} is an **experimental Fedora KDE 44 x86_64 prerelease**.
+
+LocalPIN adds opt-in six-digit PIN unlocking to an existing KDE graphical session,
+with the account password available for unlocking and recovery. It includes
+enrollment and PIN changes, durable attempt limits, protected storage, TPM 2.0 or
+explicitly selected Argon2id software credentials, and SELinux confinement.
+
+There is no supported production release. Independent security review, physical
+hardware validation and the remaining [M9 acceptance gates]({source}/docs/development/m9-release-readiness.md)
+are open. CI checks do not complete those gates.
+
+### Selected changes
+
+{changes}
+
+See the [complete changelog]({source}/CHANGELOG.md) for this source snapshot.
+
+### Downloads
+
+- **`{rpm_name}`**: the signed installable Fedora 44 x86_64 package.
+- **`{archive_name}`**: committed source; rebuilding still needs Rust dependencies and native build tools.
+- `RELEASE.json` and `BUILD-INPUTS.json`: source/build provenance, RPM identity and final signing fingerprint. The embedded build manifest intentionally retains `signed: false` for the pre-sign build.
+- `SBOM.spdx.json` and `NATIVE-RPMS.json`: Cargo target dependencies and the complete builder RPM inventory, including development tools; not a minimal runtime closure or independent license review.
+- `RPM-GPG-KEY-LocalPIN`, `SHA256SUMS` and `SHA256SUMS.asc`: public signing key, download checksums and their detached OpenPGP signature.
+
+Every published experimental release requires verified RPM and checksum signatures.
+Compare the key fingerprint with a separately trusted maintainer fingerprint, then
+follow the [signature and checksum verification steps]({source}/docs/releasing.md#verify-and-test-a-download)
+before installation. `RELEASE.json.signing.signed` must be `true`.
+
+### Installation and current limits
+
+Start in a disposable Fedora KDE VM with SELinux enforcing. Installing the RPM
+starts no broker and leaves PIN integration disabled. Follow the
+[installation and recovery runbook]({source}/docs/integration-administration.md)
+for persistent native faillock setup, enrollment, a timed trial, password fallback,
+console recovery and explicit activation.
+
+Local, non-root accounts and reviewed authselect/PAM layouts are required. Custom
+policies and systemd-homed are outside the current target. Physical TPMs,
+fingerprint devices, AccountsService GUI/DBus administration, alternate filesystem
+durability and the full hardware matrix remain unvalidated. The
+[M8.1 report]({source}/docs/development/m8.1-desktop-compatibility.md)
+records the narrower installed-VM evidence and its limits.
+
+Source: [`{commit}`](https://github.com/tommcamm/LocalPIN/commit/{commit}). Build and validation: [workflow run]({workflow_url}).
+"""
 
 
 def rpm_inventory(text):
@@ -235,10 +315,12 @@ def create(build, output, tag, commit):
     sbom = spdx(metadata, tomllib.loads((ROOT / "Cargo.lock").read_text()), native,
                 inputs.get("native_rpm_inputs"), version=version, commit=commit,
                 created=created, rpm_name=rpms[0].name, rpm_sha256=digest(rpms[0]))
+    archive_name = f"localpin-{version}-source.tar.gz"
+    workflow_url = f'{os.environ.get("GITHUB_SERVER_URL", "https://github.com")}/{os.environ.get("GITHUB_REPOSITORY", "tommcamm/LocalPIN")}/actions/runs/{os.environ.get("GITHUB_RUN_ID", "local")}'
+    notes = release_notes(version, commit, rpms[0].name, archive_name, workflow_url)
     output.mkdir(parents=True, exist_ok=False)
     shutil.copy2(rpms[0], output / rpms[0].name)
     (output / "BUILD-INPUTS.json").write_bytes(inputs_bytes)
-    archive_name = f"localpin-{version}-source.tar.gz"
     run(["git", "archive", "--format=tar.gz", f"--prefix=localpin-{version}/", f"--output={output / archive_name}", commit])
     write_json(output / "NATIVE-RPMS.json", {"scope": "complete installed disposable build environment", "packages": native})
     write_json(output / "SBOM.spdx.json", sbom)
@@ -246,33 +328,10 @@ def create(build, output, tag, commit):
                "project_version": version, "source_commit": commit, "source_archive": archive_name,
                "target": "Fedora KDE 44 x86_64", "cargo_target": TARGET,
                "cargo_features": "workspace default features", "build_inputs_signed": False,
-               "workflow_run_url": f'{os.environ.get("GITHUB_SERVER_URL", "https://github.com")}/{os.environ.get("GITHUB_REPOSITORY", "tommcamm/LocalPIN")}/actions/runs/{os.environ.get("GITHUB_RUN_ID", "local")}',
+               "workflow_run_url": workflow_url,
                "rpm": {"filename": rpms[0].name, "version": package[0]["version"], "release": package[0]["release"], "sha256": digest(rpms[0])},
                "signing": {"signed": False, "fingerprint": None}})
-    (output / "RELEASE-NOTES.md").write_text(f"""LocalPIN {version} is an experimental Fedora KDE 44 x86_64 prerelease.
-
-There is no supported production release. M9 independent security review,
-physical TPM and desktop hardware validation, and remaining acceptance gates
-are open. CI build/test evidence does not complete those gates.
-
-Source commit: `{commit}`. Installation starts no broker and does not activate
-PIN unlocking. Begin in a disposable Fedora KDE VM with SELinux enforcing;
-follow [installation and recovery](https://github.com/tommcamm/LocalPIN/blob/{commit}/docs/integration-administration.md)
-for persistent native faillock setup, enrollment, timed trial, password fallback,
-console recovery and explicit activation. Local files accounts and reviewed
-authselect/PAM layouts are required; custom policies and systemd-homed are outside
-the current target. Physical TPMs, fingerprint devices, AccountsService GUI/DBus,
-alternate filesystem durability and the full hardware matrix remain unvalidated.
-
-Check `RELEASE.json` for the final RPM signing status and key fingerprint.
-`BUILD-INPUTS.json` records the pre-sign build and intentionally retains
-`signed: false`. Verify `SHA256SUMS` after download. Checksums establish integrity;
-package signatures establish provenance from the trusted package signing key.
-`SBOM.spdx.json` describes the Cargo target graph and installed builder RPMs,
-including development/build inputs; it is not a minimal runtime closure or an
-independent dependency/license review. The source archive contains committed
-source; the RPM builder still requires cached Rust dependencies and native tools.
-""")
+    (output / "RELEASE-NOTES.md").write_text(notes)
     finalize(output)
 
 

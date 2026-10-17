@@ -123,8 +123,43 @@ def api(path, payload=None, missing_ok=False):
             return json.load(response)
     except urllib.error.HTTPError as error:
         if missing_ok and error.code == 404:
+            error.close()
             return None
-        raise RuntimeError(f"GitHub API {path} failed: HTTP {error.code}") from None
+        try:
+            message = json.loads(error.read(4096)).get("message", "")
+        except (ValueError, AttributeError):
+            message = ""
+        finally:
+            error.close()
+        if not isinstance(message, str):
+            message = ""
+        token = os.environ.get("GH_TOKEN")
+        if token:
+            message = message.replace(token, "[redacted]")
+        message = re.sub(r"[\x00-\x1f\x7f]", " ", message)[:512]
+        detail = f": {message}" if message else ""
+        hint = " Check the release job's contents: write permission and repository tag/workflow rules." if error.code == 403 else ""
+        raise RuntimeError(f"GitHub API {path} failed: HTTP {error.code}{detail}.{hint}") from None
+
+
+def verify_github_release(directory, tag, assets, *, draft):
+    result = subprocess.run(["gh", "release", "view", tag, "--repo", os.environ["GITHUB_REPOSITORY"],
+                             "--json", "tagName,name,body,isDraft,isPrerelease,assets,url"],
+                            check=True, capture_output=True, text=True)
+    release = json.loads(result.stdout)
+    expected_notes = (directory / "RELEASE-NOTES.md").read_text().replace("\r\n", "\n").strip()
+    actual_notes = (release.get("body") or "").replace("\r\n", "\n").strip()
+    expected_assets = {path.name for path in assets}
+    actual_assets = [asset.get("name") for asset in release.get("assets", [])]
+    if (release.get("tagName") != tag or release.get("name") != f"LocalPIN {tag} (experimental)"
+            or release.get("isDraft") is not draft or release.get("isPrerelease") is not True
+            or not expected_notes or actual_notes != expected_notes
+            or len(actual_assets) != len(expected_assets) or set(actual_assets) != expected_assets):
+        raise ValueError("GitHub release state, description or uploaded assets do not match the verified bundle")
+    expected_url = f'{os.environ.get("GITHUB_SERVER_URL", "https://github.com")}/{os.environ["GITHUB_REPOSITORY"]}/releases/tag/{tag}'
+    if not draft and release.get("url") != expected_url:
+        raise ValueError("published GitHub release URL differs from the repository's release page")
+    return expected_url
 
 
 def publish(directory, tag, commit):
@@ -144,7 +179,13 @@ def publish(directory, tag, commit):
     subprocess.run(["gh", "release", "create", tag, *map(str, assets), "--repo", os.environ["GITHUB_REPOSITORY"],
                     "--verify-tag", "--draft", "--prerelease", "--latest=false", "--title", f"LocalPIN {tag} (experimental)",
                     "--notes-file", str(directory / "RELEASE-NOTES.md")], check=True)
+    verify_github_release(directory, tag, assets, draft=True)
     subprocess.run(["gh", "release", "edit", tag, "--repo", os.environ["GITHUB_REPOSITORY"], "--draft=false", "--prerelease", "--latest=false"], check=True)
+    url = verify_github_release(directory, tag, assets, draft=False)
+    print(f"Published experimental release: {url}")
+    if os.environ.get("GITHUB_STEP_SUMMARY"):
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+            summary.write(f"## Experimental release published\n\n[View {tag} on GitHub Releases]({url})\n\nVerified RPM/checksum signatures, release description and all {len(assets)} assets.\n")
 
 
 if __name__ == "__main__":

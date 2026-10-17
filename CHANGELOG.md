@@ -127,6 +127,12 @@ Changes will be recorded here before versioned releases. There are no releases y
 
 ### Changed
 
+- Report missing private signing material separately from mismatched public
+  primary fingerprints. Describe experimental releases with features, selected
+  committed changes, downloads, verification/recovery guidance and source/run
+  links; verify GitHub's description and complete attachment list before making
+  a draft public, then verify and report the published release URL.
+
 - Run full workspace runtime tests on the Fedora target while retaining Ubuntu
   formatting, Clippy, Python checks, and release builds. Install the native RPM
   manifest inputs explicitly in Fedora CI.
