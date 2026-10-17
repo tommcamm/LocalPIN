@@ -1,10 +1,12 @@
 # Build inputs and dependency policy
 
-M2 has two workspace members, `localpin-core` and `localpin-protocol`, and one
-third-party Rust dependency, `zeroize`. There are no native PAM, TPM2-TSS,
-systemd, or KDF requirements in the production Rust graph yet. Select those
-inputs when their milestones introduce them; the specification's machine
-inventory is not a dependency pin. The isolated M1 experiments remain separate.
+M3 has three workspace members: `localpin-core`, `localpin-protocol`, and
+`localpin-storage`. The direct third-party Rust dependencies are `zeroize` and
+`rustix`; the committed lockfile contains eight third-party crates including
+target-specific inputs. There are no native PAM, TPM2-TSS, systemd, or KDF
+requirements in the production Rust graph yet. Select those inputs when their
+milestones introduce them; the specification's machine inventory is not a
+dependency pin. The isolated M1 experiments remain separate.
 
 ## Current inputs
 
@@ -12,7 +14,8 @@ inventory is not a dependency pin. The isolated M1 experiments remain separate.
 | --- | --- | --- |
 | Rust compiler, Cargo, rustfmt, Clippy, standard library | Exact release in [`rust-toolchain.toml`](../../rust-toolchain.toml) | One reviewed toolchain for local development and CI |
 | Rust edition and minimum supported Rust version | Workspace package metadata in [`Cargo.toml`](../../Cargo.toml) | Edition 2024; the initial minimum is the tested toolchain version |
-| Third-party Rust crates | `zeroize =1.9.1`, `default-features=false`, `alloc` only; [`Cargo.lock`](../../Cargo.lock) is committed | Erase owned PIN/password/record and framing buffers on drop |
+| Secret-buffer dependency | `zeroize =1.9.1`, `default-features=false`, `alloc` only | Erase owned PIN/password/record, storage, and framing buffers on drop |
+| Filesystem dependency | `rustix =1.1.5`, `default-features=false`, `std` and `fs` only; [`Cargo.lock`](../../Cargo.lock) is committed | Safe descriptor-relative Linux filesystem operations and file locking for protected durable storage |
 | C compiler and system C library | Developer distribution; `gcc` and `glibc` from Fedora 44 in CI | Link Rust executables and test binaries |
 | cargo-deny | `0.20.2`, installed with `--locked` | Advisory, license, duplicate/wildcard, and source checks |
 | GitHub checkout action | `v7.0.1` at `3d3c42e5aac5ba805825da76410c181273ba90b1` | Fetch the source without retaining checkout credentials |
@@ -79,6 +82,62 @@ Zeroizing ownership does not erase prior compiler moves, caller-owned inputs,
 native copies, swap, or core dumps. M5/M7 must establish the process/FFI cleanup
 and core-dump settings. No custom KDF or constant-time comparison is introduced.
 The M2 evidence report records the actual advisory/license/source check result.
+
+## M3 filesystem dependency review
+
+`rustix` is a [Bytecode Alliance project](https://github.com/bytecodealliance/rustix).
+The reviewed [1.1.5 published manifest](https://docs.rs/crate/rustix/1.1.5/source/Cargo.toml)
+declares Rust 1.65 and `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT`.
+Its bundled copyright and license files permit choosing Apache-2.0 or MIT, so
+the existing license allowlist needs no exception. Only `std` and `fs` are
+requested; `std` also enables `alloc` and `bitflags/std`. Networking, process,
+randomness, io_uring, and other optional API groups remain disabled.
+
+The following versions and registry checksums are committed in `Cargo.lock`.
+Published manifests, license files, and upstream repository links were reviewed
+from the downloaded registry sources. Maintainers are identified by those
+upstream repositories; this inventory does not claim these are the latest
+available releases.
+
+| Transitive crate | Upstream and purpose | Declared minimum Rust | License |
+| --- | --- | --- | --- |
+| [`bitflags 2.13.2`](https://docs.rs/crate/bitflags/2.13.2/source/Cargo.toml) | [bitflags project](https://github.com/bitflags/bitflags); typed syscall flag values | 1.56.0 | `MIT OR Apache-2.0` |
+| [`linux-raw-sys 0.12.1`](https://docs.rs/crate/linux-raw-sys/0.12.1/source/Cargo.toml) | [sunfishcode/linux-raw-sys](https://github.com/sunfishcode/linux-raw-sys); generated Linux UAPI definitions | 1.63 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
+| [`errno 0.3.14`](https://docs.rs/crate/errno/0.3.14/source/Cargo.toml) | [lambda-fairy/rust-errno](https://github.com/lambda-fairy/rust-errno); error access for libc/Windows backends | 1.56 | `MIT OR Apache-2.0` |
+| [`libc 0.2.191`](https://docs.rs/crate/libc/0.2.191/source/Cargo.toml) | [rust-lang/libc](https://github.com/rust-lang/libc); platform C ABI declarations for fallback targets | 1.65 | `MIT OR Apache-2.0` |
+| [`windows-sys 0.61.2`](https://docs.rs/crate/windows-sys/0.61.2/source/Cargo.toml) | [Microsoft windows-rs](https://github.com/microsoft/windows-rs); Windows API declarations for target-specific rustix/errno support | 1.71 | `MIT OR Apache-2.0` |
+| [`windows-link 0.2.1`](https://docs.rs/crate/windows-link/0.2.1/source/Cargo.toml) | [Microsoft windows-rs](https://github.com/microsoft/windows-rs); imports used by windows-sys | 1.71 | `MIT OR Apache-2.0` |
+
+All declared minimums are below the workspace's pinned Rust 1.99.1; the
+supported compiler contract is unchanged. The x86_64 Linux feature tree contains
+only `bitflags` and `linux-raw-sys` below rustix. The libc/errno and Windows
+branches are nevertheless retained in the lockfile and checked by cargo-deny,
+which does not prune targets. Their presence does not add Windows support to
+`localpin-storage`.
+
+Rustix's reviewed [build script](https://docs.rs/crate/rustix/1.1.5/source/build.rs)
+selects its syscall backend and probes compiler capabilities with Rust metadata
+compilations. Libc has a Rust build script for compiler/target configuration,
+used only when its backend is selected; the other added crates have no build
+scripts. None of the selected crates has build dependencies, downloads native
+artifacts, runs bindgen at build time, or compiles bundled C libraries. On the
+tested Linux x86_64 target, rustix uses its Rust/assembly Linux syscall backend;
+the normal Rust executable linker and system libc requirements remain.
+
+Project code still forbids unsafe code. Rustix and its platform bindings contain
+the reviewed unsafe syscall/ABI boundary, just as zeroize owns the memory-clearing
+boundary. Safe wrappers do not establish path ownership, permissions, absence of
+symlinks or hard links, lock lifetime, or crash durability on their own. The
+storage adapter and its tests enforce those requirements. Filesystem and
+hardware synchronization guarantees remain part of deployment validation.
+
+For M3, `cargo-deny 0.20.2 --locked check advisories bans licenses sources`
+passed all four checks with the unchanged policy. The sandbox's default Cargo
+home was read-only and its network could not resolve GitHub; the successful run
+used a writable copy under ignored `.local/m3-dependency-audit/cargo-home` and
+approved network access to refresh RustSec. The checked advisory database commit
+was `64f92cdc64401fab47baa10e2e11fe382aa57155` (17 October 2026). This is review
+evidence, not a pin: CI must refresh and run the check again.
 
 ## M1 experiment inputs
 

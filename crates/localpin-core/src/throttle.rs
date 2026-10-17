@@ -3,8 +3,8 @@
 //! The store implementation must hold the authoritative account/UID lock across
 //! reservation, verification, and completion. The mutable borrow held by the
 //! phase types additionally prevents concurrent use of one in-memory machine.
-//! M2 supplies no filesystem store or verifier; a store acknowledgement is a
-//! trust boundary whose durability and cross-process locking are tested in M3.
+//! The filesystem adapter lives in `localpin-storage`; this crate supplies no
+//! verifier. A store acknowledgement remains a trusted durability boundary.
 
 use crate::types::{AccountId, BootId, Generation, Incarnation, TimePoint, Uid};
 

@@ -1,8 +1,9 @@
 //! Versioned bounded model envelopes. No filesystem or cryptographic validation.
 //!
 //! These are development contracts, not a production account-lifecycle schema.
-//! M3 must establish trusted storage and lifecycle support before persisting them;
-//! M4 must validate the selected backend's payload before use.
+//! `localpin-storage` exercises these with synthetic lifecycle identities.
+//! Permanent use still requires demonstrated lifecycle support; M4 must validate
+//! the selected backend's payload before use.
 
 use crate::{
     limits::{KdfParameters, MAX_RECORD_BYTES},

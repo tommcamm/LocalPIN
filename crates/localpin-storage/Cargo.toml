@@ -1,0 +1,16 @@
+[package]
+name = "localpin-storage"
+description = "Protected Linux storage and durable LocalPIN policy adapter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+localpin-core.workspace = true
+rustix.workspace = true
+zeroize.workspace = true
+
+[lints]
+workspace = true

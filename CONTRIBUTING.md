@@ -1,8 +1,9 @@
 # Contributing to LocalPIN
 
 LocalPIN has completed isolated and guarded enforcing-VM M1 feasibility experiments
-and implements M2 pure policy/protocol models. Production integration and account
-lifecycle gates remain open. Read the
+and locally implements M2 pure policy/protocol models and M3 protected Linux
+storage. Production backends, PAM integration and account lifecycle gates remain
+open. Read the
 [product specification](docs/product-specification.md) and
 [implementation plan](docs/implementation-plan.md) before proposing implementation
 changes. Authentication behavior needs evidence appropriate to its risk, including
@@ -39,9 +40,15 @@ cargo deny --locked check advisories bans licenses sources
 
 Install the `cargo-deny` version pinned by CI before the last command. Advisory
 checks need access to the configured advisory database. Report unavailable checks
-honestly, including environmental failures. The Rust crates use simulated
-authorities/stores/workers; passing their checks establishes model contracts,
-not durable storage or platform authentication. Run the separate
+honestly, including environmental failures. These workspace checks include
+`localpin-storage`, which requires Linux and kernel support for `openat2` and
+fails closed when unavailable. Policy/protocol tests use simulated authorities,
+stores and workers. Storage tests use synthetic lifecycle identities and
+credentials with actual temporary-file and process I/O to exercise persistence,
+recovery and locking. They do not establish production lifecycle enforcement or
+platform authentication. Read the [M3 storage report](docs/development/m3-protected-storage.md)
+and [ADR 0008](docs/adr/0008-protected-storage-and-recovery.md) when changing these
+contracts. Run the separate
 [M1 harnesses](experiments/m1/README.md) when changing feasibility code; do not
 report their container results as real KDE or SELinux evidence.
 

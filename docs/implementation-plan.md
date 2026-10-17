@@ -1,7 +1,7 @@
 # LocalPIN implementation plan
 
 - Date: 2026-10-17
-- Status: Accepted roadmap; M0 implemented locally; M1 feasibility complete; M2 pure policy/protocol contracts implemented locally. Hosted CI execution remains unverified. Permanent account records remain gated on production lifecycle support.
+- Status: Accepted roadmap; M0 implemented locally; M1 feasibility complete; M2 pure policy/protocol contracts and M3 protected Linux storage implemented locally. Hosted CI execution remains unverified. Permanent account records remain gated on production lifecycle support.
 - Source of requirements: [product-specification.md](product-specification.md), version 1.2. M1 clarifies password/PIN accounting; M2 settles time boundaries and narrows lifecycle support explicitly.
 
 This plan turns the specification into independently reviewable changes and evidence gates. The specification remains authoritative. An unresolved design question below must be resolved in an architecture decision record (ADR), with a specification amendment if necessary, rather than silently changing the requirements.
@@ -129,6 +129,12 @@ Implement `localpin-storage` and wire it to the policy state machine before any 
 - Persist boot/time/cooldown/reservation metadata with the conservative reboot policy chosen in M1/M2. An ordinary reboot must not become a cheap attempt-budget reset.
 
 Exit gate: fault injection at each write/fsync/rename boundary, multi-process contention, restart/reboot/time changes, missing state, disk-full/read-only errors, and filesystem attack fixtures cannot yield an unreserved verification or an authorization whose success was not committed.
+
+The [M3 report](development/m3-protected-storage.md) records the local filesystem,
+process and fault-injection evidence and its limits. Storage uses synthetic
+lifecycle authorities and backend callbacks; ADR 0006 still blocks permanent
+production account records. Disk-full/read-only errors are injected, and physical
+power-loss behavior is not claimed by the local tests.
 
 ### M4 — Implement both credential backends
 

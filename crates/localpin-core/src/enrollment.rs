@@ -222,6 +222,7 @@ pub struct CommitIntent {
     previous: CommittedState,
     next: CommittedState,
     expires_at: TimePoint,
+    prepared_at: TimePoint,
 }
 
 impl CommitIntent {
@@ -240,6 +241,10 @@ impl CommitIntent {
     /// The strict deadline; a commit at this instant is already too late.
     pub fn expires_at(self) -> TimePoint {
         self.expires_at
+    }
+    /// Last checked model time; storage must reject rollback before finalization.
+    pub fn prepared_at(self) -> TimePoint {
+        self.prepared_at
     }
 }
 
@@ -587,6 +592,7 @@ impl EnrollmentMachine {
             previous,
             next,
             expires_at,
+            prepared_at: now,
         };
         transaction.pending = Some(intent);
         Ok(intent)

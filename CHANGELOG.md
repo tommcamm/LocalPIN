@@ -6,6 +6,15 @@ Changes will be recorded here before versioned releases. There are no releases y
 
 ### Added
 
+- M3 `localpin-storage` crate with protected descriptor-relative Linux files,
+  stable broker/per-UID locks, durable M2 throttle updates, staged credential
+  generations, atomic revocation pointers and bounded generation recovery.
+- Storage persistence-fault, crash/restart, process-contention and filesystem
+  attack fixtures using synthetic lifecycle identities and credentials with
+  actual file/process I/O; [M3 evidence report](docs/development/m3-protected-storage.md)
+  and [ADR 0008](docs/adr/0008-protected-storage-and-recovery.md).
+- Reviewed `rustix =1.1.5` dependency with `std`/`fs` features; protected storage
+  requires Linux `openat2` and fails closed on unsupported kernels.
 - M2 pure policy and protocol crates: bounded PIN/secret ownership, versioned
   record envelopes, resource admission, durable attempt phase contracts,
   enrollment transactions, revocation fences and simulated eligibility.
@@ -43,5 +52,5 @@ Changes will be recorded here before versioned releases. There are no releases y
 - Specification 1.1 clarifies that six-digit account passwords can consume a PIN
   attempt before fallback and that forwarded failures retain password accounting.
 
-Production authentication, enrollment, PAM/TPM integration, packaging, and
-activation remain unimplemented.
+Production authentication, account lifecycle enforcement, credential backends,
+enrollment, PAM/TPM integration, packaging, and activation remain unimplemented.

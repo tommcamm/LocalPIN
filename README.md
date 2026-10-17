@@ -6,11 +6,12 @@ It is intended to become useful, reviewable open-source software.
 
 Repository: [tommcamm/LocalPIN](https://github.com/tommcamm/LocalPIN).
 
-**Development status: M2 policy and protocol models implemented locally.** This repository contains the
-specification, implementation roadmap, pure Rust state machines, bounded IPC
-parsers, isolated PAM/TPM/platform experiments and guarded Fedora KDE VM tests under enforcing
-SELinux. Actual password fallback, account restrictions and a confined worker
-have evidence, including real same-UID desktops, ambiguous locker fallback and
+**Development status: M3 protected storage and M2 policy/protocol models implemented locally.**
+This repository contains the specification, implementation roadmap, pure Rust
+state machines, bounded IPC parsers, protected Linux filesystem storage,
+isolated PAM/TPM/platform experiments and guarded Fedora KDE VM tests under
+enforcing SELinux. Actual password fallback, account restrictions and a confined
+worker have evidence, including real same-UID desktops, ambiguous locker fallback and
 independently routed KDE seats. See the [M1 report](docs/development/m1-feasibility.md).
 It does not yet provide a production PIN verifier, broker, PAM module, CLI, or
 installable package. There is no supported production release.
@@ -29,14 +30,18 @@ scope. Six-digit PINs have limited entropy. The
 backend limitations, and acceptance requirements. Rust alone does not establish
 a security guarantee.
 
-## Build and test the models
+## Build and test
 
 Install Rust through rustup, then run these commands from the repository root.
 `rust-toolchain.toml` selects the pinned toolchain; `Cargo.toml` declares the minimum
 supported Rust version. `localpin-core` models enrollment, eligibility,
 revocation, resource budgets and durable throttling; `localpin-protocol` models
-bounded messages and connection ordering. Their only external Rust dependency
-is `zeroize`. Tests use simulated storage, identity authorities and workers.
+bounded messages and connection ordering. `localpin-storage` implements
+descriptor-relative protected files, stable process locks, durable throttle
+updates and atomic credential generations. Its Linux `openat2` dependency is
+required at runtime; unsupported kernels fail closed. The direct external Rust
+dependencies are `zeroize` and `rustix`, reviewed in the
+[build-input inventory](docs/development/dependencies.md).
 
 ```sh
 cargo fmt --all -- --check
@@ -45,14 +50,22 @@ cargo test --workspace --locked
 cargo build --workspace --locked
 ```
 
-These checks validate the pure model contracts. They do not validate PAM, TPM,
-password fallback, or desktop integration. There are no installation or activation
-commands at this stage.
+These workspace checks cover the policy, protocol and storage crates.
+Policy/protocol tests use simulated authorities and workers; storage tests use
+synthetic account identities and credentials with actual filesystem and process
+I/O, including persistence faults and contention. See the
+[M3 storage report](docs/development/m3-protected-storage.md)
+and [storage/recovery decision](docs/adr/0008-protected-storage-and-recovery.md)
+for evidence and limits. These checks do not validate production PAM, TPM,
+password fallback, or desktop integration. There are no installation or
+activation commands at this stage.
 
 See the [M2 report](docs/development/m2-policy-contracts.md) for exact time and
 failure boundaries. Production account support requires a tested lifecycle
 authority that detects UID reuse; no production authority exists yet. The
-current model deliberately refuses unsupported lifecycle evidence.
+current models and storage adapter deliberately refuse unsupported lifecycle
+evidence. Production credential backends and account lifecycle enforcement
+remain required before permanent account enrollment.
 
 ## Development
 

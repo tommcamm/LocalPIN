@@ -71,7 +71,7 @@ struct Usage {
     uids: [Option<Uid>; MAX_CONNECTIONS],
 }
 
-/// One broker's admission controller. M3 must add cross-process serialization.
+/// One broker's admission controller; storage guards supply cross-process locking.
 #[derive(Clone, Default)]
 pub struct ResourceBudget(Arc<Mutex<Usage>>);
 
