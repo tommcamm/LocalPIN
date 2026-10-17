@@ -1,0 +1,4 @@
+# Fail-closed packaging sample. Do not install an enabling policy without the
+# supported Fedora lockout/account review and disposable-VM integration evidence.
+auth requisite pam_deny.so
+account requisite pam_deny.so

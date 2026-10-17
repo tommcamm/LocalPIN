@@ -2,6 +2,7 @@
 
 use crate::{
     BootClock,
+    enrollment::{EnrollmentIo, PasswordAuthority},
     platform::{Peer, ResolvedSession, SessionResolver},
     worker::WorkerSupervisor,
 };
@@ -18,8 +19,8 @@ use localpin_core::{
 use localpin_credentials::{OsRandom, SoftwareVerifier};
 use localpin_protocol::{
     Availability, BackendPreference, Completion, Connection, ConnectionAction, Eligibility,
-    ErrorCode, Id, Integration, Issued, Reason, Request, Response, ResponseEnvelope, Status,
-    VerificationOutcome,
+    ErrorCode, Id, Integration, Issued, Reason, Request, RequestEnvelope, Response,
+    ResponseEnvelope, Status, VerificationOutcome,
     transport::{BootInstant as Instant, Deadline, SocketConnection, TransportError},
 };
 use localpin_storage::Storage;
@@ -130,6 +131,16 @@ pub trait Engine: Send + Sync {
     fn check(&self, peer: Arc<Peer>, deadline: Instant) -> Result<EligibilitySnapshot, Reason>;
     /// Read sanitized own-account status only.
     fn status(&self, peer: Arc<Peer>, deadline: Instant) -> Status;
+    /// Own one connection-bound fresh-password enrollment conversation.
+    fn enroll(
+        &self,
+        _peer: Arc<Peer>,
+        _expected: EligibilitySnapshot,
+        _request: RequestEnvelope,
+        channel: &mut EnrollmentIo<'_>,
+    ) -> Result<(), TransportError> {
+        channel.fail(ErrorCode::Unavailable)
+    }
     /// Reserve, supervise, persist and revalidate before delivering one result.
     fn verify(
         &self,
@@ -153,10 +164,11 @@ pub trait Engine: Send + Sync {
 
 /// M3 protected storage composed with M4 subprocess backends and M2 policy.
 pub struct ProtectedEngine {
-    storage: Storage,
-    authorities: Arc<dyn Authorities>,
-    workers: WorkerSupervisor,
-    budget: ResourceBudget,
+    pub(super) storage: Storage,
+    pub(super) authorities: Arc<dyn Authorities>,
+    pub(super) workers: WorkerSupervisor,
+    pub(super) budget: ResourceBudget,
+    pub(super) passwords: Option<Arc<dyn PasswordAuthority>>,
 }
 
 impl ProtectedEngine {
@@ -172,30 +184,51 @@ impl ProtectedEngine {
             authorities,
             workers,
             budget,
+            passwords: None,
         }
+    }
+
+    /// Supply the independently supervised trusted password-only boundary.
+    /// This is an operator/library dependency, never a wire or executable flag.
+    pub fn with_password_authority(mut self, passwords: Arc<dyn PasswordAuthority>) -> Self {
+        self.passwords = Some(passwords);
+        self
     }
 }
 
-fn fresh_id() -> Result<Id, Reason> {
+pub(super) fn fresh_id() -> Result<Id, Reason> {
     let mut bytes = [0; 16];
     OsRandom.fill(&mut bytes).map_err(|_| Reason::Policy)?;
     Id::from_bytes(bytes).map_err(|_| Reason::Policy)
 }
 
 fn unavailable_status(reason: Reason) -> Status {
+    use std::os::unix::fs::FileTypeExt;
     Status {
         configured: BackendPreference::Auto,
         enrolled: None,
         availability: Availability::Unavailable,
         cooldown_ms: 0,
         integration: Integration::Inactive,
-        tpm_detected: false,
+        // Presence is a read-only device-node observation, never usability.
+        tpm_detected: ["/dev/tpmrm0", "/dev/tpm0"].iter().any(|path| {
+            std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_char_device())
+        }),
         tpm_usable: false,
         reason,
     }
 }
 
 impl Engine for ProtectedEngine {
+    fn enroll(
+        &self,
+        peer: Arc<Peer>,
+        expected: EligibilitySnapshot,
+        request: RequestEnvelope,
+        channel: &mut EnrollmentIo<'_>,
+    ) -> Result<(), TransportError> {
+        crate::enrollment::serve(self, peer, expected, request, channel)
+    }
     fn check(&self, peer: Arc<Peer>, deadline: Instant) -> Result<EligibilitySnapshot, Reason> {
         peer.ensure_live().map_err(|_| Reason::Session)?;
         let uid = Uid::new(peer.uid()).map_err(|_| Reason::Account)?;
@@ -238,6 +271,11 @@ impl Engine for ProtectedEngine {
             Backend::Software => localpin_protocol::Backend::Software,
             Backend::Tpm2 => localpin_protocol::Backend::Tpm,
         });
+        status.configured = match state.backend() {
+            Some(Backend::Software) => BackendPreference::Software,
+            Some(Backend::Tpm2) => BackendPreference::Tpm,
+            None => BackendPreference::Auto,
+        };
         status.availability = Availability::Disabled;
         if state.backend().is_some() {
             let result = (|| {
@@ -524,7 +562,7 @@ impl Broker {
     }
 }
 
-fn pending(stream: &UnixStream) -> bool {
+pub(super) fn pending(stream: &UnixStream) -> bool {
     let mut byte = [0];
     match rustix::net::recv(
         stream,
@@ -584,16 +622,20 @@ fn serve_connection_with_clock(
                 | Request::CommitEnrollment { .. }
                 | Request::Disable { .. }
         );
-        // M6 owns fresh password authorization. Fail before starting any
-        // enrollment state or interpreting a client-supplied password result.
+        // A BeginEnroll transfers ownership of the connection to a single
+        // bounded transaction. No grant survives returning from that handler.
         if mutation {
-            socket.write_response(
-                &ResponseEnvelope {
-                    connection: session.id(),
-                    response: Response::Error(ErrorCode::Unavailable),
-                },
-                Deadline::at(deadline),
-            )?;
+            if matches!(request.request, Request::BeginEnroll { .. }) {
+                let expected = engine.check(peer.clone(), deadline).ok();
+                if let Some(expected) =
+                    expected.filter(|s| s.account().uid.get() == peer.uid() && peer.uid() != 0)
+                {
+                    let mut channel = EnrollmentIo::new(&mut socket, &mut session, &monitor)?;
+                    return engine.enroll(peer.clone(), expected, request, &mut channel);
+                }
+            }
+            let response = session.fail(ErrorCode::Unavailable);
+            socket.write_response(&response, Deadline::at(deadline))?;
             return Ok(());
         }
         let eligible = if matches!(

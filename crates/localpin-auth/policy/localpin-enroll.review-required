@@ -1,0 +1,9 @@
+# Candidate supported local password-only profile. This is NOT an installer.
+# Review /etc/security/faillock.conf and the distribution's current lockout,
+# account, SELinux, and unix_chkpwd helper requirements before explicit activation.
+# No include/substack, LocalPIN, pam_pinlock, fingerprint, cached success or nullok.
+auth requisite pam_faillock.so preauth
+auth [success=1 default=bad] pam_unix.so
+auth [default=die] pam_faillock.so authfail
+auth required pam_faillock.so authsucc
+account required pam_unix.so

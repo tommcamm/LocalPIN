@@ -2,7 +2,8 @@
 
 LocalPIN has completed isolated and guarded enforcing-VM M1 feasibility experiments
 and locally implements M2 pure policy/protocol models, M3 protected Linux
-storage, M4 credential primitives and the M5 bounded broker. PAM integration,
+storage, M4 credential primitives, the M5 bounded broker and M6 trusted enrollment
+worker/CLI. PAM unlock integration,
 installed sandbox validation and account lifecycle gates remain
 open. Read the
 [product specification](docs/product-specification.md) and
@@ -70,6 +71,16 @@ peer identity, deadlines or authorization delivery. Local socket and
 `SO_PEERPIDFD` tests require Linux 6.5+ and permission to use local IPC; denied
 syscalls are infrastructure failures, not passing negative assertions.
 Ordinary tests never install units or change host authentication.
+
+Read the [M6 report](docs/development/m6-enrollment-cli.md) and
+[ADR 0011](docs/adr/0011-trusted-enrollment-and-cli.md) before changing enrollment,
+password-worker policy, terminal input or credential publication. Run the
+isolated enrollment and password-PAM suites when modifying those boundaries:
+
+```sh
+python3 crates/localpind/tests/run_enrollment_broker.py
+python3 crates/localpin-auth/tests/isolated_pam.py
+```
 
 ## Authentication experiments
 

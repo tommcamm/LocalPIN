@@ -1,0 +1,30 @@
+[package]
+name = "localpinctl"
+description = "Interactive LocalPIN enrollment and nonsecret status client"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+localpin-core.workspace = true
+localpin-protocol = { path = "../localpin-protocol", version = "=0.1.0-alpha.1" }
+rustix = { workspace = true, features = ["termios", "stdio", "process", "event", "time"] }
+zeroize.workspace = true
+libc = "=0.2.191"
+
+[dev-dependencies]
+rustix = { workspace = true, features = ["pty"] }
+
+[[test]]
+name = "job_control"
+harness = false
+
+# Only the signal-mask implementation contains a narrowly documented FFI use.
+[lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[lints.clippy]
+all = "warn"

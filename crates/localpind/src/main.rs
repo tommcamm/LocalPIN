@@ -1,5 +1,6 @@
-//! Installed socket-activated LocalPIN broker. No enrollment or PAM mutation.
+//! Installed socket-activated LocalPIN broker. No PAM configuration mutation.
 
+use localpin_auth::PasswordSupervisor;
 use localpin_core::limits::ResourceBudget;
 use localpin_protocol::transport::take_activation_listener;
 use localpin_storage::Storage;
@@ -10,6 +11,7 @@ use localpind::{
 use std::{fs::File, path::Path, sync::Arc};
 
 fn run() -> Result<(), ()> {
+    localpind::protect_process_secrets().map_err(|_| ())?;
     if std::env::args_os().len() != 1 || rustix::process::geteuid().as_raw() != 0 {
         return Err(());
     }
@@ -28,13 +30,18 @@ fn run() -> Result<(), ()> {
     .map_err(|_| ())?;
     let storage = Storage::open(File::from(root)).map_err(|_| ())?;
     let workers = WorkerSupervisor::new("/usr/libexec/localpin/localpin-worker").map_err(|_| ())?;
+    let passwords =
+        PasswordSupervisor::new("/usr/libexec/localpin/localpin-auth-worker").map_err(|_| ())?;
     let budget = ResourceBudget::default();
-    let engine = Arc::new(ProtectedEngine::new(
-        storage,
-        Arc::new(SystemAuthorities),
-        workers,
-        budget.clone(),
-    ));
+    let engine = Arc::new(
+        ProtectedEngine::new(
+            storage,
+            Arc::new(SystemAuthorities),
+            workers,
+            budget.clone(),
+        )
+        .with_password_authority(Arc::new(passwords)),
+    );
     Broker::new(engine, budget).run(listener).map_err(|_| ())
 }
 

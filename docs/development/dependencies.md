@@ -1,6 +1,6 @@
 # Build inputs and dependency policy
 
-M3 has three workspace members: `localpin-core`, `localpin-protocol`, and
+The historical M3 baseline had three workspace members: `localpin-core`, `localpin-protocol`, and
 `localpin-storage`. The direct third-party Rust dependencies are `zeroize` and
 `rustix`; the committed lockfile contains eight third-party crates including
 target-specific inputs. There are no native PAM, TPM2-TSS, systemd, or KDF
@@ -377,3 +377,31 @@ rustix's 0.61.2; Linux does not compile that ABI. No advisory or source
 exception was introduced. Live logind routing also does not establish supported
 account restrictions or an immutable account incarnation, so the default broker
 keeps ordinary-account PIN authorization unavailable.
+
+## M6 password worker and terminal dependencies
+
+M6 adds two original workspace crates without introducing a new external crate
+version: `localpin-auth` and `localpinctl`. They reuse exact locked `libc 0.2.191`,
+`rustix 1.1.5`, `getrandom 0.4.3` and `zeroize 1.9.1`. The CLI enables rustix's
+safe terminal/poll APIs and test-only PTY APIs. Native PAM is loaded from the
+fixed `libpam.so.0` runtime ABI inside the disposable helper, so compiling does
+not require PAM development headers. Runtime password use requires Linux-PAM,
+`pam_unix`, `pam_faillock` and the explicitly reviewed service profile.
+
+Two narrowly scoped unsafe boundaries are new review inputs. `localpin-auth`
+isolates dynamic symbol loading, native PAM callback/allocator ownership and
+NSS UID lookup in `pam.rs`; callbacks catch Rust panics before the C boundary.
+The CLI isolates signal-mask calls in its terminal guard, restoring the terminal
+before pending termination/suspend signals are unblocked on the same thread.
+Both crates deny unsafe code outside their documented exceptions. Native PAM
+copies and arbitrary NSS/PAM calls are bounded by disposable worker exit and
+supervision, not a claim that zeroize erases upstream allocations.
+
+The helper authenticates only the fixed password service and requires a fresh
+hidden password conversation plus account checks. Review of its exact profile
+does not certify the distribution's complete policy or installed privileges.
+See [ADR 0011](../adr/0011-trusted-enrollment-and-cli.md) and the
+[M6 report](m6-enrollment-cli.md) for validation and remaining gates.
+
+The final M6 locked audit passed all four policy categories with cargo-deny
+0.20.2. No dependency-policy exception or external crate version was added.

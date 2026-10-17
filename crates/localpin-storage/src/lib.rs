@@ -524,12 +524,28 @@ impl UserStore<'_> {
             if before_pointer.millis < started.millis {
                 return Err(Error::Time);
             }
-            self.dir
-                .replace("active", &Pointer(next).encode(), &mut self.faults)?;
+            let mut publishing_time = before_pointer;
+            self.dir.replace_guarded(
+                "active",
+                &Pointer(next).encode(),
+                &mut self.faults,
+                || {
+                    // Pointer staging itself can stall. Do not publish an
+                    // expired/cancelled grant after its tempfile write/fsync.
+                    check_lifecycle(self.lifecycle, next.account())?;
+                    let publishing = clock.now().map_err(|_| Error::Time)?;
+                    valid_commit_time(publishing, intent.expires_at())?;
+                    if publishing.millis < before_pointer.millis {
+                        return Err(Error::Time);
+                    }
+                    publishing_time = publishing;
+                    Ok(())
+                },
+            )?;
             self.cleanup(next)?;
             let finished = clock.now().map_err(|_| Error::Time)?;
             valid_commit_time(finished, intent.expires_at())?;
-            if finished.millis < before_pointer.millis {
+            if finished.millis < publishing_time.millis {
                 return Err(Error::Time);
             }
             check_lifecycle(self.lifecycle, next.account())?;

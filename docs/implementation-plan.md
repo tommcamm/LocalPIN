@@ -1,7 +1,7 @@
 # LocalPIN implementation plan
 
 - Date: 2026-10-17
-- Status: Accepted roadmap; M0 implemented locally; M1 feasibility complete; M2 policy/protocol contracts, M3 protected storage, M4 credential primitives and M5 bounded broker implemented locally. Installed sandbox, physical resource-manager and later review gates remain open. Hosted CI execution remains unverified. Permanent account records remain gated on production lifecycle support.
+- Status: Accepted roadmap; M0 implemented locally; M1 feasibility complete; M2 policy/protocol contracts, M3 protected storage, M4 credential primitives, M5 bounded broker and M6 enrollment worker/CLI implemented locally. Installed password policy/sandbox, physical resource-manager and later review gates remain open. Hosted CI execution remains unverified. Permanent account records remain gated on production lifecycle support.
 - Source of requirements: [product-specification.md](product-specification.md), version 1.2. M1 clarifies password/PIN accounting; M2 settles time boundaries and narrows lifecycle support explicitly.
 
 This plan turns the specification into independently reviewable changes and evidence gates. The specification remains authoritative. An unresolved design question below must be resolved in an architecture decision record (ADR), with a specification amendment if necessary, rather than silently changing the requirements.
@@ -194,6 +194,13 @@ Implement `localpin-auth` and `localpinctl`.
 - Prove that wrong/stale password, cancellation, reconnect, replay, account changes, and worker crash cannot authorize a commit. Pre-commit checks validate the new credential and password recovery without weakening lockout accounting.
 
 Exit gate: complete enrollment/change/disable/recovery flows work against a test broker; an unlocked user process or old PIN cannot reset credentials; cancellation preserves committed state; installed/enrolled/tested/active are distinct statuses.
+
+The [M6 report](development/m6-enrollment-cli.md) and
+[ADR 0011](adr/0011-trusted-enrollment-and-cli.md) describe the password-only
+worker, terminal CLI and staged credential transactions. Complete broker flows
+use isolated synthetic account authorities; ADR 0006 still refuses unmanaged
+production accounts. Installed password-policy/confinement evidence remains an
+explicit M8 gate, and enrollment does not activate desktop integration.
 
 ### M7 — Complete the small PAM adapter and KDE integration contract
 

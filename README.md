@@ -6,7 +6,7 @@ It is intended to become useful, reviewable open-source software.
 
 Repository: [tommcamm/LocalPIN](https://github.com/tommcamm/LocalPIN).
 
-**Development status: M5 bounded broker, M4 credential primitives, M3 storage and M2 policy/protocol models implemented locally.**
+**Development status: M6 enrollment worker and CLI, M5 bounded broker, M4 credential primitives, M3 storage and M2 policy/protocol models implemented locally.**
 This repository contains the specification, implementation roadmap, pure Rust
 state machines, bounded IPC parsers, protected Linux filesystem storage,
 isolated PAM/TPM/platform experiments and guarded Fedora KDE VM tests under
@@ -20,7 +20,9 @@ The broker now composes protected throttling, one-operation backend processes,
 authenticated Unix sockets and live logind session routing. Its production
 account authority still refuses unmanaged accounts. See the
 [M5 report](docs/development/m5-bounded-broker.md) for evidence and limits.
-It does not yet provide a PAM module, enrollment CLI, or installable package.
+It now includes a password-only enrollment worker, terminal CLI and protected
+credential transactions. See the [M6 report](docs/development/m6-enrollment-cli.md).
+It does not yet provide a PAM unlock module or installable package.
 There is no supported production release.
 
 ## Intended scope
@@ -75,6 +77,7 @@ explicit opt-in commands using synthetic inputs and disposable state:
 python3 crates/localpin-tpm/tests/run_simulator.py
 cargo run -p localpin-credentials --example benchmark --release --locked
 python3 crates/localpind/tests/run_protected_broker.py
+python3 crates/localpind/tests/run_enrollment_broker.py
 ```
 
 The simulator test requires `swtpm` and `tpm2-tools`. The protected broker suite
@@ -83,6 +86,16 @@ only disposable state and synthetic account authorities. The benchmark uses synt
 input and reports local KDF latency. These checks do not validate production PAM, physical TPMs,
 password fallback, or desktop integration. There are no installation or
 activation commands at this stage.
+
+The CLI command grammar is available with `cargo run -p localpinctl -- --help`.
+Status and doctor are read-only. Enrollment requires a trusted supported account
+baseline, fresh password-only PAM authentication and a foreground terminal;
+ordinary production accounts remain unavailable. The isolated password-PAM
+test uses namespace-private accounts and policy:
+
+```sh
+python3 crates/localpin-auth/tests/isolated_pam.py
+```
 
 See the [M2 report](docs/development/m2-policy-contracts.md) for exact time and
 failure boundaries. Production account support requires a tested lifecycle

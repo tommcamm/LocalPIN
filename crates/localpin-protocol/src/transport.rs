@@ -649,6 +649,12 @@ impl Client {
             },
             deadline,
         )?;
+        self.receive(deadline)
+    }
+
+    /// Receive the next private enrollment prompt without sending another request.
+    /// Binding and duplicate greetings are checked before any prompt is exposed.
+    pub fn receive(&mut self, deadline: Deadline) -> Result<ResponseEnvelope, TransportError> {
         let response = self.connection.read_response(deadline)?;
         if response.connection != self.id || matches!(response.response, Response::Hello) {
             self.connection.close();

@@ -276,6 +276,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "localpin-auth"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "getrandom",
+ "libc",
+ "localpin-core",
+ "localpin-protocol",
+ "rustix",
+ "zeroize",
+]
+
+[[package]]
 name = "localpin-core"
 version = "0.1.0-alpha.1"
 dependencies = [
@@ -328,12 +340,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "localpinctl"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "libc",
+ "localpin-core",
+ "localpin-protocol",
+ "rustix",
+ "zeroize",
+]
+
+[[package]]
 name = "localpind"
 version = "0.1.0-alpha.1"
 dependencies = [
  "dbus",
  "getrandom",
  "libc",
+ "localpin-auth",
  "localpin-core",
  "localpin-credentials",
  "localpin-protocol",

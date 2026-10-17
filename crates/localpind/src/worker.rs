@@ -16,7 +16,7 @@ use localpin_core::{
     records::CredentialRecord,
     secret::Pin,
     throttle::{BackendFailure, BackendOutcome},
-    types::Backend,
+    types::{AccountId, Backend, Generation, Incarnation, Uid},
 };
 use localpin_protocol::transport::BootInstant as Instant;
 use std::{
@@ -37,6 +37,9 @@ use zeroize::Zeroizing;
 pub const MAX_WORKERS: usize = 4;
 const REQUEST_HEADER: usize = 16;
 const RESPONSE_BYTES: usize = 13;
+const ENROLLMENT_BINDING_BYTES: usize = 29;
+const ENROLLMENT_RESPONSE_HEADER: usize = 17;
+const MAX_ENROLLMENT_RESPONSE: usize = ENROLLMENT_RESPONSE_HEADER + MAX_RECORD_BYTES;
 const POLL_INTERVAL: Duration = Duration::from_millis(2);
 const TPM_DA_RESERVE: u32 = 2;
 
@@ -202,13 +205,105 @@ impl WorkerSupervisor {
         deadline: Instant,
         mut cancelled: impl FnMut() -> bool,
     ) -> BackendOutcome {
-        let parameters = match parameters(credential) {
-            Ok(parameters) => parameters,
-            Err(()) => return unavailable(),
-        };
         let kind = match credential.backend() {
             Backend::Software => WorkKind::Verification,
             Backend::Tpm2 => WorkKind::TpmPinDerivation,
+        };
+        self.check_record(
+            credential,
+            pin,
+            permit,
+            kind,
+            false,
+            deadline,
+            &mut cancelled,
+        )
+    }
+
+    /// Trial-check the exact protected record reopened by the storage transaction.
+    ///
+    /// This uses the same bounded worker table as ordinary verification and
+    /// enrollment. Its result grants no authentication or enrollment authority.
+    pub fn trial_verify(
+        &self,
+        credential: &CredentialRecord,
+        pin: Pin,
+        permit: WorkPermit,
+        deadline: Instant,
+        mut cancelled: impl FnMut() -> bool,
+    ) -> BackendOutcome {
+        let kind = match credential.backend() {
+            Backend::Software => WorkKind::Enrollment,
+            Backend::Tpm2 => WorkKind::TpmPinDerivation,
+        };
+        self.check_record(
+            credential,
+            pin,
+            permit,
+            kind,
+            true,
+            deadline,
+            &mut cancelled,
+        )
+    }
+
+    /// Create one candidate for an already authorized enrollment transaction.
+    ///
+    /// The returned record is bound to the exact account, proposed generation
+    /// and selected backend. The broker must stage, reopen and trial-check it
+    /// before committing. No TPM error selects software. The existing aggregate
+    /// work lease remains charged until this disposable process is fully reaped.
+    #[allow(clippy::too_many_arguments)]
+    pub fn enroll(
+        &self,
+        account: AccountId,
+        generation: Generation,
+        backend: Backend,
+        pin: Pin,
+        permit: WorkPermit,
+        deadline: Instant,
+        mut cancelled: impl FnMut() -> bool,
+    ) -> Result<CredentialRecord, BackendFailure> {
+        let kind = match backend {
+            Backend::Software => WorkKind::Enrollment,
+            Backend::Tpm2 => WorkKind::TpmPinDerivation,
+        };
+        if !permit.covers(account.uid, KdfParameters::ENROLLMENT, kind)
+            || Instant::now() >= deadline
+            || cancelled()
+        {
+            return Err(BackendFailure::Unavailable);
+        }
+        let id = self.next_id().ok_or(BackendFailure::Unavailable)?;
+        let request = encode_enrollment_request(account, generation, backend, &pin, id);
+        drop(pin);
+        let response = self
+            .exchange(
+                request,
+                permit,
+                MAX_ENROLLMENT_RESPONSE,
+                deadline,
+                cancelled,
+            )
+            .ok_or(BackendFailure::Unavailable)?;
+        decode_enrollment_response(&response, id, account, generation, backend)
+            .ok_or(BackendFailure::Unavailable)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn check_record(
+        &self,
+        credential: &CredentialRecord,
+        pin: Pin,
+        permit: WorkPermit,
+        kind: WorkKind,
+        trial: bool,
+        deadline: Instant,
+        mut cancelled: impl FnMut() -> bool,
+    ) -> BackendOutcome {
+        let parameters = match parameters(credential) {
+            Ok(parameters) => parameters,
+            Err(()) => return unavailable(),
         };
         if !permit.covers(credential.account().uid, parameters, kind)
             || Instant::now() >= deadline
@@ -216,31 +311,45 @@ impl WorkerSupervisor {
         {
             return unavailable();
         }
-        let id = match self
-            .shared
-            .next_id
-            .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-        {
-            Ok(id) => id,
-            Err(_) => return unavailable(),
+        let Some(id) = self.next_id() else {
+            return unavailable();
         };
-        let request = match encode_request(credential, &pin, id) {
+        let request = match encode_record_request(credential, &pin, id, trial) {
             Ok(request) => request,
             Err(()) => return unavailable(),
         };
         drop(pin);
-        let slot = match self.reserve_slot() {
-            Some(slot) => slot,
-            None => return unavailable(),
-        };
-        let result = self.spawn(slot, permit);
-        let mut stream = match result {
+        self.exchange(request, permit, RESPONSE_BYTES, deadline, cancelled)
+            .and_then(|response| decode_response(&response, id))
+            .unwrap_or_else(unavailable)
+    }
+
+    fn next_id(&self) -> Option<u64> {
+        self.shared
+            .next_id
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+            .ok()
+    }
+
+    fn exchange(
+        &self,
+        request: Zeroizing<Vec<u8>>,
+        permit: WorkPermit,
+        response_limit: usize,
+        deadline: Instant,
+        mut cancelled: impl FnMut() -> bool,
+    ) -> Option<Zeroizing<Vec<u8>>> {
+        if Instant::now() >= deadline || cancelled() {
+            return None;
+        }
+        let slot = self.reserve_slot()?;
+        let mut stream = match self.spawn(slot, permit) {
             Ok(stream) => stream,
             Err(_) => {
                 if let Ok(mut slots) = self.shared.slots.lock() {
                     slots[slot] = None;
                 }
-                return unavailable();
+                return None;
             }
         };
         // The guard retires the child even if cancellation code unwinds.
@@ -250,28 +359,28 @@ impl WorkerSupervisor {
             completed: false,
         };
         let mut sent = 0;
-        let mut response = [0u8; RESPONSE_BYTES + 1];
+        let mut response = Zeroizing::new(vec![0u8; response_limit + 1]);
         let mut received = 0;
         let mut eof = false;
         let mut status = None;
         loop {
             if Instant::now() >= deadline || cancelled() {
-                return unavailable();
+                return None;
             }
             if sent < request.len() {
                 match stream.write(&request[sent..]) {
-                    Ok(0) => return unavailable(),
+                    Ok(0) => return None,
                     Ok(n) => {
                         sent += n;
                         if sent == request.len()
                             && stream.shutdown(std::net::Shutdown::Write).is_err()
                         {
-                            return unavailable();
+                            return None;
                         }
                     }
                     Err(error) if error.kind() == io::ErrorKind::WouldBlock => {}
                     Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
-                    Err(_) => return unavailable(),
+                    Err(_) => return None,
                 }
             }
             if !eof {
@@ -279,19 +388,19 @@ impl WorkerSupervisor {
                     Ok(0) => eof = true,
                     Ok(n) => {
                         received += n;
-                        if received > RESPONSE_BYTES {
-                            return unavailable();
+                        if received > response_limit {
+                            return None;
                         }
                     }
                     Err(error) if error.kind() == io::ErrorKind::WouldBlock => {}
                     Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
-                    Err(_) => return unavailable(),
+                    Err(_) => return None,
                 }
             }
             if status.is_none() {
                 match self.try_reap_active(slot) {
                     Ok(found) => status = found,
-                    Err(_) => return unavailable(),
+                    Err(_) => return None,
                 }
             }
             if let Some(status) = status {
@@ -303,9 +412,10 @@ impl WorkerSupervisor {
                         || Instant::now() >= deadline
                         || cancelled()
                     {
-                        return unavailable();
+                        return None;
                     }
-                    return decode_response(&response[..received], id).unwrap_or_else(unavailable);
+                    response.truncate(received);
+                    return Some(response);
                 }
             }
             thread::sleep(POLL_INTERVAL.min(deadline.saturating_duration_since(Instant::now())));
@@ -449,16 +559,17 @@ fn parameters(credential: &CredentialRecord) -> Result<KdfParameters, ()> {
     }
 }
 
-fn encode_request(
+fn encode_record_request(
     credential: &CredentialRecord,
     pin: &Pin,
     id: u64,
+    trial: bool,
 ) -> Result<Zeroizing<Vec<u8>>, ()> {
     let record = credential.encode().map_err(|_| ())?;
     let mut output = Zeroizing::new(Vec::with_capacity(
         REQUEST_HEADER + record.expose().len() + 6,
     ));
-    output.extend_from_slice(b"LPW1");
+    output.extend_from_slice(if trial { b"LPT1" } else { b"LPW1" });
     output.extend_from_slice(&id.to_be_bytes());
     output.extend_from_slice(&(record.expose().len() as u32).to_be_bytes());
     output.extend_from_slice(record.expose());
@@ -478,15 +589,88 @@ fn decode_response(bytes: &[u8], id: u64) -> Option<BackendOutcome> {
     })
 }
 
-fn read_request(input: &mut impl Read) -> Result<(u64, CredentialRecord, Pin), ()> {
+fn encode_enrollment_request(
+    account: AccountId,
+    generation: Generation,
+    backend: Backend,
+    pin: &Pin,
+    id: u64,
+) -> Zeroizing<Vec<u8>> {
+    let mut output = Zeroizing::new(Vec::with_capacity(
+        REQUEST_HEADER + ENROLLMENT_BINDING_BYTES + 6,
+    ));
+    output.extend_from_slice(b"LPE1");
+    output.extend_from_slice(&id.to_be_bytes());
+    output.extend_from_slice(&(ENROLLMENT_BINDING_BYTES as u32).to_be_bytes());
+    output.extend_from_slice(&account.uid.get().to_be_bytes());
+    output.extend_from_slice(&account.incarnation.get());
+    output.extend_from_slice(&generation.get().to_be_bytes());
+    output.push(match backend {
+        Backend::Tpm2 => 1,
+        Backend::Software => 2,
+    });
+    output.extend_from_slice(pin.expose());
+    output
+}
+
+fn decode_enrollment_response(
+    bytes: &[u8],
+    id: u64,
+    account: AccountId,
+    generation: Generation,
+    backend: Backend,
+) -> Option<CredentialRecord> {
+    if bytes.len() < ENROLLMENT_RESPONSE_HEADER
+        || bytes.len() > MAX_ENROLLMENT_RESPONSE
+        || &bytes[..4] != b"LPWE"
+        || bytes[4..12] != id.to_be_bytes()
+        || bytes[12] != 1
+    {
+        return None;
+    }
+    let length = u32::from_be_bytes(bytes[13..17].try_into().ok()?) as usize;
+    if length == 0 || length != bytes.len() - ENROLLMENT_RESPONSE_HEADER {
+        return None;
+    }
+    let record = CredentialRecord::decode(&bytes[ENROLLMENT_RESPONSE_HEADER..]).ok()?;
+    if record.account() != account
+        || record.generation() != generation
+        || record.backend() != backend
+        || parameters(&record).ok()? != KdfParameters::ENROLLMENT
+    {
+        return None;
+    }
+    Some(record)
+}
+
+enum WorkerRequest {
+    Record {
+        credential: CredentialRecord,
+        pin: Pin,
+    },
+    Enroll {
+        account: AccountId,
+        generation: Generation,
+        backend: Backend,
+        pin: Pin,
+    },
+}
+
+fn read_request(input: &mut impl Read) -> Result<(u64, WorkerRequest), ()> {
     let mut header = [0; REQUEST_HEADER];
     input.read_exact(&mut header).map_err(|_| ())?;
-    if &header[..4] != b"LPW1" {
-        return Err(());
-    }
+    let enrollment = match &header[..4] {
+        b"LPW1" | b"LPT1" => false,
+        b"LPE1" => true,
+        _ => return Err(()),
+    };
     let id = u64::from_be_bytes(header[4..12].try_into().map_err(|_| ())?);
     let length = u32::from_be_bytes(header[12..16].try_into().map_err(|_| ())?) as usize;
-    if id == 0 || length == 0 || length > MAX_RECORD_BYTES {
+    if id == 0
+        || length == 0
+        || length > MAX_RECORD_BYTES
+        || (enrollment && length != ENROLLMENT_BINDING_BYTES)
+    {
         return Err(());
     }
     let mut bytes = Zeroizing::new(vec![0; length + 6]);
@@ -495,10 +679,35 @@ fn read_request(input: &mut impl Read) -> Result<(u64, CredentialRecord, Pin), (
     if input.read(&mut trailing).map_err(|_| ())? != 0 {
         return Err(());
     }
-    let credential = CredentialRecord::decode(&bytes[..length]).map_err(|_| ())?;
     let pin = Pin::parse(&bytes[length..]).map_err(|_| ())?;
-    parameters(&credential)?;
-    Ok((id, credential, pin))
+    let request = if enrollment {
+        let account = AccountId {
+            uid: Uid::new(u32::from_be_bytes(bytes[..4].try_into().map_err(|_| ())?))
+                .map_err(|_| ())?,
+            incarnation: Incarnation::new(bytes[4..20].try_into().map_err(|_| ())?)
+                .map_err(|_| ())?,
+        };
+        let generation = Generation::new(u64::from_be_bytes(
+            bytes[20..28].try_into().map_err(|_| ())?,
+        ))
+        .map_err(|_| ())?;
+        let backend = match bytes[28] {
+            1 => Backend::Tpm2,
+            2 => Backend::Software,
+            _ => return Err(()),
+        };
+        WorkerRequest::Enroll {
+            account,
+            generation,
+            backend,
+            pin,
+        }
+    } else {
+        let credential = CredentialRecord::decode(&bytes[..length]).map_err(|_| ())?;
+        parameters(&credential)?;
+        WorkerRequest::Record { credential, pin }
+    };
+    Ok((id, request))
 }
 
 fn dispatch(credential: &CredentialRecord, pin: &Pin) -> BackendOutcome {
@@ -537,25 +746,88 @@ fn dispatch(credential: &CredentialRecord, pin: &Pin) -> BackendOutcome {
     }
 }
 
-/// Execute the installed one-shot helper's private stdin/stdout contract.
+fn dispatch_enrollment(
+    account: AccountId,
+    generation: Generation,
+    backend: Backend,
+    pin: &Pin,
+) -> Result<CredentialRecord, ()> {
+    let budget = ResourceBudget::default();
+    match backend {
+        Backend::Software => {
+            localpin_credentials::enroll(account, generation, pin, &budget).map_err(|_| ())
+        }
+        Backend::Tpm2 => {
+            let mut permit = budget
+                .try_work(
+                    account.uid,
+                    KdfParameters::ENROLLMENT,
+                    WorkKind::TpmPinDerivation,
+                )
+                .map_err(|_| ())?;
+            localpin_tpm::NativeOperation::resource_manager()
+                .map_err(|_| ())?
+                .enroll(
+                    account,
+                    generation,
+                    pin,
+                    &mut permit,
+                    &mut localpin_credentials::OsRandom,
+                )
+                .map_err(|_| ())
+        }
+    }
+}
+
+/// Execute the installed one-shot helper's bounded private stdin/stdout contract.
 ///
-/// No argv/env credential, path, endpoint, backend override or command is read.
-/// Malformed requests produce no response. A valid request yields one fixed-size
-/// sanitized backend result, and all secret-bearing owners drop before exit.
+/// No argv/env credential, path, endpoint or command is read. A request selects
+/// only one reviewed operation and backend. Malformed input produces no response;
+/// valid input yields a sanitized result or a bounded protected credential record.
+/// All secret-bearing owners drop before exit.
 pub fn worker_main() -> i32 {
-    let request = read_request(&mut io::stdin().lock());
-    let Ok((id, credential, pin)) = request else {
+    if crate::protect_process_secrets().is_err() {
+        return 1;
+    }
+    let Ok((id, request)) = read_request(&mut io::stdin().lock()) else {
         return 1;
     };
-    let outcome = dispatch(&credential, &pin);
-    drop((credential, pin));
-    let mut response = [0; RESPONSE_BYTES];
-    response[..4].copy_from_slice(b"LPWR");
-    response[4..12].copy_from_slice(&id.to_be_bytes());
-    response[12] = match outcome {
-        BackendOutcome::Match => 1,
-        BackendOutcome::Mismatch => 2,
-        BackendOutcome::Unavailable(_) | BackendOutcome::Cancelled => 3,
+    let response = match request {
+        WorkerRequest::Record { credential, pin } => {
+            let outcome = dispatch(&credential, &pin);
+            drop((credential, pin));
+            let mut response = Zeroizing::new(vec![0; RESPONSE_BYTES]);
+            response[..4].copy_from_slice(b"LPWR");
+            response[4..12].copy_from_slice(&id.to_be_bytes());
+            response[12] = match outcome {
+                BackendOutcome::Match => 1,
+                BackendOutcome::Mismatch => 2,
+                BackendOutcome::Unavailable(_) | BackendOutcome::Cancelled => 3,
+            };
+            response
+        }
+        WorkerRequest::Enroll {
+            account,
+            generation,
+            backend,
+            pin,
+        } => {
+            let record = dispatch_enrollment(account, generation, backend, &pin);
+            drop(pin);
+            let record = record.and_then(|record| record.encode().map_err(|_| ()));
+            let mut response = Zeroizing::new(vec![0; ENROLLMENT_RESPONSE_HEADER]);
+            response[..4].copy_from_slice(b"LPWE");
+            response[4..12].copy_from_slice(&id.to_be_bytes());
+            match record {
+                Ok(record) => {
+                    response[12] = 1;
+                    response[13..17].copy_from_slice(&(record.expose().len() as u32).to_be_bytes());
+                    response.extend_from_slice(record.expose());
+                }
+                Err(()) => response[12] = 3,
+            }
+            response
+        }
     };
     let mut output = io::stdout().lock();
     if output
@@ -572,7 +844,6 @@ pub fn worker_main() -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use localpin_core::types::{AccountId, Generation, Incarnation, Uid};
     use std::sync::atomic::AtomicUsize;
 
     const PHC: &[u8] = b"$argon2id$v=19$m=65536,t=3,p=1$BwcHBwcHBwcHBwcHBwcHBw$CUNrJW+K3R42xrH7g4MDA7wv0ihz8Hcf0glJGhH5HZ4";
@@ -634,8 +905,18 @@ mod tests {
     #[test]
     fn canonical_private_request_rejects_truncation_trailing_and_excessive_length() {
         let credential = record(1000);
-        let request = encode_request(&credential, &Pin::parse(b"123456").unwrap(), 17).unwrap();
-        let (id, decoded, pin) = read_request(&mut request.as_slice()).unwrap();
+        let request =
+            encode_record_request(&credential, &Pin::parse(b"123456").unwrap(), 17, false).unwrap();
+        let (
+            id,
+            WorkerRequest::Record {
+                credential: decoded,
+                pin,
+            },
+        ) = read_request(&mut request.as_slice()).unwrap()
+        else {
+            panic!("wrong operation")
+        };
         assert_eq!(id, 17);
         assert_eq!(decoded.account(), credential.account());
         assert_eq!(decoded.generation(), credential.generation());
@@ -649,6 +930,300 @@ mod tests {
         let mut excessive = *b"LPW1\0\0\0\0\0\0\0\x01\0\0\0\0";
         excessive[12..].copy_from_slice(&((MAX_RECORD_BYTES + 1) as u32).to_be_bytes());
         assert!(read_request(&mut excessive.as_slice()).is_err());
+    }
+
+    fn enrollment_permit(budget: &ResourceBudget, uid: u32) -> WorkPermit {
+        budget
+            .try_work(
+                Uid::new(uid).unwrap(),
+                KdfParameters::ENROLLMENT,
+                WorkKind::Enrollment,
+            )
+            .unwrap()
+    }
+
+    fn enrollment_response(credential: &CredentialRecord, id: u64) -> Zeroizing<Vec<u8>> {
+        let record = credential.encode().unwrap();
+        let mut response = Zeroizing::new(b"LPWE".to_vec());
+        response.extend_from_slice(&id.to_be_bytes());
+        response.push(1);
+        response.extend_from_slice(&(record.expose().len() as u32).to_be_bytes());
+        response.extend_from_slice(record.expose());
+        response
+    }
+
+    #[test]
+    fn enrollment_request_is_exact_bounded_and_preserves_the_trusted_binding() {
+        let credential = record(1000);
+        let request = encode_enrollment_request(
+            credential.account(),
+            credential.generation(),
+            Backend::Software,
+            &Pin::parse(b"012345").unwrap(),
+            17,
+        );
+        assert_eq!(request.len(), REQUEST_HEADER + ENROLLMENT_BINDING_BYTES + 6);
+        let (
+            id,
+            WorkerRequest::Enroll {
+                account,
+                generation,
+                backend,
+                pin,
+            },
+        ) = read_request(&mut request.as_slice()).unwrap()
+        else {
+            panic!("wrong operation")
+        };
+        assert_eq!(id, 17);
+        assert_eq!(account, credential.account());
+        assert_eq!(generation, credential.generation());
+        assert_eq!(backend, Backend::Software);
+        assert_eq!(pin.expose(), b"012345");
+        for length in 0..request.len() {
+            assert!(read_request(&mut &request[..length]).is_err());
+        }
+        for (start, end) in [(4, 12), (16, 20), (20, 36), (36, 44)] {
+            let mut invalid = request.to_vec();
+            invalid[start..end].fill(0);
+            assert!(read_request(&mut invalid.as_slice()).is_err());
+        }
+        let mut trailing = request.to_vec();
+        trailing.push(0);
+        assert!(read_request(&mut trailing.as_slice()).is_err());
+    }
+
+    #[test]
+    fn enrollment_results_require_exact_id_account_generation_backend_and_payload() {
+        let credential = record(1000);
+        let valid = enrollment_response(&credential, 17);
+        let decode = |bytes: &[u8], id, account, generation, backend| {
+            decode_enrollment_response(bytes, id, account, generation, backend)
+        };
+        assert!(
+            decode(
+                &valid,
+                17,
+                credential.account(),
+                credential.generation(),
+                Backend::Software,
+            )
+            .is_some()
+        );
+        for length in 0..valid.len() {
+            assert!(
+                decode(
+                    &valid[..length],
+                    17,
+                    credential.account(),
+                    credential.generation(),
+                    Backend::Software,
+                )
+                .is_none()
+            );
+        }
+        let mut wrong_incarnation = credential.account();
+        wrong_incarnation.incarnation = Incarnation::new([2; 16]).unwrap();
+        for (id, account, generation, backend) in [
+            (
+                18,
+                credential.account(),
+                credential.generation(),
+                Backend::Software,
+            ),
+            (
+                17,
+                record(1001).account(),
+                credential.generation(),
+                Backend::Software,
+            ),
+            (
+                17,
+                wrong_incarnation,
+                credential.generation(),
+                Backend::Software,
+            ),
+            (
+                17,
+                credential.account(),
+                Generation::new(2).unwrap(),
+                Backend::Software,
+            ),
+            (
+                17,
+                credential.account(),
+                credential.generation(),
+                Backend::Tpm2,
+            ),
+        ] {
+            assert!(decode(&valid, id, account, generation, backend).is_none());
+        }
+        for (offset, byte) in [(0, b'X'), (12, 3), (13, 1), (17, b'X')] {
+            let mut invalid = valid.to_vec();
+            invalid[offset] = byte;
+            assert!(
+                decode(
+                    &invalid,
+                    17,
+                    credential.account(),
+                    credential.generation(),
+                    Backend::Software
+                )
+                .is_none()
+            );
+        }
+        let mut trailing = valid.to_vec();
+        trailing.push(0);
+        assert!(
+            decode(
+                &trailing,
+                17,
+                credential.account(),
+                credential.generation(),
+                Backend::Software
+            )
+            .is_none()
+        );
+        let invalid = CredentialRecord::new(
+            credential.account(),
+            credential.generation(),
+            Backend::Software,
+            b"invalid",
+        )
+        .unwrap();
+        assert!(
+            decode(
+                &enrollment_response(&invalid, 17),
+                17,
+                credential.account(),
+                credential.generation(),
+                Backend::Software
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn enrollment_and_trial_refuse_wrong_work_kinds_before_spawning() {
+        let supervisor = fixture("/usr/bin/sleep", &["1"], Duration::ZERO);
+        let budget = ResourceBudget::default();
+        let credential = record(1000);
+        assert!(
+            supervisor
+                .enroll(
+                    credential.account(),
+                    credential.generation(),
+                    Backend::Software,
+                    Pin::parse(b"012345").unwrap(),
+                    permit(&budget, 1000),
+                    Instant::now() + Duration::from_secs(1),
+                    || false,
+                )
+                .is_err()
+        );
+        assert_eq!(supervisor.occupied(), 0);
+        assert_eq!(
+            supervisor.trial_verify(
+                &credential,
+                Pin::parse(b"012345").unwrap(),
+                permit(&budget, 1000),
+                Instant::now() + Duration::from_secs(1),
+                || false,
+            ),
+            unavailable()
+        );
+        assert_eq!(supervisor.occupied(), 0);
+        assert_eq!(
+            supervisor.verify(
+                &credential,
+                Pin::parse(b"012345").unwrap(),
+                enrollment_permit(&budget, 1000),
+                Instant::now() + Duration::from_secs(1),
+                || false,
+            ),
+            unavailable()
+        );
+        assert_eq!(supervisor.occupied(), 0);
+    }
+
+    #[test]
+    fn cancelled_enrollment_keeps_the_shared_uid_memory_and_process_capacity_until_reap() {
+        let supervisor = fixture("/usr/bin/sleep", &["1"], Duration::from_millis(150));
+        let budget = ResourceBudget::default();
+        let credential = record(1000);
+        let mut polls = 0;
+        let start = Instant::now();
+        assert!(
+            supervisor
+                .enroll(
+                    credential.account(),
+                    credential.generation(),
+                    Backend::Software,
+                    Pin::parse(b"012345").unwrap(),
+                    enrollment_permit(&budget, 1000),
+                    start + Duration::from_secs(1),
+                    || {
+                        polls += 1;
+                        polls >= 4
+                    },
+                )
+                .is_err()
+        );
+        assert!(start.elapsed() < Duration::from_millis(250));
+        assert_eq!(supervisor.occupied(), 1);
+        for kind in [
+            WorkKind::Verification,
+            WorkKind::Enrollment,
+            WorkKind::TpmPinDerivation,
+        ] {
+            assert!(
+                budget
+                    .try_work(credential.account().uid, KdfParameters::ENROLLMENT, kind)
+                    .is_err()
+            );
+        }
+        await_empty(&supervisor);
+        assert!(
+            budget
+                .try_work(
+                    credential.account().uid,
+                    KdfParameters::ENROLLMENT,
+                    WorkKind::Verification
+                )
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn malformed_oversized_and_late_enrollment_worker_results_fail_closed() {
+        let credential = record(1000);
+        let valid = enrollment_response(&credential, 1);
+        for (payload, sleep, deadline) in [
+            ("b'LPWE'".to_owned(), 0, 500),
+            (format!("bytes({})", MAX_ENROLLMENT_RESPONSE + 1), 0, 500),
+            (format!("bytes({:?})", valid.as_slice()), 1, 80),
+        ] {
+            let code = format!(
+                "import sys,time; sys.stdin.buffer.read(); sys.stdout.buffer.write({payload}); sys.stdout.buffer.flush(); time.sleep({sleep})"
+            );
+            let supervisor = fixture("/usr/bin/python3", &["-c", &code], Duration::ZERO);
+            let start = Instant::now();
+            assert!(
+                supervisor
+                    .enroll(
+                        credential.account(),
+                        credential.generation(),
+                        Backend::Software,
+                        Pin::parse(b"012345").unwrap(),
+                        enrollment_permit(&ResourceBudget::default(), 1000),
+                        start + Duration::from_millis(deadline),
+                        || false,
+                    )
+                    .is_err()
+            );
+            assert!(start.elapsed() < Duration::from_millis(750));
+            await_empty(&supervisor);
+        }
     }
 
     #[test]

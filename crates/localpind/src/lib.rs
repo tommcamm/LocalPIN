@@ -1,13 +1,32 @@
 //! Bounded Linux broker, live session routing and disposable backend workers.
 //!
 //! Ordinary Unix accounts remain unavailable until a supported lifecycle and
-//! account-policy authority exists. No PAM activation or enrollment is provided.
+//! account-policy authority exists. No PAM integration is activated by a build.
 
 pub mod broker;
+pub mod enrollment;
 pub mod platform;
 pub mod worker;
 
 use localpin_core::types::{BootId, Clock, TimePoint, Unavailable};
+
+/// Disable process dumps before a broker or helper can receive any secrets.
+///
+/// This changes process-wide state and belongs at executable entry points,
+/// before threads start. Library callers must establish the same boundary in
+/// their own process. The dumpability guard also covers piped core handlers,
+/// which can ignore the core-size limit. Neither guard erases memory copies.
+pub fn protect_process_secrets() -> std::io::Result<()> {
+    rustix::process::set_dumpable_behavior(rustix::process::DumpableBehavior::NotDumpable)?;
+    rustix::process::setrlimit(
+        rustix::process::Resource::Core,
+        rustix::process::Rlimit {
+            current: Some(0),
+            maximum: Some(0),
+        },
+    )?;
+    Ok(())
+}
 
 /// Kernel boot identity and suspend-inclusive monotonic clock.
 pub struct BootClock {

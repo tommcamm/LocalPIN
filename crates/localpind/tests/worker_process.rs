@@ -18,7 +18,7 @@ const WORKER: &str = env!("CARGO_BIN_EXE_localpin-worker");
 const PHC: &[u8] = b"$argon2id$v=19$m=65536,t=3,p=1$BwcHBwcHBwcHBwcHBwcHBw$CUNrJW+K3R42xrH7g4MDA7wv0ihz8Hcf0glJGhH5HZ4";
 
 fn request(pin: &[u8; 6]) -> Zeroizing<Vec<u8>> {
-    let record = CredentialRecord::new(
+    let credential = CredentialRecord::new(
         AccountId {
             uid: Uid::new(1000).unwrap(),
             incarnation: Incarnation::new([1; 16]).unwrap(),
@@ -27,14 +27,30 @@ fn request(pin: &[u8; 6]) -> Zeroizing<Vec<u8>> {
         Backend::Software,
         PHC,
     )
-    .unwrap()
-    .encode()
     .unwrap();
+    record_request(&credential, pin, false)
+}
+
+fn record_request(credential: &CredentialRecord, pin: &[u8; 6], trial: bool) -> Zeroizing<Vec<u8>> {
+    let record = credential.encode().unwrap();
     let mut request = Zeroizing::new(Vec::new());
-    request.extend_from_slice(b"LPW1");
+    request.extend_from_slice(if trial { b"LPT1" } else { b"LPW1" });
     request.extend_from_slice(&17u64.to_be_bytes());
     request.extend_from_slice(&(record.expose().len() as u32).to_be_bytes());
     request.extend_from_slice(record.expose());
+    request.extend_from_slice(pin);
+    request
+}
+
+fn enrollment_request(pin: &[u8; 6]) -> Zeroizing<Vec<u8>> {
+    let mut request = Zeroizing::new(Vec::new());
+    request.extend_from_slice(b"LPE1");
+    request.extend_from_slice(&17u64.to_be_bytes());
+    request.extend_from_slice(&29u32.to_be_bytes());
+    request.extend_from_slice(&1000u32.to_be_bytes());
+    request.extend_from_slice(&[1; 16]);
+    request.extend_from_slice(&2u64.to_be_bytes());
+    request.push(2); // Explicitly selected software; this test never opens a TPM.
     request.extend_from_slice(pin);
     request
 }
@@ -108,4 +124,62 @@ fn actual_helper_rejects_oversized_partial_trailing_input_and_arguments_silently
     assert_eq!(output.status.code(), Some(2));
     assert!(output.stdout.is_empty());
     assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn actual_helper_provisions_bound_software_and_trials_the_returned_record() {
+    let output = execute(&enrollment_request(b"012345"), &[]);
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    assert!(output.stdout.len() <= 17 + MAX_RECORD_BYTES);
+    assert_eq!(&output.stdout[..4], b"LPWE");
+    assert_eq!(&output.stdout[4..12], &17u64.to_be_bytes());
+    assert_eq!(output.stdout[12], 1);
+    let length = u32::from_be_bytes(output.stdout[13..17].try_into().unwrap()) as usize;
+    assert_eq!(output.stdout.len(), 17 + length);
+    let record = CredentialRecord::decode(&output.stdout[17..]).unwrap();
+    assert_eq!(record.account().uid.get(), 1000);
+    assert_eq!(record.account().incarnation.get(), [1; 16]);
+    assert_eq!(record.generation().get(), 2);
+    assert_eq!(record.backend(), Backend::Software);
+    for (pin, outcome) in [(b"012345", 1), (b"123456", 2)] {
+        let output = execute(&record_request(&record, pin, true), &[]);
+        assert!(output.status.success());
+        assert_eq!(output.stdout.len(), 13);
+        assert_eq!(&output.stdout[..4], b"LPWR");
+        assert_eq!(&output.stdout[4..12], &17u64.to_be_bytes());
+        assert_eq!(output.stdout[12], outcome);
+        assert!(output.stderr.is_empty());
+    }
+    let output = execute(&record_request(&record, b"012345", false), &[]);
+    assert!(output.status.success());
+    assert_eq!(output.stdout[12], 1);
+}
+
+#[test]
+fn actual_helper_rejects_invalid_enrollment_bindings_pin_and_envelopes() {
+    let request = enrollment_request(b"012345");
+    let mut malformed = Vec::new();
+    for length in 0..request.len() {
+        malformed.push(request[..length].to_vec());
+    }
+    for (start, end) in [(4, 12), (16, 20), (20, 36), (36, 44)] {
+        let mut invalid = request.to_vec();
+        invalid[start..end].fill(0);
+        malformed.push(invalid);
+    }
+    for (offset, byte) in [(12, 1), (15, 28), (44, 3), (45, b'a')] {
+        let mut invalid = request.to_vec();
+        invalid[offset] = byte;
+        malformed.push(invalid);
+    }
+    let mut trailing = request.to_vec();
+    trailing.push(0);
+    malformed.push(trailing);
+    for input in malformed {
+        let output = execute(&input, &[]);
+        assert!(!output.status.success());
+        assert!(output.stdout.is_empty());
+        assert!(output.stderr.is_empty());
+    }
 }

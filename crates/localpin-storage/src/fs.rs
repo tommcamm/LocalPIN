@@ -214,6 +214,17 @@ impl Dir {
         bytes: &[u8],
         fault: &mut impl FaultInjector,
     ) -> Result<()> {
+        self.replace_guarded(name, bytes, fault, || Ok(()))
+    }
+
+    /// Recheck volatile authorization after staging/fsync, immediately before rename.
+    pub(crate) fn replace_guarded(
+        &self,
+        name: &str,
+        bytes: &[u8],
+        fault: &mut impl FaultInjector,
+        mut before_rename: impl FnMut() -> Result<()>,
+    ) -> Result<()> {
         check_name(name)?;
         // These inodes are permanent serialization points, never records.
         if matches!(name, PENDING | "lock" | "broker.lock") {
@@ -255,6 +266,7 @@ impl Dir {
             Err(Error::Io(std::io::ErrorKind::NotFound)) => {}
             Err(error) => return Err(error),
         }
+        before_rename()?;
         renameat(&self.file, PENDING, &self.file, name).map_err(path_error)?;
         fault.check(Boundary::Renamed)?;
         self.sync()?;

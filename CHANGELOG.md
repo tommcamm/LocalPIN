@@ -6,6 +6,12 @@ Changes will be recorded here before versioned releases. There are no releases y
 
 ### Added
 
+- M6 `localpin-auth` disposable password-only PAM worker and bounded supervisor,
+  plus `localpinctl` terminal enrollment, change, disable, explicit migration,
+  root recovery and versioned nonsecret doctor/status output.
+- Connection-bound password grants, staged native backend creation/trial and
+  durable generation commits; isolated failure/replay/cancellation regressions.
+  [M6 evidence and remaining gates](docs/development/m6-enrollment-cli.md).
 - M5 `localpind` broker with kernel-authenticated Unix sockets, strict socket
   activation, typed clients, live logind routing and socket-bound process identity;
   [M5 evidence report](docs/development/m5-bounded-broker.md).
@@ -59,6 +65,11 @@ Changes will be recorded here before versioned releases. There are no releases y
 
 ### Changed
 
+- Fresh M6 review hardened CLI, broker and credential-helper entry points against
+  secret-bearing core dumps before input; subprocess regressions verify process
+  dumpability and limits without generating crash artifacts.
+- Terminal input cancels and restores settings if foreground ownership changes,
+  with job-control signals guarded and an actual session/PTY regression.
 - Separate M5 review fixed renewed request deadlines and suspend-paused IPC,
   worker and session timeouts; deadline propagation, absolute boot-time timerfds,
   delivery/lifetime limits and late cancellation now have regressions. See the
@@ -77,6 +88,6 @@ Changes will be recorded here before versioned releases. There are no releases y
 - Specification 1.1 clarifies that six-digit account passwords can consume a PIN
   attempt before fallback and that forwarded failures retain password accounting.
 
-Production account lifecycle/policy enforcement, enrollment CLI, PAM integration,
-packaging and activation remain unimplemented. Installed broker/worker sandbox
+Production account lifecycle/policy enforcement, PAM unlock integration,
+packaging and activation remain unimplemented. Installed broker/password-worker sandbox
 and physical TPM validation remain open.
