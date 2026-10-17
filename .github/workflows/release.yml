@@ -113,7 +113,15 @@ jobs:
           LOCALPIN_SIGNING_PASSPHRASE: ${{ secrets.RPM_SIGNING_PASSPHRASE }}
           LOCALPIN_SIGNING_FINGERPRINT: ${{ vars.RPM_SIGNING_FINGERPRINT }}
         run: python3 packaging/fedora/sign-release.py "$RUNNER_TEMP/release"
-      - name: Create an annotated tag and publish all assets as an experimental prerelease
+      - name: Preserve the complete signed release evidence
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-evidence-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release/
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+      - name: Create an annotated tag and publish the RPM and checksum as an experimental prerelease
         env:
           GH_TOKEN: ${{ github.token }}
           LOCALPIN_TAG: ${{ needs.validate.outputs.tag }}

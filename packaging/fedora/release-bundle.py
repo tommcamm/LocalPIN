@@ -85,15 +85,25 @@ See the [complete changelog]({source}/CHANGELOG.md) for this source snapshot.
 ### Downloads
 
 - **`{rpm_name}`**: the signed installable Fedora 44 x86_64 package.
-- **`{archive_name}`**: committed source; rebuilding still needs Rust dependencies and native build tools.
-- `RELEASE.json` and `BUILD-INPUTS.json`: source/build provenance, RPM identity and final signing fingerprint. The embedded build manifest intentionally retains `signed: false` for the pre-sign build.
-- `SBOM.spdx.json` and `NATIVE-RPMS.json`: Cargo target dependencies and the complete builder RPM inventory, including development tools; not a minimal runtime closure or independent license review.
-- `RPM-GPG-KEY-LocalPIN`, `SHA256SUMS` and `SHA256SUMS.asc`: public signing key, download checksums and their detached OpenPGP signature.
+- **`SHA256SUMS`**: the SHA256 checksum of that RPM.
 
-Every published experimental release requires verified RPM and checksum signatures.
-Compare the key fingerprint with a separately trusted maintainer fingerprint, then
+Every published experimental release requires a verified embedded RPM signature.
+Download the [public signing key](https://raw.githubusercontent.com/tommcamm/LocalPIN/{commit}/packaging/fedora/RPM-GPG-KEY-LocalPIN),
+compare its fingerprint with a separately trusted maintainer fingerprint, then
 follow the [signature and checksum verification steps]({source}/docs/releasing.md#verify-and-test-a-download)
-before installation. `RELEASE.json.signing.signed` must be `true`.
+before installation. The public checksum file detects changed downloads; the RPM
+signature authenticates the package.
+
+### Build evidence
+
+The [workflow run]({workflow_url}) retains a `release-evidence-*` artifact for 90 days
+with the full signed bundle: `{archive_name}`, source/build provenance in
+`RELEASE.json` and `BUILD-INPUTS.json`, `SBOM.spdx.json`, the builder inventory
+`NATIVE-RPMS.json`, the public key, release notes, and a separate full-bundle
+`SHA256SUMS` with its detached `SHA256SUMS.asc` signature. The artifact's checksum
+file covers the full evidence bundle; the release download covers only the RPM.
+The SBOM includes development tools and is not a minimal runtime closure or
+independent license review. Rebuilding needs Rust dependencies and native build tools.
 
 ### Installation and current limits
 

@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Publish a complete experimental bundle without replacing any tag or asset."""
+"""Verify a complete experimental bundle and publish only its RPM and checksum."""
 import argparse
 import hashlib
 import importlib.util
@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import tempfile
 import urllib.error
@@ -105,7 +106,10 @@ def verify_native_assets(directory):
             run(["gpg", "--batch", "--verify", str(directory / "SHA256SUMS.asc"), str(directory / "SHA256SUMS")])
             database = str(Path(temporary) / "rpmdb")
             run(["rpm", "--dbpath", database, "--initdb"])
-            run(["rpmkeys", "--dbpath", database, "--import", str(public)])
+            # Verify with the repository key linked from the download instructions,
+            # so changing the CI signing key also requires publishing its public key.
+            published_key = Path(__file__).with_name("RPM-GPG-KEY-LocalPIN")
+            run(["rpmkeys", "--dbpath", database, "--import", str(published_key)])
             run(["rpmkeys", "--dbpath", database, "--define", "_pkgverify_level signature", "--checksig", str(rpm)])
         finally:
             subprocess.run(["gpgconf", "--kill", "gpg-agent"], env=env, capture_output=True, check=False)
@@ -162,13 +166,29 @@ def verify_github_release(directory, tag, assets, *, draft):
     return expected_url
 
 
+def prepare_downloads(directory, output):
+    """Project the verified evidence into two downloads without changing evidence."""
+    data = json.loads((directory / "RELEASE.json").read_text())
+    rpm = output / data["rpm"]["filename"]
+    shutil.copyfile(directory / rpm.name, rpm)
+    checksum = output / "SHA256SUMS"
+    checksum.write_text(f"{hashlib.sha256(rpm.read_bytes()).hexdigest()}  {rpm.name}\n")
+    return [rpm, checksum]
+
+
 def publish(directory, tag, commit):
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("full source commit required")
     if os.environ.get("GITHUB_REF") != "refs/heads/main" or commit != os.environ.get("GITHUB_SHA"):
         raise ValueError("publication requires the dispatched main commit")
-    assets = verify_bundle(directory, tag, commit)
+    verify_bundle(directory, tag, commit)
     verify_native_assets(directory)
+    with tempfile.TemporaryDirectory(prefix="localpin-release-downloads-") as temporary:
+        assets = prepare_downloads(directory, Path(temporary))
+        _publish_downloads(directory, tag, commit, assets)
+
+
+def _publish_downloads(directory, tag, commit, assets):
     if api(f"git/ref/tags/{tag}", missing_ok=True) is not None or api(f"releases/tags/{tag}", missing_ok=True) is not None:
         raise ValueError("tag or release already exists; refusing to overwrite published history")
     if api(f"compare/{commit}...main")["status"] not in ("ahead", "identical"):
@@ -185,7 +205,7 @@ def publish(directory, tag, commit):
     print(f"Published experimental release: {url}")
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
-            summary.write(f"## Experimental release published\n\n[View {tag} on GitHub Releases]({url})\n\nVerified RPM/checksum signatures, release description and all {len(assets)} assets.\n")
+            summary.write(f"## Experimental release published\n\n[View {tag} on GitHub Releases]({url})\n\nVerified signed RPM and evidence bundle; published the RPM and its checksum ({len(assets)} assets).\n")
 
 
 if __name__ == "__main__":
