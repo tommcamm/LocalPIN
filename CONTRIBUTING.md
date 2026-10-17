@@ -41,9 +41,8 @@ git switch -c docs/clearer-recovery-guide
 ```
 
 Choose a branch name that describes your change; `fix/`, `feat/`, `test/`, and
-`docs/` are useful prefixes. Install the native build prerequisites described in
-the [README](README.md#build-from-source). `rust-toolchain.toml` selects the pinned
-Rust toolchain; `Cargo.toml` declares the minimum supported Rust version.
+`docs/` are useful prefixes. Follow [Build from source](#build-from-source) for
+the native prerequisites and first build.
 
 Before changing behavior, read the [product specification](docs/product-specification.md)
 and the relevant part of the [implementation plan](docs/implementation-plan.md).
@@ -51,6 +50,43 @@ The specification defines the requirements; development reports describe the
 evidence gathered so far. Resolve changes to a design contract in an
 [architecture decision record](docs/adr/) and update the specification when
 requirements change.
+
+## Build from source
+
+Use a Fedora development environment with Rust installed through rustup. The
+repository selects its toolchain in [rust-toolchain.toml](rust-toolchain.toml)
+and declares its minimum Rust version in [Cargo.toml](Cargo.toml).
+
+Native builds need a C compiler, `pkg-config`, TPM2-TSS 4.x development libraries,
+and libdbus development libraries. On Fedora, install the build inputs with:
+
+```sh
+sudo dnf install gcc pkgconf-pkg-config tpm2-tss-devel dbus-devel
+```
+
+Python 3 is used by the test and packaging tools. Broker operation requires
+Linux 6.5 or later with `SO_PEERPIDFD`, procfs, and a system bus/logind; protected
+storage also requires `openat2` support.
+
+```sh
+git clone https://github.com/tommcamm/LocalPIN.git
+cd LocalPIN
+cargo build --workspace --all-features --release --locked
+cargo run -p localpinctl -- --help
+```
+
+If you already cloned a fork, run the Cargo commands from that checkout.
+Building does not install or activate LocalPIN. The CLI's `doctor` and `status`
+commands provide read-only diagnostics; enrollment needs a separately prepared
+broker, supported account authority, and fresh interactive password verification.
+See the [CLI reference](crates/localpinctl/README.md) and the
+[installation and recovery runbook](docs/integration-administration.md).
+
+The [validation commands](#validation) below include the first source checks
+(`cargo fmt`, Clippy, and workspace tests), dependency policy, and separate
+simulator/PAM/VM suites. Workspace tests do not establish installed desktop or
+physical hardware compatibility. For an RPM build, follow the
+[Fedora packaging guide](packaging/fedora/README.md#build-without-installing).
 
 ## Branches and pull requests
 
@@ -170,7 +206,22 @@ Never commit passwords, PINs, derived authorization values, real credential
 records, private keys, system authentication files, VM images, or unsanitized
 logs. Use clearly synthetic, sanitized fixtures and document their purpose.
 
+## Project background
+
+LocalPIN is an independent personal project. The existing
+[pam_pinlock project](https://github.com/saltnpepper97/pam_pinlock) provides
+migration context. LocalPIN's exact-block migration requires fresh provisioning
+and enrollment and does not import old verifiers. Broader compatibility or a
+security improvement over that project has not been demonstrated.
+
+Use the [documentation index](docs/README.md) for component references, design
+contracts, development evidence, and the current implementation plan.
+
 ## AI assistance and licensing
+
+Development uses OpenAI Codex and other large language models, with maintainer
+oversight. AI assistance does not replace human review or the independent
+security review required before a production release.
 
 AI-assisted contributions are welcome. Contributors remain responsible for
 understanding the submitted work, checking its correctness and provenance, and

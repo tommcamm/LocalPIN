@@ -1,184 +1,124 @@
+<div align="center">
+
 # LocalPIN
 
-**Six-digit PIN unlocking for your existing Fedora KDE session, with your account
-password as the recovery route.**
+**A six-digit PIN for your Fedora KDE lock screen.**
 
+[![Experimental](https://img.shields.io/badge/status-experimental-orange?style=flat-square)](#compatibility-and-limitations)
 [![CI](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml)
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue?style=flat-square)](#license)
 
-[Build from source](#build-from-source) ·
-[Download a testing RPM](packaging/fedora/README.md#download-a-ci-testing-rpm) ·
-[Manual prereleases](docs/releasing.md) ·
-[Installation and recovery](docs/integration-administration.md) ·
-[Contribute](CONTRIBUTING.md) ·
-[Report a security issue](SECURITY.md)
+[Get started](#get-started) ·
+[Usage guide](docs/usage.md) ·
+[Documentation](docs/README.md) ·
+[Releases](https://github.com/tommcamm/LocalPIN/releases)
 
-LocalPIN adds an opt-in PIN path to the KDE lock screen. It combines a small PAM
-adapter, a local Rust broker, durable attempt limits, and a choice of TPM 2.0 or
-explicitly selected software credentials. Your normal account password remains
-available for unlocking and recovery.
+</div>
+
+LocalPIN adds opt-in PIN unlocking to an existing local KDE session. Your account
+password stays in place for password unlocking and recovery.
 
 > [!WARNING]
-> LocalPIN is experimental. There is no supported production release. Independent
-> security review and physical hardware validation remain open. Start in a
-> disposable Fedora KDE VM and verify password fallback and console recovery
-> before relying on any installation.
+> LocalPIN is experimental authentication software with no supported production
+> release. Independent security review and physical hardware validation remain
+> open. Start in a disposable VM and complete the password-fallback and console
+> recovery tests in the installation guide before activation.
 
-## What works today
+## Features
 
-The implementation includes enrollment and PIN changes, account lifecycle checks,
-protected credential storage, software and TPM backends, KDE PAM integration,
-Fedora RPM packaging, SELinux confinement, and administrator recovery tools.
-
-The current M8.1 milestone has recorded source checks and targeted installed-RPM
-acceptance on Fedora KDE 44 x86_64 with SELinux enforcing and a private TPM
-emulator. The tested cases include KDE PIN/password unlocking, missing-component
-fallback, console recovery, native account tools, ordinary DNF maintenance,
-compatible LocalPIN upgrades, and reboot continuity. The
-[M8.1 report](docs/development/m8.1-desktop-compatibility.md) records the exact
-builds, evidence, and coverage limits.
-
-Physical TPMs and fingerprint devices, alternate filesystems, AccountsService
-GUI/DBus administration, and the full hardware matrix still need validation.
-[M9](docs/implementation-plan.md#m9--review-hardware-validation-and-versioned-release)
-covers independent review and the remaining release gates; the
-[readiness checklist](docs/development/m9-release-readiness.md) tracks the evidence.
-
-Hosted CI checks Rust lint/build quality on Ubuntu and runs the full workspace
-tests, native PAM/TPM checks, and RPM build on Fedora 44. Successful Fedora jobs
-provide an unsigned testing RPM with build metadata and checksums. See
-[GitHub Actions](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml)
-for results; CI is separate from installed desktop and hardware evidence.
-
-## Scope and security model
-
-| Area | Current target |
+| Feature | What you get |
 | --- | --- |
-| Platform | Fedora KDE 44, x86_64, SELinux enforcing; installed evidence uses Btrfs |
-| Accounts | Local, non-root accounts with the documented native account authority |
-| Authentication | Unlocking an existing local graphical session |
-| Credentials | TPM 2.0 backend or an explicitly selected Argon2id software backend |
-| Policy | Reviewed local authselect/PAM layouts and persistent native faillock accounting |
-| Recovery | Account password and a separate administrator console recovery tool |
+| **Keyboard-friendly unlocking** | A six-digit PIN, including leading zeroes, submitted with Enter in KDE's existing lock screen. |
+| **Password fallback** | Use your account password when you prefer it or the PIN route is unavailable, subject to normal account policy. |
+| **A choice of credentials** | TPM 2.0 protection or an explicitly selected Argon2id software backend. |
+| **Persistent attempt limits** | PIN throttling survives service restarts and retains protection across reboots. |
+| **Credential management** | Enroll, change your PIN, switch backends, or disable your PIN through the CLI. |
+| **Diagnostics and recovery** | Inspect status, follow actionable diagnostics, and recover through a separate administrator console tool. |
 
-Initial login, sudo, SSH, polkit, and disk encryption are outside the initial
-scope. Network accounts, systemd-homed, and custom authentication policies require
-separate compatibility work. Unsupported or ambiguous policy/state refuses PIN
-use; see the [account](docs/account-administration.md) and
-[integration](docs/integration-administration.md) contracts for exact boundaries.
+## Get started
 
-A six-digit PIN has limited entropy. Backend choice, protected state, and durable
-attempt limits are part of the design; a PIN is not a general replacement for a
-strong password. The [product specification](docs/product-specification.md)
-defines the threat model and backend limitations. Implementation language and
-passing tests alone do not establish a security guarantee.
+Use a disposable **Fedora KDE 44 x86_64 VM with SELinux enforcing** and a
+recoverable snapshot first. Setup requires administrator access and the supported
+local account and authentication policy described in the installation guide.
 
-## Build from source
+1. **Download and verify.** Get the experimental RPM and `SHA256SUMS` from
+   [GitHub Releases](https://github.com/tommcamm/LocalPIN/releases). Follow the
+   [download verification instructions](docs/releasing.md#verify-and-test-a-download),
+   including checking the RPM signature against a separately trusted signing key.
+2. **Install the package.** Follow
+   [installation and recovery](docs/integration-administration.md).
+   Installation leaves services stopped and desktop PIN integration disabled.
+3. **Prepare and enroll.** An administrator prepares persistent password-failure
+   accounting offline and provisions the selected accounts. Then enroll from
+   your own foreground terminal in the local KDE session, choosing a backend
+   explicitly. The [usage guide](docs/usage.md#enroll-your-pin) explains the choices.
+4. **Trial, test, and activate.** Complete the runbook's bounded trial, real PIN
+   and password unlock tests, console recovery rehearsal, and final activation.
+   Recovery rehearsal revokes enrollment; repeat preparation, enrollment, and
+   trial tests as directed before activating.
 
-Use a Fedora development environment with Rust installed through rustup. The
-repository selects its toolchain in [rust-toolchain.toml](rust-toolchain.toml)
-and declares its minimum Rust version in [Cargo.toml](Cargo.toml).
+**Installation and enrollment alone do not activate PIN unlocking.** Follow the
+complete runbook for the required order and recovery checks.
 
-Native builds need a C compiler, `pkg-config`, TPM2-TSS 4.x development libraries,
-and libdbus development libraries. On Fedora, install the build inputs with:
+Testing a particular commit? [Unsigned CI testing RPMs](packaging/fedora/README.md#download-a-ci-testing-rpm)
+are a separate option for disposable test environments.
 
-```sh
-sudo dnf install gcc pkgconf-pkg-config tpm2-tss-devel dbus-devel
-```
+## Everyday use
 
-Python 3 is used by the test and packaging tools. Broker operation requires
-Linux 6.5 or later with `SO_PEERPIDFD`, procfs, and a system bus/logind; protected
-storage also requires `openat2` support.
+After setup, type your PIN into KDE's existing lock-screen field and press
+**Enter**. The field may still say **Password**; there is no separate PIN selector
+or automatic submission after six digits. Enter your full account password in
+the same field whenever needed.
 
-```sh
-git clone https://github.com/tommcamm/LocalPIN.git
-cd LocalPIN
-cargo build --workspace --all-features --release --locked
-cargo run -p localpinctl -- --help
-```
+Run these commands as your normal user:
 
-Building does not install or activate LocalPIN. The CLI's `doctor` and `status`
-commands provide read-only diagnostics; enrollment needs a separately prepared
-broker, supported account authority, and fresh interactive password verification.
-See the [CLI reference](crates/localpinctl/README.md).
-
-For a first source check:
-
-```sh
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-cargo test --workspace --all-features --locked
-```
-
-[CONTRIBUTING.md](CONTRIBUTING.md#validation) covers the full local checks,
-dependency policy, and separate simulator/PAM/VM suites. Workspace tests do not
-establish installed desktop or physical hardware compatibility.
-
-## Experimental installation
-
-Download the signed experimental RPM and `SHA256SUMS` from
-[GitHub Releases](https://github.com/tommcamm/LocalPIN/releases) and follow the
-[verification instructions](docs/releasing.md#verify-and-test-a-download).
-Unsigned CI testing RPMs (retained for 14 days) and local builds are also covered
-by the [Fedora packaging guide](packaging/fedora/README.md).
-Installation starts no services and leaves PIN integration disabled.
-Preparation, enrollment, a timed trial, password/recovery tests, and explicit
-activation are separate steps in the
-[installation and recovery runbook](docs/integration-administration.md).
-
-Use a disposable enforcing Fedora KDE VM first. The runbook includes the required
-persistent native accounting setup, supported policy layouts, compatible-update
-behavior, and recovery from a text console. Building or installing an RPM does
-not complete those checks.
-
-## Inside the project
-
-| Component | Responsibility |
+| Task | Command |
 | --- | --- |
-| [`localpin-pam`](crates/localpin-pam) | Small PAM adapter for the KDE unlock path |
-| [`localpind`](crates/localpind) | Broker, account authority, and supervised backend workers |
-| [`localpinctl`](crates/localpinctl) | Interactive enrollment, credential changes, and diagnostics |
-| [`localpin-auth`](crates/localpin-auth) | Private password-only PAM and eligibility workers |
-| [`localpin-core`](crates/localpin-core) / [`localpin-protocol`](crates/localpin-protocol) | Policy, bounded messages, and operation contracts |
-| [`localpin-storage`](crates/localpin-storage) | Protected files, credential generations, and durable throttling |
-| [`localpin-credentials`](crates/localpin-credentials) / [`localpin-tpm`](crates/localpin-tpm) | Software credentials, PIN derivation, and TPM operations |
-| [`packaging/fedora`](packaging/fedora) / [`tools`](tools) | RPM/confinement definitions and activation/recovery tooling |
+| Diagnose availability | `localpinctl doctor` |
+| Check enrollment and activation | `localpinctl status` |
+| Change your PIN | `localpinctl change` |
+| Disable your account's PIN credential | `localpinctl disable` |
 
-Start with the [implementation plan](docs/implementation-plan.md) for the roadmap,
-the [architecture decisions](docs/adr) for design rationale, and the
-[changelog](CHANGELOG.md) for delivered changes. Historical milestone reports
-retain their original scope; M8.1 supersedes the earlier immutable-appliance
-account model.
+Credential changes require confirmation and fresh account-password verification.
+PINs and passwords are entered privately and interactively, never as command
+arguments or through pipes. See the [usage guide](docs/usage.md) for enrollment,
+backend migration, cooldowns, and troubleshooting.
 
-## Contributing
+For system-wide recovery, use the
+[administrator console recovery procedure](docs/integration-administration.md#console-recovery-and-removal).
+Disabling your own PIN credential does not restore the system's PAM configuration.
 
-Bug reports, documentation improvements, tests, and focused implementation work
-are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before starting. Every change,
-including documentation, uses its own branch and a pull request targeting `main`
-for maintainer review.
+## Compatibility and limitations
 
-Use [issues](https://github.com/tommcamm/LocalPIN/issues) for non-sensitive bugs
-and feature proposals. Follow [SECURITY.md](SECURITY.md) for suspected
-vulnerabilities; never put authentication secrets or private exploit details in
-public issues.
+| Area | Current boundary |
+| --- | --- |
+| **Environment** | Fedora KDE 44, x86_64, SELinux enforcing, and reviewed local authselect/PAM layouts. |
+| **Accounts** | Explicitly provisioned local, non-root accounts. Network accounts, systemd-homed, and custom authentication policies are outside the current domain. |
+| **Where PIN works** | Unlocking an existing local graphical session. Initial login, text-console login, sudo, SSH, polkit, and disk encryption retain their existing authentication. |
+| **Validation** | Targeted installed tests used a disposable Fedora KDE VM, Btrfs, and a private TPM emulator. Physical TPMs and fingerprint devices, alternate filesystems, GUI account administration, and full legacy TPM migration still need validation. |
 
-## Project background and AI assistance
+A six-digit PIN has limited entropy. Software mode provides online throttling,
+but copied verifier material remains susceptible to offline guessing. TPM
+protection depends on the device and platform; full-disk encryption remains a
+separate defense. LocalPIN does not protect against root, a compromised kernel
+or desktop, or malware already running as you.
 
-LocalPIN is an independent personal project. The existing
-[pam_pinlock project](https://github.com/saltnpepper97/pam_pinlock) provides
-migration context. LocalPIN's exact-block migration requires fresh provisioning
-and enrollment and does not import old verifiers. Broader compatibility or a
-security improvement over that project has not been demonstrated.
+Wrong PINs can also count as native password failures when forwarded to password
+authentication. PIN cooldown does not bypass account lockout or expiry, and
+password fallback depends on the existing authentication system remaining
+functional. See the [usage guide](docs/usage.md#cooldowns-and-account-policy) and
+[detailed security model](docs/product-specification.md#4-security-scope-and-limitations).
 
-Development uses OpenAI Codex and other large language models, with maintainer
-oversight. Contributors remain responsible for understanding and validating
-their changes. AI assistance does not replace human review or the independent
-security review required before a production release.
+## Documentation and help
+
+- [Documentation index](docs/README.md) — user guides, administration, and technical references.
+- [Contributing](CONTRIBUTING.md) — source builds, validation, and focused pull requests.
+- [Issues](https://github.com/tommcamm/LocalPIN/issues) — non-sensitive bugs and feature ideas.
+- [Security policy](SECURITY.md) — how to report a suspected vulnerability privately.
+- [Changelog](CHANGELOG.md) — delivered changes.
 
 ## License
 
-Copyright 2026 LocalPIN contributors.
-
-Original project material is dual-licensed under [MIT](LICENSE-MIT) or
-[Apache-2.0](LICENSE-APACHE), at your option (`MIT OR Apache-2.0`). Third-party
-material retains its own notices and license terms.
+Copyright 2026 LocalPIN contributors. Original project material is dual-licensed
+under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option
+(`MIT OR Apache-2.0`). Third-party material retains its own notices and terms.
