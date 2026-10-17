@@ -1,7 +1,8 @@
 # Contributing to LocalPIN
 
-LocalPIN has isolated and guarded enforcing-VM M1 feasibility experiments.
-Same-UID desktop, second-seat and production integration gates remain open. Read the
+LocalPIN has completed isolated and guarded enforcing-VM M1 feasibility experiments
+and implements M2 pure policy/protocol models. Production integration and account
+lifecycle gates remain open. Read the
 [product specification](docs/product-specification.md) and
 [implementation plan](docs/implementation-plan.md) before proposing implementation
 changes. Authentication behavior needs evidence appropriate to its risk, including
@@ -38,9 +39,9 @@ cargo deny --locked check advisories bans licenses sources
 
 Install the `cargo-deny` version pinned by CI before the last command. Advisory
 checks need access to the configured advisory database. Report unavailable checks
-honestly, including environmental failures. The initial core library has no
-dependencies or authentication behavior, so passing the Rust checks establishes
-only the repository foundation. Run the separate
+honestly, including environmental failures. The Rust crates use simulated
+authorities/stores/workers; passing their checks establishes model contracts,
+not durable storage or platform authentication. Run the separate
 [M1 harnesses](experiments/m1/README.md) when changing feasibility code; do not
 report their container results as real KDE or SELinux evidence.
 

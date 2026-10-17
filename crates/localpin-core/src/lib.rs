@@ -1,6 +1,12 @@
-//! Core foundations for LocalPIN, a planned Linux screen-unlock PIN system.
+//! Pure LocalPIN policy contracts. No host authentication or credential backend.
 //!
-//! This crate currently establishes the workspace and its build policies.
-//! Authentication, credential handling, and policy state machines are not yet
-//! implemented. See `docs/product-specification.md` and the implementation plan
-//! in the repository for the intended behavior and delivery gates.
+//! Platform adapters are trusted boundaries: a simulated durable store, lifecycle
+//! authority, or password worker is not evidence of a production implementation.
+
+pub mod eligibility;
+pub mod enrollment;
+pub mod limits;
+pub mod records;
+pub mod secret;
+pub mod throttle;
+pub mod types;

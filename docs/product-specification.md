@@ -1,9 +1,10 @@
 # LocalPIN product specification
 
-**Specification version:** 1.1
+**Specification version:** 1.2
 
-**Date:** 2026-10-16  
-**Status:** Implementation specification for a future production project; no Rust implementation or system installation is implied by this document.  
+**Date:** 2026-10-17
+
+**Status:** Implementation specification; M2 has pure policy/protocol models, with production adapters and installation still pending.
 **Initial deployment:** Fedora Linux, KDE Plasma, local user accounts.  
 **Working component names:** `pam_localpin.so`, `localpind`, `localpinctl`.
 
@@ -22,6 +23,12 @@ This document defines the complete intended product, including installation, int
 The inspected machine reported Fedora 44 KDE, Plasma/kscreenlocker 6.7.5, Rust 1.95.0, and a TPM 2.0 entry in sysfs. TPM device access and suitability were not established. SELinux was disabled on this particular machine; the product must nevertheless support Fedora with SELinux enforcing.
 
 The initial supported platform is Fedora KDE with local, non-root users and a verified screen-lock PAM service. Target x86_64 initially; aarch64 support requires equivalent CI, packages, and hardware integration testing. Network identities, systemd-homed accounts, non-KDE desktops, immutable Fedora variants, and other distributions must be reported as unsupported until adapters and tests exist. Unsupported configurations must not receive guessed PAM edits.
+
+Account support additionally requires an enforcing, tested lifecycle authority
+that distinguishes account incarnations and revokes enrollment before UID reuse.
+No such production adapter is delivered in M2; ordinary unmanaged Unix accounts
+remain unsupported for production activation. UID/name/home equality is
+insufficient. See [ADR 0006](adr/0006-account-incarnation-support.md).
 
 Use a pinned stable Rust toolchain, Rust 2024 edition, a declared minimum supported Rust version, and a committed Cargo.lock. Select maintained stable dependencies at implementation time. Record exact versions, licenses, advisories, and native-library requirements; do not follow moving `latest` versions in release builds.
 
@@ -170,7 +177,15 @@ OS randomness failures abort enrollment. Secrets use zeroizing buffers, bounded 
 
 ## 11. Authoritative throttling and crash consistency
 
-The same broker-managed throttle applies to both backends. The default is five submitted valid-format guesses per rolling 60-second window, followed by a five-minute PIN cooldown. Candidates outside six ASCII digits do not invoke or consume LocalPIN verification attempts. A six-digit account password is also a PIN-format candidate and may consume a LocalPIN attempt before succeeding through password fallback. The fallback remains governed by the existing password stack, including any failure accounting when a wrong PIN is forwarded as the same candidate. LocalPIN must not suppress or reset those password counters. This accounting clarification is recorded in [ADR 0001](adr/0001-pam-candidate-and-account-policy.md); the exact fifth-attempt state transition is defined and tested in M2.
+The same broker-managed throttle applies to both backends. The default is five submitted valid-format guesses per rolling 60-second window, followed by a five-minute PIN cooldown. Candidates outside six ASCII digits do not invoke or consume LocalPIN verification attempts. A six-digit account password is also a PIN-format candidate and may consume a LocalPIN attempt before succeeding through password fallback. The fallback remains governed by the existing password stack, including any failure accounting when a wrong PIN is forwarded as the same candidate. LocalPIN must not suppress or reset those password counters. This accounting clarification is recorded in [ADR 0001](adr/0001-pam-candidate-and-account-policy.md).
+
+The window is open at its lower boundary: an attempt exactly 60 seconds old no
+longer counts. The fifth reservation is allowed and immediately installs a full
+five-minute cooldown; its successful durable completion clears that cooldown.
+Mismatch, technical error, cancellation or crash retains the reservation and
+cooldown. Subsequent candidates cannot invoke a backend before cooldown expiry;
+a request exactly at expiry is permitted. [ADR 0005](adr/0005-policy-time-and-revocation.md)
+defines the tested M2 boundaries.
 
 For each UID and credential generation:
 
@@ -183,7 +198,7 @@ For each UID and credential generation:
 
 Use a fixed, bounded on-disk state representation with atomic replacement, file and directory synchronization, and lock files whose inode is never replaced during use. Limit one broker instance through the service/socket ownership and process locking; in-memory mutexes alone do not establish cross-process safety.
 
-Persist the boot identifier, bounded recent-attempt timestamps, cooldown state, generation, and state version. Within a boot use a monotonic clock that includes suspend time. On boot-ID change discard incomparable monotonic timestamps but conservatively impose the remaining persisted cooldown or a fresh full cooldown when an active cooldown or unresolved reserved attempt existed. Clock rollback, malformed timestamps, missing required throttle state, or corruption must not reset the budget to unlimited attempts. Deliberate root/disk-snapshot rollback remains outside software-mode guarantees; TPM mode retains its independent hardware defense.
+Persist the boot identifier, bounded recent-attempt timestamps, cooldown origin and deadline, generation, and state version. Validate the exact checked cooldown interval even after recent timestamps are pruned. Within a boot use a monotonic clock that includes suspend time. On boot-ID change discard incomparable timestamps and durably impose a fresh full cooldown whenever persisted recent attempts, an active cooldown or an unresolved reservation exist. This includes recent attempts below the fifth-attempt threshold and prevents cheap reboot resets. Recovery is committed once per new boot. Clock rollback, malformed timestamps, missing required throttle state, or corruption must not reset the budget to unlimited attempts. Deliberate root/disk-snapshot rollback remains outside software-mode guarantees; TPM mode retains its independent hardware defense.
 
 Unauthenticated traffic must have global resource limits as well: at most one in-flight verification per UID, 32 concurrent connections, bounded queues, and an initial global KDF memory budget of 256 MiB. These limits may be raised only with measured deployment evidence. A caller cannot select expensive KDF work factors. Malformed frames must be rejected cheaply and must not charge another UID's budget.
 
@@ -203,6 +218,13 @@ Proposed layout:
 | `/var/lib/localpin/integration-backups/` | Original PAM files, digests, package/version metadata |
 
 Use numeric UIDs for internal paths, never raw usernames. Detect UID reuse and require re-enrollment when the account identity no longer matches the recorded local-account identity. Renaming an account must not accidentally authorize a new account with an unrelated UID.
+
+The identity must include an opaque incarnation from the supported trusted
+lifecycle authority. Recheck it at enrollment and verification finalization;
+unavailable/unsupported evidence refuses PIN. The M2 envelope is a development
+contract, not a frozen permanent identity schema. Permanent account records and
+production activation remain blocked until the authority's deletion/recreation,
+crash and concurrency guarantees have evidence.
 
 Open relative to trusted directory descriptors using no-follow/beneath restrictions where available. Reject symlinks, unsafe ownership/modes, unexpected file types, and oversized records. Do not rely on an `lstat` followed by an unrestricted `open`. Credential records are bounded to 64 KiB; configuration to 64 KiB; throttle records to 16 KiB. Unknown versions fail the PIN route safely.
 

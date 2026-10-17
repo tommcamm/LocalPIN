@@ -1,10 +1,10 @@
 # Build inputs and dependency policy
 
-LocalPIN starts with one workspace member, `localpin-core`, and no third-party
-Rust dependencies. It uses the Rust standard library. There are no native PAM,
-TPM2-TSS, systemd, or cryptographic-library requirements at M0. Select and record
-those inputs when the corresponding milestone introduces them; the specification's
-machine inventory is not a dependency pin.
+M2 has two workspace members, `localpin-core` and `localpin-protocol`, and one
+third-party Rust dependency, `zeroize`. There are no native PAM, TPM2-TSS,
+systemd, or KDF requirements in the production Rust graph yet. Select those
+inputs when their milestones introduce them; the specification's machine
+inventory is not a dependency pin. The isolated M1 experiments remain separate.
 
 ## Current inputs
 
@@ -12,7 +12,7 @@ machine inventory is not a dependency pin.
 | --- | --- | --- |
 | Rust compiler, Cargo, rustfmt, Clippy, standard library | Exact release in [`rust-toolchain.toml`](../../rust-toolchain.toml) | One reviewed toolchain for local development and CI |
 | Rust edition and minimum supported Rust version | Workspace package metadata in [`Cargo.toml`](../../Cargo.toml) | Edition 2024; the initial minimum is the tested toolchain version |
-| Third-party Rust crates | None; [`Cargo.lock`](../../Cargo.lock) is committed | No speculative runtime or development libraries |
+| Third-party Rust crates | `zeroize =1.9.1`, `default-features=false`, `alloc` only; [`Cargo.lock`](../../Cargo.lock) is committed | Erase owned PIN/password/record and framing buffers on drop |
 | C compiler and system C library | Developer distribution; `gcc` and `glibc` from Fedora 44 in CI | Link Rust executables and test binaries |
 | cargo-deny | `0.20.2`, installed with `--locked` | Advisory, license, duplicate/wildcard, and source checks |
 | GitHub checkout action | `v7.0.1` at `3d3c42e5aac5ba805825da76410c181273ba90b1` | Fetch the source without retaining checkout credentials |
@@ -59,6 +59,26 @@ cargo deny --locked check advisories licenses bans sources
 `cargo install --locked` uses the checker's published lockfile. The checker is a
 development tool; its implementation dependencies are not LocalPIN runtime
 dependencies and are outside LocalPIN's `Cargo.lock`.
+
+## M2 Rust dependency review
+
+`zeroize` is maintained by RustCrypto and licensed `Apache-2.0 OR MIT`, within
+the existing license policy. Its published manifest declares edition 2024 and
+Rust 1.85, below this workspace's pinned 1.99.1. With only `alloc` enabled it has
+no transitive dependencies, native libraries or build script. Derive and serde
+support remain disabled. The exact release and registry checksum are locked.
+The reviewed published source and [published upstream changelog](https://docs.rs/crate/zeroize/1.9.1/source/CHANGELOG.md)
+record 1.9.1's fix for a potential uninitialized-memory read in the previous
+optimization-barrier fallback; M2 selects the fixed patch. The
+[published manifest/source](https://docs.rs/crate/zeroize/1.9.1/source/Cargo.toml)
+and [API](https://docs.rs/zeroize/1.9.1/zeroize/) are the primary references.
+
+Project code forbids unsafe code; zeroize's implementation contains its own
+reviewed memory-clearing boundary, still within the dependency audit scope.
+Zeroizing ownership does not erase prior compiler moves, caller-owned inputs,
+native copies, swap, or core dumps. M5/M7 must establish the process/FFI cleanup
+and core-dump settings. No custom KDF or constant-time comparison is introduced.
+The M2 evidence report records the actual advisory/license/source check result.
 
 ## M1 experiment inputs
 

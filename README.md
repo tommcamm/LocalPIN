@@ -6,9 +6,9 @@ It is intended to become useful, reviewable open-source software.
 
 Repository: [tommcamm/LocalPIN](https://github.com/tommcamm/LocalPIN).
 
-**Development status: M1 feasibility complete; M2 implementation next.** This repository contains the
-specification, implementation roadmap, initial Rust workspace, and isolated
-PAM/TPM/platform experiments and guarded Fedora KDE VM tests under enforcing
+**Development status: M2 policy and protocol models implemented locally.** This repository contains the
+specification, implementation roadmap, pure Rust state machines, bounded IPC
+parsers, isolated PAM/TPM/platform experiments and guarded Fedora KDE VM tests under enforcing
 SELinux. Actual password fallback, account restrictions and a confined worker
 have evidence, including real same-UID desktops, ambiguous locker fallback and
 independently routed KDE seats. See the [M1 report](docs/development/m1-feasibility.md).
@@ -29,12 +29,14 @@ scope. Six-digit PINs have limited entropy. The
 backend limitations, and acceptance requirements. Rust alone does not establish
 a security guarantee.
 
-## Build the foundation
+## Build and test the models
 
 Install Rust through rustup, then run these commands from the repository root.
 `rust-toolchain.toml` selects the pinned toolchain; `Cargo.toml` declares the minimum
-supported Rust version. The initial `localpin-core` library has no dependencies
-or authentication functionality.
+supported Rust version. `localpin-core` models enrollment, eligibility,
+revocation, resource budgets and durable throttling; `localpin-protocol` models
+bounded messages and connection ordering. Their only external Rust dependency
+is `zeroize`. Tests use simulated storage, identity authorities and workers.
 
 ```sh
 cargo fmt --all -- --check
@@ -43,9 +45,14 @@ cargo test --workspace --locked
 cargo build --workspace --locked
 ```
 
-These checks validate the workspace foundation. They do not validate PAM, TPM,
+These checks validate the pure model contracts. They do not validate PAM, TPM,
 password fallback, or desktop integration. There are no installation or activation
 commands at this stage.
+
+See the [M2 report](docs/development/m2-policy-contracts.md) for exact time and
+failure boundaries. Production account support requires a tested lifecycle
+authority that detects UID reuse; no production authority exists yet. The
+current model deliberately refuses unsupported lifecycle evidence.
 
 ## Development
 

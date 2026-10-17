@@ -1,8 +1,8 @@
 # LocalPIN implementation plan
 
 - Date: 2026-10-17
-- Status: Accepted roadmap; M0 implemented locally; M1 feasibility complete after the 2026-10-17 enforcing-VM topology tests and recovery. M2 implementation is next. Hosted M1 CI execution remains unverified.
-- Source of requirements: [product-specification.md](product-specification.md), version 1.1. M1 clarifies six-digit password/PIN failure accounting in section 11 and ADR 0001.
+- Status: Accepted roadmap; M0 implemented locally; M1 feasibility complete; M2 pure policy/protocol contracts implemented locally. Hosted CI execution remains unverified. Permanent account records remain gated on production lifecycle support.
+- Source of requirements: [product-specification.md](product-specification.md), version 1.2. M1 clarifies password/PIN accounting; M2 settles time boundaries and narrows lifecycle support explicitly.
 
 This plan turns the specification into independently reviewable changes and evidence gates. The specification remains authoritative. An unresolved design question below must be resolved in an architecture decision record (ADR), with a specification amendment if necessary, rather than silently changing the requirements.
 
@@ -105,8 +105,8 @@ and the UID-reuse lifecycle during M2. Do not stabilize a persisted account-iden
 schema around UID/name/home equality. M3/M4 work may follow once its relevant M2
 contracts are tested and settled; unresolved identity requirements still block
 permanent credential/account records. No VM interaction is needed for this initial
-M2 work. The current Rust workspace remains the foundation; M2 implementation is
-not yet delivered.
+M2 work. M2's delivered pure contracts, local checks and remaining adapter gates
+are recorded in the [M2 report](development/m2-policy-contracts.md).
 
 - Define bounded UID/account identity, backend selection, credential generations, PIN format, typed outcomes, enrollment transactions, and versioned records.
 - Model the attempt lifecycle: eligible -> durably reserved -> backend outcome -> durably completed -> response. Represent unavailable, mismatch, cooldown, and success separately.
@@ -263,7 +263,8 @@ same-UID/second-seat KDE fallback and account/helper checks from root-declared
 metadata and synthetic controls. Production caller, lifecycle, persistence and
 integration requirements retain their later milestone gates. The everyday
 authentication setup remains separate throughout development. M2 contracts are
-not settled merely by the feasibility result.
+tested in the pure Rust suites and documented in ADRs 0005–0007; actual
+persistence and platform lifecycle evidence remain later gates.
 
 No calendar estimate is committed before the feasibility work. Subsequent estimates should use measured test infrastructure effort and availability of independent review/hardware, with review and recovery work included in the schedule.
 
