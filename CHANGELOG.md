@@ -6,6 +6,8 @@ experimental builds.
 
 ## Unreleased
 
+## [0.1.0-alpha.2] - 2026-10-17
+
 ### Added
 
 - Primary `localpin` CLI alias and inline terminal menu with guided
