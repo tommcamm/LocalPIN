@@ -8,7 +8,7 @@
 
 Name:           localpin
 Version:        0.1.0
-Release:        0.1.alpha1%{?dist}
+Release:        0.1.alpha2%{?dist}
 Summary:        Opt-in local PIN unlock for Fedora KDE local accounts
 License:        MIT OR Apache-2.0
 Source0:        localpin-%{version}-native.tar.gz
@@ -153,5 +153,8 @@ fi
 %dir %attr(0755,root,root) %{_sharedstatedir}/faillock
 
 %changelog
+* Sat Oct 17 2026 LocalPIN contributors - 0.1.0-0.1.alpha2
+- Automated experimental release version update.
+
 * Sat Oct 17 2026 LocalPIN contributors - 0.1.0-0.1.alpha1
 - Initial opt-in Fedora appliance RPM and confinement sources.
