@@ -6,8 +6,10 @@ files accounts and the distribution's local authselect profile. It uses
 and [KDE-specific native authentication accounting](adr/0018-kde-native-update-compatibility.md).
 It does not freeze `/etc` or require a reference VM's exact library build.
 The earlier [M8 report](development/m8-packaging-recovery.md) describes the
-superseded appliance implementation. Updated installed acceptance and independent
-review remain requirements before M9 or daily deployment.
+superseded appliance implementation. The
+[M8.1 report](development/m8.1-desktop-compatibility.md) records targeted installed
+acceptance for the current design. Independent review, physical hardware
+validation, and remaining release gates are still required before daily deployment.
 
 ## Install without activation
 

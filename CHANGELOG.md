@@ -115,6 +115,11 @@ Changes will be recorded here before versioned releases. There are no releases y
 
 ### Changed
 
+- Refresh the project overview, contributor and security guidance, issue/PR
+  templates, and build/runbook introductions for the current M8.1 implementation.
+  Require a dedicated branch and a pull request for maintainer review for every
+  change; record the same workflow in repository agent guidance.
+
 - Specification 1.3 records M6.1's narrow account domain and administrative
   restrictions. Ordinary unmanaged accounts remain unsupported; no KDE unlock
   adapter, package activation or production-readiness claim is introduced.

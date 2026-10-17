@@ -5,12 +5,13 @@ body:
   - type: markdown
     attributes:
       value: |
-        Check the product specification and implementation plan first. Planned functionality is not implemented functionality.
+        Thanks for sharing an idea. Check the [product specification](https://github.com/tommcamm/LocalPIN/blob/main/docs/product-specification.md) and [implementation plan](https://github.com/tommcamm/LocalPIN/blob/main/docs/implementation-plan.md) for existing scope and open work.
+        LocalPIN currently targets existing Fedora KDE sessions and remains experimental. Planned behavior is not a supported feature. Use the [security policy](https://github.com/tommcamm/LocalPIN/security) for suspected vulnerabilities.
   - type: textarea
     id: problem
     attributes:
       label: Problem or use case
-      description: Explain who needs this and what they are trying to do.
+      description: Explain who needs this and what they are trying to do. Include the relevant desktop, account setup, or administration workflow without sharing private account data.
     validations:
       required: true
   - type: textarea
@@ -24,4 +25,4 @@ body:
     id: scope
     attributes:
       label: Scope and validation
-      description: Note relevant specification requirements, milestones, platform constraints, and how success could be demonstrated.
+      description: Note relevant specification requirements, platform constraints, effects on password fallback or recovery, and how success could be demonstrated safely.

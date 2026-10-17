@@ -1,7 +1,7 @@
 # LocalPIN implementation plan
 
 - Date: 2026-10-17
-- Status: M0–M8 implemented with historical appliance acceptance; M8.1 final source checks and targeted installed RPM acceptance passed on Fedora KDE 44 x86_64 with SELinux enforcing and a private TPM emulator. The [M8.1 report](development/m8.1-desktop-compatibility.md) records evidence and each installed case's build scope. GUI/DBus AccountsService, full old-TPM-credential migration and physical hardware remain unvalidated. M9 independent human/specialist review and release gates remain open; hosted CI execution remains unverified.
+- Status: M0–M8 implemented with historical appliance acceptance; M8.1 final source checks and targeted installed RPM acceptance passed on Fedora KDE 44 x86_64 with SELinux enforcing and a private TPM emulator. The [M8.1 report](development/m8.1-desktop-compatibility.md) records evidence and each installed case's build scope. GUI/DBus AccountsService, full old-TPM-credential migration and physical hardware remain unvalidated. M9 independent human/specialist review and release gates remain open. [Hosted CI at baseline `a066099`](https://github.com/tommcamm/LocalPIN/actions/runs/39042452799) failed Ubuntu native PAM loading and the Fedora RPM runtime-package input check; recorded local/VM acceptance is separate.
 - Source of requirements: [product-specification.md](product-specification.md), version 1.5. ADR 0017 replaces the frozen lifecycle domain with native shadow-record markers and locking; ADR 0018 defines KDE/native-update compatibility.
 
 
@@ -459,13 +459,13 @@ These are engineering decisions to investigate, not unanswered user-preference q
 
 ## Git and GitHub workflow
 
-Use one repository and a simple `main` plus short-lived branches workflow. A long-lived `develop` branch adds no value for this personal project.
+Use [tommcamm/LocalPIN](https://github.com/tommcamm/LocalPIN) with `main` and short-lived branches. Every change, including documentation and configuration, must go through its own branch and a pull request for maintainer review. Do not commit or push development changes directly to `main`. [CONTRIBUTING.md](../CONTRIBUTING.md) describes the current contributor workflow.
 
-1. Start with `git init -b main`. Commit only the reviewed specification as the baseline, then the roadmap, then repository/toolchain foundations in distinct commits. Use the maintainer's existing Git identity; do not invent one or change global settings.
-2. Use one branch per coherent change, for example `chore/repository-foundation`, `spike/fedora-pam-fallback`, `feat/durable-throttle`, or `feat/tpm-backend`. A milestone can require several small branches/PRs.
+1. Start a dedicated branch from the latest `main`. Use the maintainer's existing Git identity; do not invent one or change global settings.
+2. Use one branch per coherent change, for example `docs/recovery-guide`, `fix/frame-limit`, or `feat/tpm-backend`. A milestone can require several small branches/PRs. Address review feedback on the same unmerged branch.
 3. Make focused commits that include the relevant tests and documentation. Example subjects: `feat(storage): reserve attempts durably` and `test(pam): cover six-digit password fallback`. Record what was actually tested, including environment limitations.
 4. Review diffs before staging; stage explicit paths. Keep real credentials, state directories, PAM backups, private keys, core files, simulator secrets and machine-identifying debug logs out of history. Test fixtures must be synthetic and clearly labeled.
-5. After the GitHub repository is deliberately created, add the confirmed remote, open PRs into `main`, and require available CI checks. Review the full diff even as a solo maintainer; obtain specialist review for the sensitive boundaries. Prefer squash merge for exploratory branches and a clear final PR description.
+5. Push the branch and open a PR targeting `main` with actual validation results and remaining limits. Leave it open for maintainer review and approval; do not merge without explicit maintainer instruction. Review the full diff and hosted CI results, and obtain specialist review for sensitive boundaries.
 6. Rebase only unpublished personal work as appropriate; do not rewrite shared `main` or published release tags. Fix published mistakes through corrective commits and follow the documented credential-response process if a secret ever enters history.
 7. Use annotated version tags, changelog entries, signed release packages, checksums, dependency/SBOM records and a release checklist. Keep release secrets out of pull-request CI and use a separately controlled signing/release step.
 
@@ -494,8 +494,11 @@ RPM, desktop, reboot and recovery matrix passed for that same restricted domain.
 The [M8.1 report](development/m8.1-desktop-compatibility.md) supplies fresh
 targeted installed evidence for the current account/KDE/update architecture,
 including passed final source checks and targeted final RPM acceptance. M9 retains independent review, missing
-administration/migration coverage and physical hardware/release gates; hosted
-CI execution remains unverified.
+administration/migration coverage and physical hardware/release gates. The
+[baseline hosted run](https://github.com/tommcamm/LocalPIN/actions/runs/39042452799)
+failed Ubuntu PAM loading and Fedora RPM input checks. Consult
+[GitHub Actions](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml)
+for subsequent results; local and installed evidence does not imply passing CI.
 
 No calendar estimate is committed before the feasibility work. Subsequent estimates should use measured test infrastructure effort and availability of independent review/hardware, with review and recovery work included in the schedule.
 

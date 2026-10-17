@@ -1,14 +1,20 @@
 # Build inputs and dependency policy
 
-The historical M3 baseline had three workspace members: `localpin-core`, `localpin-protocol`, and
-`localpin-storage`. The direct third-party Rust dependencies are `zeroize` and
-`rustix`; the committed lockfile contains eight third-party crates including
-target-specific inputs. There are no native PAM, TPM2-TSS, systemd, or KDF
-requirements in the production Rust graph yet. Select those inputs when their
-milestones introduce them; the specification's machine inventory is not a
-dependency pin. The isolated M1 experiments remain separate.
+The current workspace has nine crates covering policy, IPC, protected storage,
+software and TPM credentials, the broker, password/eligibility workers, CLI, and
+PAM adapter. Native builds require TPM2-TSS 4.x and libdbus development libraries,
+`pkg-config`, and a C compiler. Native PAM integration and installed packaging
+have additional runtime and validation inputs; see the
+[contribution guide](../../CONTRIBUTING.md#validation) and
+[Fedora packaging guide](../../packaging/fedora/README.md).
 
-## Current inputs
+The exact Rust graph is committed in `Cargo.lock`. This inventory keeps the
+milestone-specific dependency reviews below as historical evidence; their crate
+counts, measurements, and version observations describe the recorded baseline.
+The specification's machine inventory is not a dependency pin. Isolated M1
+experiment inputs remain separate from production dependencies.
+
+## Shared build inputs
 
 | Input | Selection | Purpose |
 | --- | --- | --- |
