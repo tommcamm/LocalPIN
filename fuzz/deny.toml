@@ -1,0 +1,34 @@
+# Separate development-only graph; production policy remains ../deny.toml.
+[graph]
+all-features = true
+
+[advisories]
+db-urls = ["https://github.com/RustSec/advisory-db"]
+yanked = "deny"
+unmaintained = "all"
+unsound = "all"
+ignore = []
+
+[licenses]
+allow = ["MIT", "Apache-2.0"]
+confidence-threshold = 0.95
+
+[licenses.private]
+ignore = false
+
+# Published wrapper metadata requires NCSA in addition to MIT/Apache-2.0.
+# Bundled LLVM source headers also retain Apache-2.0 WITH LLVM-exception.
+[[licenses.exceptions]]
+name = "libfuzzer-sys"
+version = "=0.4.13"
+allow = ["NCSA", "Apache-2.0 WITH LLVM-exception"]
+
+[bans]
+multiple-versions = "deny"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

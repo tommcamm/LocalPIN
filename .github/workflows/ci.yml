@@ -74,7 +74,9 @@ jobs:
       - name: Install the pinned dependency checker
         run: cargo install cargo-deny --version 0.20.2 --locked
       - name: Check advisories, licenses, bans, and sources
-        run: cargo deny --locked check advisories licenses bans sources
+        run: |
+          cargo deny --locked check advisories licenses bans sources
+          cargo deny --manifest-path fuzz/Cargo.toml --config fuzz/deny.toml --locked check advisories licenses bans sources
 
   fedora:
     name: Fedora 44 x86_64

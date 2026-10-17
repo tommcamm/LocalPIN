@@ -44,7 +44,7 @@ are separate evidence.
 | Formatting, Clippy and locked release build | Passed on the production toolchain. |
 | Full workspace, all features | 324 passed, 10 opt-in tests ignored; the separate native runners below cover applicable opt-ins. Zero-test harnesses are not counted as test cases. |
 | Deterministic M9 models/campaigns | Workspace tests include all 38,416 verification traces, record mutations and stream partition/canonicalization checks. These remain separate from coverage-guided fuzzing. |
-| cargo-deny 0.20.2 | Advisories, licenses, bans and sources passed after advisory refresh against the production lockfile. |
+| cargo-deny 0.20.2 | Advisories, licenses, bans and sources passed after advisory refresh for both the production graph and the separately reviewed fuzz graph. The test runtime's NCSA/LLVM exception is isolated in fuzz/deny.toml. |
 | Synthetic administration/release/VM guards | 72 integration, 50 release-policy and 21 topology-guard tests passed. Packaging assertions and SELinux policy compilation passed without installation or policy loading. |
 | Native PAM ABI | Fedora layouts, exports and null-handle rejection passed; no host authentication handle was created. |
 | Isolated production PAM adapter | Passed candidate-byte preservation, repeated handles, callback errors, fallback, unavailable broker cases, real synthetic pam_unix/faillock accounting, locked and expired accounts. |

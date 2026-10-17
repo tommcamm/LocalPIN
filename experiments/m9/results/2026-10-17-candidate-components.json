@@ -450,6 +450,28 @@
       "exit_code": 0,
       "passed": 1,
       "log_sha256": "31a12cac1a3da265cef436fb5bf12f0c59eb25551fcd9617eb869d7f8f82e914"
+    },
+    {
+      "name": "fuzz-dependencies",
+      "command": [
+        "cargo",
+        "deny",
+        "--manifest-path",
+        "fuzz/Cargo.toml",
+        "--config",
+        "fuzz/deny.toml",
+        "--locked",
+        "check",
+        "advisories",
+        "licenses",
+        "bans",
+        "sources"
+      ],
+      "exit_code": 0,
+      "tool": "cargo-deny 0.20.2",
+      "policy_sha256": "80a0c96eef0acc2b173cc672a6bf9fff902becc7f0ed856d12d89a08e286acb6",
+      "log_sha256": "f1a0fca39d4280363937aabd77783990ea6480bd9ca257816de3b68fc8efa845",
+      "scope": "Separate test-only graph; production policy unchanged. Declared NCSA and bundled LLVM notices reviewed for libfuzzer-sys 0.4.13."
     }
   ],
   "retained_failures": [
@@ -481,6 +503,12 @@
       "result": "invalid invocation without required Rust test executable; no private prompt",
       "original_log_sha256": "4cc6c0c1303850da4aade1ae83f39233cf04b012a5a198f659a321b87b35f713",
       "disposition": "correct Cargo entry passed; not a product defect"
+    },
+    {
+      "name": "fuzz-initial-production-license-policy",
+      "result": "Production policy rejected libfuzzer-sys declared NCSA license; advisory/bans/source checks passed",
+      "original_log_sha256": "d77f2464b02d3de94618dca08ca5b9784bd72fb036df0a02e3673fa052f2c62f",
+      "disposition": "Reviewed testing-only dependency notices and added a separate version-scoped fuzz policy; final separate graph check passed. Production policy unchanged."
     }
   ],
   "fuzz": {
