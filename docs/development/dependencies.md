@@ -27,7 +27,7 @@ experiment inputs remain separate from production dependencies.
 | GitHub checkout action | `v7.0.1` at `3d3c42e5aac5ba805825da76410c181273ba90b1` | Fetch the source without retaining checkout credentials |
 | GitHub artifact upload action | `v7.0.2` at `cf430e030ddbb5b0abf93d22962f4752f3646cd9` | Publish unsigned Fedora testing RPMs, build metadata, and checksums with 14-day retention |
 | Linux CI environments | GitHub `ubuntu-24.04`; official `fedora:44` container on x86_64 | General quality checks and a separate Fedora build/test job |
-| Release tools | Fedora 44 `rpm-sign`, `gnupg2`, `gh` and Python standard library | Separate manual experimental publication; optional OpenPGP signing uses protected environment secrets and temporary keyrings |
+| Release tools | Fedora 44 `rpm-sign`, `gnupg2`, `gh` and Python standard library | Separate manual experimental publication; required OpenPGP signing and verification use protected environment secrets and temporary keyrings |
 
 Toolchain and dependency versions belong in their authoritative files. Keep the
 toolchain's `channel` an exact release, and update the workspace minimum version

@@ -1,7 +1,7 @@
 # Experimental Fedora releases
 
 The [Experimental release workflow](../.github/workflows/release.yml) creates a
-versioned GitHub prerelease with a native Fedora KDE 44 x86_64 RPM. M9 is in
+versioned GitHub prerelease with a signed native Fedora KDE 44 x86_64 RPM. M9 is in
 progress: independent specialist review, physical hardware validation and the
 other [readiness gates](development/m9-release-readiness.md) remain open. The
 workflow refuses stable versions. Publishing a prerelease does not close M9.
@@ -14,17 +14,18 @@ After the release workflow is reviewed and merged into `main`:
    initial version is `0.1.0-alpha.1`; a new release needs a new version committed
    through a PR, including workspace dependency versions and `Cargo.lock` where
    applicable. Only `alpha.N`, `beta.N` and `rc.N` versions are accepted.
-2. Open **Actions → Experimental release → Run workflow**, select **main**, and
-   choose whether to sign the RPM. Leave signing unchecked until the environment
-   below is configured. No tag input is needed: the job derives
+2. Configure the `release` environment's signing credentials below before the
+   first release. Open **Actions → Experimental release → Run workflow**, select
+   **main**, and run it. Signing is required for every release; there is no
+   signing toggle. No tag input is needed: the job derives
    `v0.1.0-alpha.1` from the committed version and builds the dispatched commit.
 3. The job reruns the complete CI workflow, then tests the shipping default
    feature set and builds a fresh RPM in Fedora 44. It does not install or
    activate LocalPIN. All checks must pass before publication is possible.
 4. Approve the `release` environment if its protection rules require it. The
-   separate publication job optionally signs, verifies checksums, creates an
-   annotated tag at the tested commit, uploads all assets to a draft, then
-   publishes it as an experimental prerelease with `latest=false`.
+   separate publication job signs the RPM and checksums, verifies their
+   signatures, creates an annotated tag at the tested commit, uploads all assets
+   to a draft, then publishes it as an experimental prerelease with `latest=false`.
 
 The workflow has no push/tag trigger and accepts dispatches only from `main`.
 Build/check jobs have read-only repository access and no signing secrets. Only
@@ -45,7 +46,7 @@ Each release contains:
   installed native builder RPM inventory. Development/build inputs can appear;
   this is not a minimal runtime closure or independent license review.
 - `NATIVE-RPMS.json`, release notes and `SHA256SUMS`.
-- For signed runs, `RPM-GPG-KEY-LocalPIN` and `SHA256SUMS.asc`.
+- `RPM-GPG-KEY-LocalPIN` and the detached checksum signature `SHA256SUMS.asc`.
 
 The initial RPM release is `0.1.alpha1.release.fc44`, above the same-version
 `0.1.alpha1.ci.*` testing packages in RPM ordering. Subsequent alpha versions use
@@ -63,9 +64,11 @@ are not yet certified reproducible builds.
 
 ## Configure RPM signing
 
-Supported releases require signed RPMs under the project specification and M9
-plan. Unsigned experimental builds remain useful for isolated testing. SHA256
-checksums detect changed downloads; they do not authenticate the publisher.
+Every experimental GitHub prerelease requires verified OpenPGP signatures on
+the RPM and checksum file. Supported releases also require signed RPMs under the
+project specification and M9 plan. Ordinary CI testing artifacts remain unsigned
+and separate from releases. SHA256 checksums detect changed downloads; they do
+not authenticate the publisher.
 An RPM OpenPGP signature authenticates a package to a separately trusted key;
 it does not establish that the software passed independent review. GitHub build
 attestations, if added later, would be additional provenance rather than an RPM
@@ -90,10 +93,12 @@ it. Put signing credentials in this environment, never repository-wide PR CI:
 
 An encrypted, dedicated key is preferable. The passphrase and key are both
 available to an approved signing job, so environment access and workflow review
-remain part of the trust boundary. If signing is selected and key setup or
-signature verification fails, the job stops; it never falls back to publishing
-an unsigned RPM. It hashes the final signed package and updates the SBOM digest
-before signing the checksum file. The embedded `BUILD-INPUTS.json` intentionally
+remain part of the trust boundary. If key setup or signature verification fails,
+the job stops before creating a tag or release; it never falls back to publishing
+an unsigned RPM. Publication independently requires a signed bundle and verifies
+both signatures before making changes on GitHub. The signing job hashes the
+final signed package and updates the SBOM digest before signing the checksum
+file. The embedded `BUILD-INPUTS.json` intentionally
 keeps `signed: false` because it describes the pre-sign build;
 `RELEASE.json.signing` describes the final distributed RPM.
 
@@ -105,8 +110,8 @@ No maintainer signing identity or environment secrets are created by this change
 ## Verify and test a download
 
 Download assets from the intended tagged prerelease and read `RELEASE.json`.
-For a signed release, first compare the public key's full fingerprint with the
-maintainer's separately trusted fingerprint:
+Its signing status must be `true`. First compare the public key's full
+fingerprint with the maintainer's separately trusted fingerprint:
 
 ```sh
 gpg --show-keys --with-fingerprint RPM-GPG-KEY-LocalPIN
@@ -116,10 +121,6 @@ sha256sum --check SHA256SUMS
 sudo rpmkeys --import RPM-GPG-KEY-LocalPIN
 rpmkeys --checksig --verbose ./localpin-*.x86_64.rpm
 ```
-
-For an unsigned experimental release, verify `SHA256SUMS` and explicitly retain
-the unsigned status in the test report. Do not describe checksums as a signature
-or bypass a machine's package-signature policy to install it.
 
 Use a disposable Fedora KDE 44 VM with SELinux enforcing and a recoverable
 snapshot first. Installation leaves the broker stopped and integration disabled.
@@ -136,5 +137,5 @@ Complete the [M9 checklist](development/m9-release-readiness.md), resolve blocki
 findings, freeze record/protocol contracts, establish a maintained private
 reporting channel and supported-version policy, and obtain independent review
 and final-candidate physical acceptance. Then review a separate change enabling
-supported releases and enforcing those evidence/signing gates. Checking a
-workflow input cannot substitute for those requirements.
+supported releases and enforcing those evidence gates. A successful signed
+prerelease cannot substitute for those requirements.

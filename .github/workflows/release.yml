@@ -2,11 +2,6 @@ name: Experimental release
 
 on:
   workflow_dispatch:
-    inputs:
-      sign_rpm:
-        description: Sign with the release environment's OpenPGP key (requires setup)
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -113,7 +108,6 @@ jobs:
           cd "$RUNNER_TEMP/release"
           sha256sum --check SHA256SUMS
       - name: Sign and verify the RPM with the configured release key
-        if: inputs.sign_rpm
         env:
           LOCALPIN_SIGNING_KEY: ${{ secrets.RPM_SIGNING_KEY }}
           LOCALPIN_SIGNING_PASSPHRASE: ${{ secrets.RPM_SIGNING_PASSPHRASE }}

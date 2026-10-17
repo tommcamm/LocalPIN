@@ -1,6 +1,7 @@
 # Fedora package and confinement contract
 
-This is an experimental, project-distributed, unsigned Fedora KDE 44 x86_64 RPM.
+This is an experimental, project-distributed Fedora KDE 44 x86_64 RPM. Versioned
+GitHub prereleases are signed; ordinary CI testing artifacts remain unsigned.
 The current M8.1 implementation supports ordinary local account administration
 and stable native PAM package updates through [ADR 0017](../../docs/adr/0017-shadow-record-account-authority.md)
 and [ADR 0018](../../docs/adr/0018-kde-native-update-compatibility.md). Historical
@@ -26,8 +27,9 @@ package builds do not extend the recorded installed evidence.
 The maintainer can run the [manual release workflow](../../docs/releasing.md)
 from `main` to build the current version and create a tagged GitHub prerelease.
 It reruns CI and includes source, an SPDX dependency inventory, provenance and
-checksums, with optional protected OpenPGP signing. Supported stable releases
-remain gated on independent M9 review and hardware acceptance.
+checksums, with required verified OpenPGP signing in the protected release
+environment. Supported stable releases remain gated on independent M9 review
+and hardware acceptance.
 
 ## Download a CI testing RPM
 

@@ -144,7 +144,7 @@ def spdx(metadata, lock, native, runtime_inputs, *, version, commit, created, rp
 
 
 def finalize(output):
-    """Refresh the final RPM digest and checksums after optional RPM signing."""
+    """Refresh the final RPM digest and checksums after RPM signing."""
     output = Path(output)
     files = list(output.iterdir())
     if any(path.is_symlink() or not path.is_file() for path in files):
