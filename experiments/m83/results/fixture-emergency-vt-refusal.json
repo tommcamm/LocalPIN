@@ -1,0 +1,12 @@
+{
+  "phase": "emergency-console-observer-vt-refusal",
+  "passed": false,
+  "candidate": "0.1.0-0.1.alpha1.vm83.11.fc44",
+  "fixture_only": true,
+  "actual_root_password_login_succeeded": true,
+  "observer_expected_tty": "tty1",
+  "actual_root_controlling_tty_verified": "tty2",
+  "observer_refused_before_recovery_or_product_mutation": true,
+  "only_observer_expected_vt_corrected_before_retry": true,
+  "no_additional_password_attempt_or_counter_reset": true
+}

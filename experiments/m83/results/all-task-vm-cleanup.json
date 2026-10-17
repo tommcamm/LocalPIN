@@ -1,0 +1,11 @@
+{
+  "phase": "all-task-vm-cleanup",
+  "passed": true,
+  "all_task_clone_domains_and_independent_disks_removed": true,
+  "all_task_private_emulators_removed_by_libvirt_undefine": true,
+  "all_failed_task_saved_ram_archives_and_raw_journals_removed": true,
+  "all_temporary_keys_and_synthetic_root_recovery_secrets_removed": true,
+  "no_task_cleanup_storage_pool_retained": true,
+  "original_vm_identity_preserved_and_off": true,
+  "host_authentication_and_physical_tpm_never_used_as_fixtures": true
+}

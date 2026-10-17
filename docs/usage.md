@@ -28,10 +28,14 @@ system changes, and guides private PIN enrollment, trial tests, console recovery
 and final activation. Sudo owns any administrator-password prompt; enrollment
 separately verifies your account password through the existing broker.
 
-The one-time persistent password-accounting migration still requires an
-[offline maintenance console](integration-administration.md#prepare-native-accounting-once).
-Setup explains the handoff and stops when accounting is missing. It does not
-copy live tallies or reset counters. The target requires supported local
+The one-time persistent password-accounting migration can be started by setup
+on a supported fresh installation. Save all work before approving maintenance:
+it signs out sessions and temporarily stops authentication, preserves existing
+failure counters, and returns to password login. Setup opens again after login;
+you can also run `localpin setup` yourself. It does not copy live tallies or reset
+counters. Unsupported or interrupted maintenance requires the
+[administrator procedure](integration-administration.md#prepare-native-accounting-once).
+The target requires supported local
 accounts, reviewed Fedora authentication policy and SELinux enforcing. Network
 accounts, systemd-homed and arbitrary PAM customizations are outside this domain.
 The guided flow supports one owner account; installations managing additional

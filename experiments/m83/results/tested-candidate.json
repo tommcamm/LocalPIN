@@ -1,0 +1,24 @@
+{
+  "candidate": "0.1.0-0.1.alpha1.vm83.5.fc44",
+  "rpm_sha256": "54cf63b75af0bf0a59afcccd4ada7f362af1a2c0a3be4e69dfe73d6d02b14196",
+  "source_archive_sha256": "7467c9fe210b58e091c411dc8576a0e94e6d74f83245ee13cc899ca673e011d6",
+  "runtime_sha256": {
+    "tools/localpin-accounting.py": "dd16f0a36f84183f710db4c9be92904f5da90ecd3a5d126feeceb2b943611897",
+    "tools/localpin-integration.py": "8e46281735102ec560d2248767f577a429a3e0bd16080f4a89567b8967dc7d7e",
+    "tools/localpin-setup-resume": "b7c253f5519d395340894c1666892243dc99826895627c32385dbb0779ae98ce",
+    "crates/localpinctl/src/admin.rs": "e0e424133210c2e71441a3c6f99b0150cb1e587af25d7342be1e872bee0744c3",
+    "crates/localpinctl/src/setup.rs": "bb2630466e5199f5610e2dde87147f1eb092c95d714ac2e6a49a1b09fdd86bff",
+    "packaging/fedora/localpin-accounting.service": "90ef7ee7ab6dee1cafa916284a1323c25c38565f558d85f9b81663625c7df027",
+    "packaging/fedora/localpin-accounting-delay.service": "0f2f10fe7fbfbc65204b07d06015b0d1f95a78d993a192dbb7189aa46ccbf025",
+    "packaging/fedora/localpin-accounting-guard.service": "280e7f94fcb0e78dc17fca5f212729d3bafda38cfffc54f15ac49b5864d6faec",
+    "packaging/fedora/localpin-accounting.target": "6a2471bb832dea9da6975e5a8d2abd0b8175320b0a8f1354ae4f188062768e01",
+    "packaging/fedora/localpinmaintenance.slice": "9bbe5dbec486e953f0fa64e40e291eba39c77a9c1400c8e2d20b0c0bff9ccb1b",
+    "packaging/fedora/localpin-setup.desktop": "caa50030b029719f6000332029d0ba2999d1983e7da54fac3b2b1436112502f4",
+    "packaging/fedora/selinux/localpin.fc": "6fae55d6b78bd0d034901a396f524279070728d155110eb80f468e56f22e9a9a"
+  },
+  "private_emulated_tpm": true,
+  "physical_tpm_tested": false,
+  "matched_source_when_built": true,
+  "scope": "Candidate 5 matched the source snapshot used to build it; the final candidate changes the accounting watchdog to inherited pidfd signaling.",
+  "final_candidate_comparison": "final-candidate.json"
+}

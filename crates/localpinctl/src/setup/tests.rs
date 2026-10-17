@@ -71,6 +71,7 @@ impl Host for Fake {
         match operation {
             Operation::Preview => return Ok(Some("synthetic policy diff".to_owned())),
             Operation::Prepare => self.state = report(Phase::Prepared, false, false),
+            Operation::PrepareAccounting => self.state.blocker = Blocker::AccountingMaintenance,
             Operation::Trial => self.state = report(Phase::Prepared, true, true),
             Operation::RecordTests => self.state.tests_recorded = true,
             Operation::Activate => {
@@ -282,7 +283,7 @@ fn active_reenrollment_requires_fresh_active_enrollment_and_broker_readiness() {
 #[test]
 fn every_blocker_stops_before_any_mutation() {
     for blocker in [
-        Blocker::Accounting,
+        Blocker::AccountingMaintenance,
         Blocker::Multiuser,
         Blocker::Recovery,
         Blocker::Policy,
@@ -295,6 +296,97 @@ fn every_blocker_stops_before_any_mutation() {
         assert!(host.actions.is_empty());
         assert!(host.backends.is_empty());
         assert!(ui.contains("Guide:"));
+    }
+}
+
+#[test]
+fn accounting_maintenance_requires_explicit_logout_approval_and_exits_before_enrollment() {
+    let mut state = report(Phase::Unprepared, false, false);
+    state.blocker = Blocker::Accounting;
+    let mut host = Fake::new(state);
+    let mut ui = Script::new(&[0, 0]);
+    drive(&mut host, &mut ui).unwrap();
+    assert_eq!(host.actions, [Operation::PrepareAccounting]);
+    assert!(host.backends.is_empty());
+    assert_eq!(host.inspections, 1);
+    assert!(ui.contains("Save your work"));
+    assert!(ui.contains("log out all users"));
+    assert!(ui.contains("stop running services and background jobs"));
+    assert!(ui.contains("background jobs may need restarting"));
+    assert!(ui.contains("full account password"));
+    assert!(ui.contains("setup will reopen automatically"));
+    assert!(!ui.contains("LocalPIN is active"));
+    assert!(ui.answers.is_empty());
+}
+
+#[test]
+fn declining_or_cancelling_accounting_maintenance_never_schedules_or_enrolls() {
+    for cancel in [false, true] {
+        let mut state = report(Phase::Unprepared, false, false);
+        state.blocker = Blocker::Accounting;
+        let mut host = Fake::new(state.clone());
+        let mut ui = Script::new(if cancel { &[0] } else { &[0, 1] });
+        if cancel {
+            ui.answers.push_back(Err(CliError::Cancelled));
+        }
+        assert_eq!(
+            drive(&mut host, &mut ui),
+            if cancel {
+                Err(CliError::Cancelled)
+            } else {
+                Ok(())
+            }
+        );
+        assert!(host.actions.is_empty());
+        assert!(host.backends.is_empty());
+        assert_eq!(host.state, state);
+        assert!(!ui.contains("maintenance is scheduled"));
+    }
+}
+
+#[test]
+fn failed_scheduling_is_not_retried_or_reported_as_success() {
+    let mut state = report(Phase::Unprepared, false, false);
+    state.blocker = Blocker::Accounting;
+    let mut host = Fake::new(state);
+    host.fail = Some(Operation::PrepareAccounting);
+    let mut ui = Script::new(&[0, 0]);
+    assert_eq!(drive(&mut host, &mut ui), Err(CliError::Administrator));
+    assert_eq!(host.actions, [Operation::PrepareAccounting]);
+    assert!(host.backends.is_empty());
+    assert!(!ui.contains("maintenance is scheduled"));
+}
+
+#[test]
+fn accounting_on_existing_or_ambiguous_state_is_an_administrator_handoff() {
+    for mut state in [
+        report(Phase::Disabled, false, false),
+        report(Phase::Prepared, true, true),
+        report(Phase::Unknown, false, false),
+        report(Phase::Unprepared, true, false),
+    ] {
+        state.blocker = Blocker::Accounting;
+        let mut host = Fake::new(state);
+        let mut ui = Script::new(&[0]);
+        assert_eq!(drive(&mut host, &mut ui), Err(CliError::SetupBlocked));
+        assert!(host.actions.is_empty());
+        assert!(host.backends.is_empty());
+    }
+}
+
+#[test]
+fn scheduling_response_is_exact_and_must_confirm_the_handoff() {
+    assert_eq!(accounting_scheduled(br#"{"scheduled":true}"#), Ok(()));
+    for bytes in [
+        br#"{"scheduled":false}"#.as_slice(),
+        br#"{"scheduled":"true"}"#,
+        br#"{"scheduled":true,"extra":0}"#,
+        br#"{"scheduled":true,"scheduled":true}"#,
+        br#"{}"#,
+        br#"null"#,
+        br#"invalid"#,
+    ] {
+        assert_eq!(accounting_scheduled(bytes), Err(CliError::SetupReport));
     }
 }
 

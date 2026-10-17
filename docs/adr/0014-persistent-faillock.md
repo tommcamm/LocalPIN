@@ -82,8 +82,11 @@ hardlinks, unexpected access/default ACLs, malformed records and conflicting
 destinations; never reset or select a smaller tally. Synchronize copies before
 the atomic configuration switch and restore distribution labels.
 
-This is an administrator-reviewed maintenance step with interruption evidence,
-not an expansion of eligible production metadata or an automatic repair. The
+This is an administrator-approved maintenance step with interruption evidence,
+not an expansion of eligible production metadata or an automatic repair.
+[ADR 0020](0020-setup-accounting-maintenance.md) lets the guided CLI schedule a
+fixed offline service for supported fresh installations after explicit sign-out
+approval. Provisioning and eligibility still cannot perform this conversion. The
 M8.2 fixture requires an explicit canonicalization option when a primary-group
 source needs conversion; its exact before/after snapshots remain guest-private.
 Successful source checks alone do not establish the new installed migration

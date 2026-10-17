@@ -1,0 +1,36 @@
+{
+  "account_password_prompt_count": 1,
+  "case": "final-activation",
+  "complete": true,
+  "evr": "0.1.0-0.1.alpha1.vm83.5.fc44",
+  "exit_code": 0,
+  "messages": {
+    "account_unavailable": false,
+    "accounting_handoff": false,
+    "activated": true,
+    "active_new_pin_ready": false,
+    "active_noop": false,
+    "administrator_recovery_required": false,
+    "console_recovery_handoff": false,
+    "enrollment_retained": false,
+    "paused": false,
+    "trial_changed": false
+  },
+  "mode": "setup",
+  "passed": true,
+  "phase": "m82-wizard-finish",
+  "program": "localpin",
+  "prompt": {
+    "answers": [],
+    "id": null,
+    "kind": "exited"
+  },
+  "raw_transcript_guest_root_only": true,
+  "runner_sha256": "5dcca2a4ef165c4e882cd03b28e5b7d09852659efdc5d189a8056d48a2c5793c",
+  "secret_echo_absent": true,
+  "selinux": "Enforcing",
+  "sudo_password_prompt_count": 1,
+  "transcript_bytes": 3918,
+  "observed_utc": "2026-10-17T21:33:02.294556+00:00",
+  "candidate": "0.1.0-0.1.alpha1.vm83.5.fc44"
+}

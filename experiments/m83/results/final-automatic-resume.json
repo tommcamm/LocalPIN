@@ -1,0 +1,15 @@
+{
+  "phase": "final-automatic-resume",
+  "passed": true,
+  "candidate": "0.1.0-0.1.alpha1.vm83.11.fc44",
+  "actual_full_password_display_manager_login": true,
+  "shipped_autostart_opened_actual_installed_setup_in_konsole": true,
+  "fresh_elevated_readiness_check_reached_apply_preparation": true,
+  "sudo_password_prompt_count": 0,
+  "secret_echo_absent": true,
+  "owner_user_manager_bus_and_delegate_subgroup_healthy": true,
+  "no_manual_user_service_repair_after_final_candidate_migration": true,
+  "no_pin_or_account_authority_created": true,
+  "original_nonowner_native_failure_history_preserved": true,
+  "selinux": "Enforcing"
+}

@@ -1,0 +1,19 @@
+{
+  "phase": "post-recovery-owner-user-manager-start-failure",
+  "passed": false,
+  "candidate": "0.1.0-0.1.alpha1.vm83.10.fc44",
+  "actual_full_password_display_manager_login_and_plasma_desktop": true,
+  "user_manager_state": "failed",
+  "user_manager_result": "resources",
+  "fixed_pid1_error": "Failed to spawn executor: No such file or directory",
+  "owner_user_bus_absent": true,
+  "owner_user_manager_cgroup_empty_and_thawed": true,
+  "root_user_manager_active_from_same_template": true,
+  "installed_executor_exists_and_pid1_executor_fd_present": true,
+  "journald_active_and_stdout_socket_present": true,
+  "normal_setup_retry_not_started": true,
+  "no_native_counter_reset_or_administrative_service_repair": true,
+  "required_owner_delegate_subgroup": "init.scope",
+  "required_owner_delegate_subgroup_absent": true,
+  "active_root_manager_same_delegate_subgroup_present": true
+}

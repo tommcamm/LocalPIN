@@ -1,0 +1,19 @@
+{
+  "phase": "pin",
+  "passed": true,
+  "selinux": "Enforcing",
+  "observations": {
+    "unlocked": true,
+    "enter_required_observed": true,
+    "locked_before_enter": true,
+    "unlock_elapsed_seconds": 0.867,
+    "before_enter_tally": {
+      "bytes": 0
+    },
+    "after_tally": {
+      "bytes": 0
+    },
+    "native_password_tally_unchanged": true
+  },
+  "candidate": "0.1.0-0.1.alpha1.vm83.5.fc44"
+}

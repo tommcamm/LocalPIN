@@ -1,0 +1,10 @@
+{
+  "phase": "pending-request-clone-cleanup",
+  "passed": true,
+  "candidate": "0.1.0-0.1.alpha1.vm83.11.fc44",
+  "intentionally_unrecovered_task_clone_disposed_after_guard_refusal": true,
+  "task_domain_independent_disk_private_emulator_removed": true,
+  "temporary_keys_and_synthetic_root_recovery_secret_removed": true,
+  "no_native_authority_reset_or_force_erase": true,
+  "original_vm_remains_defined_and_off": true
+}

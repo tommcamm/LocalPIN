@@ -1,0 +1,20 @@
+{
+  "phase": "resumed-wizard-observation",
+  "passed": true,
+  "prompt": {
+    "id": "readiness",
+    "kind": "choice",
+    "answers": {
+      "1": "yes",
+      "2": "pause",
+      "q": "cancel"
+    }
+  },
+  "sudo_password_prompt_count": 0,
+  "account_password_prompt_count": 0,
+  "actual_konsole": true,
+  "actual_installed_setup_process": true,
+  "candidate": "0.1.0-0.1.alpha1.vm83.5.fc44",
+  "actual_full_password_display_manager_login": true,
+  "shipped_autostart_opened_setup_without_manual_restart": true
+}

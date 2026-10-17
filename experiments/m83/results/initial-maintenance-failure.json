@@ -1,0 +1,17 @@
+{
+  "phase": "observed-maintenance-failure",
+  "passed": false,
+  "candidate": "0.1.0-0.1.alpha1.vm83.3.fc44",
+  "durable_phase": "quiescing",
+  "barrier_record_present": false,
+  "source_snapshot_count": 0,
+  "same_boot_volatile_memory_preserved_in_managed_save": true,
+  "original_vm_off": true,
+  "stock_emergency_root_locked": true,
+  "failure_reason_available": false,
+  "raw_journal_exported": false,
+  "guest_agent_unavailable_after_isolation": true,
+  "synthetic_offline_root_fixture_created_later": true,
+  "restored_memory_retained_cached_locked_root": true,
+  "no_root_password_attempt_sent": true
+}

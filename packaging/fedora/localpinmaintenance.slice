@@ -1,0 +1,6 @@
+[Unit]
+Description=Independent LocalPIN accounting maintenance boundary
+DefaultDependencies=no
+IgnoreOnIsolate=yes
+
+[Slice]

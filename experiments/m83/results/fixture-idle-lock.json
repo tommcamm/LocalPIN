@@ -1,0 +1,15 @@
+{
+  "phase": "fixture-idle-lock",
+  "passed": false,
+  "candidate": "0.1.0-0.1.alpha1.vm83.9.fc44",
+  "product_maintenance_requested": false,
+  "isolation_performed": false,
+  "driver_stopped_at_unchanged_readiness": true,
+  "native_kde_failure_events_observed": 2,
+  "owner_volatile_tally_present": false,
+  "counter_reset_performed": false,
+  "actual_password_unlock_after_diagnosis": true,
+  "original_case_cancelled_before_restart": true,
+  "cancellation_exit_code": 130,
+  "correction": "Require an unlocked desktop before start, prompt observation and every graphical keyboard input."
+}

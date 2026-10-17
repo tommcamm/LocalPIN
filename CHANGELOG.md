@@ -8,13 +8,18 @@ experimental builds.
 
 ### Added
 
+- Setup-managed same-boot persistent-accounting maintenance for supported fresh
+  Fedora KDE installations, with explicit sign-out approval, counter-preserving
+  copies, protected interruption state and automatic setup resumption after
+  password login. Real unlock/recovery tests and explicit activation remain
+  required; installation alone still changes no authentication policy.
 - Primary `localpin` CLI alias and inline terminal menu with guided
   `localpin setup`: readiness checks, preparation preview, explicit backend
   enrollment, trial/recovery guidance, resume and final activation. Privileged
   steps use a fixed sudo/helper interface with transaction-scoped single-account
   guards; secrets keep the existing private broker path. Existing `localpinctl`
-  commands and status/doctor JSON stay compatible. Persistent accounting still
-  requires an offline maintenance handoff and real recovery revokes enrollment.
+  commands and status/doctor JSON stay compatible. Persistent accounting remains
+  an offline operation and real recovery revokes enrollment.
   [ADR 0019](docs/adr/0019-guided-setup-orchestration.md) defines the boundary;
   [targeted installed VM evidence](docs/development/m8.2-installed-acceptance.md)
   passed for the recorded TPM-required cases. M9 review, physical hardware and

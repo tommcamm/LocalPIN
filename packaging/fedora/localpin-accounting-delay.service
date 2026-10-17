@@ -1,0 +1,9 @@
+[Unit]
+Description=Hand LocalPIN setup to independent system maintenance
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/localpin/localpin-accounting begin
+TimeoutStartSec=15
+UMask=0077
+LimitCORE=0

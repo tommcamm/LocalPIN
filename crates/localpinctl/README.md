@@ -31,8 +31,11 @@ subtle colors where supported and plain text when `NO_COLOR` is present,
 `setup` runs as the current non-root desktop owner. It checks authoritative
 installation/account state, previews preparation, explicitly chooses TPM or
 software protection, enrolls privately, and guides trial and real recovery
-checks before final activation. The offline native-accounting migration remains
-a manual maintenance handoff. Recovery revokes enrollment; rerunning setup guides
+checks before final activation. On supported fresh installations, setup offers
+offline native-accounting maintenance after explicit approval to save work and
+sign out. A packaged system service preserves counters and returns to password
+login; setup then opens again automatically. Unsupported or interrupted
+maintenance requires administrator recovery. Recovery revokes enrollment; rerunning setup guides
 fresh preparation, enrollment and final desktop tests. No user-owned checkpoint
 can authorize a skipped step. A valid live trial may be resumed; an expired,
 rebooted or enrollment-changed trial needs repeated tests. Healthy active

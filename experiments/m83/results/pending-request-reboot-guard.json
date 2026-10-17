@@ -1,0 +1,17 @@
+{
+  "phase": "pending-request-reboot-guard",
+  "passed": true,
+  "candidate": "0.1.0-0.1.alpha1.vm83.11.fc44",
+  "real_requested_transaction_survived_real_reboot": true,
+  "boot_changed_and_original_volatile_failure_record_naturally_absent": true,
+  "normal_display_manager_and_ssh_withheld": true,
+  "guard_unit_failed_pending_request": true,
+  "actual_root_emergency_password_login": true,
+  "actual_controlling_tty": "/dev/tty1",
+  "installed_recover_refused_nonzero": true,
+  "recover_returncode": 1,
+  "journal_policy_and_tally_inventories_unchanged_by_recovery": true,
+  "no_empty_counters_created_no_counter_reset": true,
+  "no_account_authority_or_resume_hint_created": true,
+  "selinux": "Enforcing"
+}

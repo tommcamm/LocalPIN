@@ -1,0 +1,11 @@
+{
+  "phase": "erase",
+  "passed": true,
+  "candidate": "0.1.0-0.1.alpha1.vm83.11.fc44",
+  "unprepared_final_candidate_erased": true,
+  "no_account_or_pin_authority_existed_or_created": true,
+  "original_stock_kde_policy_unchanged": true,
+  "persistent_native_accounting_policy_and_all_counter_bytes_uid_gid_mode_xattrs_retained": true,
+  "module_absent_broker_inactive": true,
+  "selinux": "Enforcing"
+}

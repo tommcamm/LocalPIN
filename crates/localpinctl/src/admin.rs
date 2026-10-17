@@ -26,6 +26,8 @@ pub(crate) enum Phase {
 pub(crate) enum Blocker {
     None,
     Accounting,
+    #[serde(rename = "accounting-maintenance")]
+    AccountingMaintenance,
     Multiuser,
     Recovery,
     Policy,
@@ -73,6 +75,7 @@ pub(crate) enum Operation {
     Inspect,
     Preview,
     Prepare,
+    PrepareAccounting,
     Trial,
     RecordTests,
     Activate,
@@ -107,6 +110,7 @@ fn command(operation: Operation, uid: u32, trial_ref: Option<&str>) -> Result<Co
         .arg(match operation {
             Operation::Inspect => "setup-status",
             Operation::Preview | Operation::Prepare => "prepare",
+            Operation::PrepareAccounting => "prepare-accounting",
             Operation::Trial => "trial",
             Operation::RecordTests => "record-tests",
             Operation::Activate => "activate",
@@ -175,6 +179,7 @@ mod tests {
             Operation::Inspect,
             Operation::Preview,
             Operation::Prepare,
+            Operation::PrepareAccounting,
             Operation::Trial,
             Operation::RecordTests,
             Operation::Activate,
@@ -193,6 +198,12 @@ mod tests {
             );
             if operation != Operation::Inspect {
                 assert!(args.windows(2).any(|pair| pair == ["--setup-uid", "1001"]));
+            }
+            if operation == Operation::PrepareAccounting {
+                assert_eq!(
+                    args,
+                    ["--", HELPER, "prepare-accounting", "--setup-uid", "1001"]
+                );
             }
             let env: Vec<_> = command.get_envs().collect();
             assert_eq!(env.len(), 4);

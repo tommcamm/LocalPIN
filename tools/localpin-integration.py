@@ -11,6 +11,8 @@ import contextlib
 import difflib
 import fcntl
 import hashlib
+import importlib.machinery
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -65,6 +67,28 @@ class SetupScopeRefusal(Refusal):
 
 class AccountingRequired(Refusal):
     """Persistent native accounting needs the documented offline handoff."""
+
+
+def accounting_module():
+    executable = Path(__file__).resolve()
+    name = 'localpin-accounting.py' if executable.suffix == '.py' else 'localpin-accounting'
+    loader = importlib.machinery.SourceFileLoader('localpin_accounting', str(executable.with_name(name)))
+    module = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+    loader.exec_module(module)
+    return module
+
+
+def accounting_pending():
+    journal = CONTROL / 'accounting/transaction.json'
+    if not journal.exists() and not journal.is_symlink():
+        return False
+    try:
+        value = json.loads(read(journal, 4 * 1024 * 1024, mode=0o600))
+    except FileNotFoundError:
+        return False
+    require(isinstance(value, dict) and value.get('schema') == 1,
+            'invalid accounting maintenance journal; use emergency recovery')
+    return value.get('phase') not in ('complete', 'aborted')
 
 
 def require(condition, message):
@@ -248,7 +272,9 @@ def locked():
             raise Refusal('another integration operation is in progress') from None
         validate_lock(fd)
         _integration_lock_fd = fd
-        run(['/usr/sbin/restorecon', '-R', str(STATE)])
+        # Accounting backups retain exact original xattrs, including SELinux.
+        # Relabel only the lock and its directories, never private backup files.
+        run(['/usr/sbin/restorecon', str(STATE), str(CONTROL), str(path)])
         yield
     finally:
         _integration_lock_fd = None
@@ -347,7 +373,7 @@ def native_policy_files():
                 'native x86_64 PAM runtime required')
 
 
-def validate_policy(*, integrated=False):
+def validate_policy(*, integrated=False, allow_volatile=False):
     release = dict(line.split('=', 1) for line in read('/usr/lib/os-release').decode('ascii').splitlines()
                    if '=' in line and not line.startswith('#'))
     require(release.get('ID', '').strip('"') == 'fedora'
@@ -371,7 +397,9 @@ def validate_policy(*, integrated=False):
             allowed += (['files', '[SUCCESS=merge]', 'systemd'],)
         require(len(entries) == 1 and entries[0] in allowed,
                 'local files accounts with optional systemd NSS are required')
-    if read('/etc/security/faillock.conf') != PERSISTENT:
+    accounting = read('/etc/security/faillock.conf')
+    if accounting != PERSISTENT and not (allow_volatile and digest(accounting) ==
+            '662303cf89938c12d95a7fc59d92cbe76c398312527fa908894fb319809093b3'):
         raise AccountingRequired('persistent accounting required: migrate native tallies offline and install the exact reviewed faillock configuration before prepare')
     tally = Path('/var/lib/faillock')
     safe_parents(tally)
@@ -538,6 +566,9 @@ def setup_status(uid):
     result = {'schema_version': 1, 'phase': phase, 'blocker': 'none', 'enrolled': False,
               'trial_valid': False, 'trial_remaining_seconds': 0, 'trial_ref': None,
               'tests_recorded': False}
+    if accounting_pending():
+        result['blocker'] = 'accounting-maintenance'
+        return result
     try:
         accounts = setup_scope(state, uid)
     except SetupScopeRefusal:
@@ -915,7 +946,7 @@ def status(state):
 def main():
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=['status', 'setup-status', 'prepare', 'trial', 'record-tests', 'activate', 'migrate-legacy',
+    parser.add_argument('operation', choices=['status', 'setup-status', 'prepare-accounting', 'prepare', 'trial', 'record-tests', 'activate', 'migrate-legacy',
                                              'disable', 'recover', 'package-check', 'package-suspend', 'package-cache-begin', 'package-resume'])
     parser.add_argument('--uid', type=int, action='append', default=[])
     parser.add_argument('--setup-uid', type=int, help='Require a single-account setup transaction for this UID')
@@ -931,11 +962,13 @@ def main():
     require(os.getuid() == os.geteuid(), 'setuid installation is unsupported')
     require(not args.uid or args.operation in ('prepare', 'setup-status'), 'UID selection applies only to prepare or setup-status')
     require(args.operation != 'setup-status' or len(args.uid) == 1, 'setup-status requires exactly one UID')
-    require(args.setup_uid is None or args.operation in ('prepare', 'trial', 'record-tests', 'activate'),
+    require(args.setup_uid is None or args.operation in ('prepare-accounting', 'prepare', 'trial', 'record-tests', 'activate'),
             'setup UID precondition applies only to setup mutations')
     require(args.setup_uid is None or (1000 <= args.setup_uid <= 59999
             and (args.operation != 'prepare' or args.uid == [args.setup_uid])),
             'setup preparation requires exactly its selected UID')
+    require(args.operation != 'prepare-accounting' or args.setup_uid is not None,
+            'accounting maintenance requires exactly its setup owner')
     require(args.setup_trial is None or (args.setup_uid is not None
             and args.operation in ('record-tests', 'activate')
             and re.fullmatch(r'[0-9a-f]{64}', args.setup_trial)),
@@ -954,6 +987,8 @@ def main():
     if args.operation == 'setup-status':
         print(json.dumps(setup_status(args.uid[0]), sort_keys=True))
         return
+    if args.operation == 'package-check':
+        require(not accounting_pending(), 'accounting maintenance pending; preserve the installed recovery helper')
     if args.operation == 'record-tests':
         require(args.pin and args.password and args.recovery, 'explicit PIN, password and console-recovery attestations required')
     if args.candidate_evr:
@@ -974,6 +1009,7 @@ def main():
             result = status(state)
     else:
         with locked():
+            require(not accounting_pending(), 'accounting maintenance pending; use emergency recovery')
             if args.operation in ('disable', 'recover'):
                 # Even a corrupt manifest must not leave desktop PIN active.
                 close_gate()
@@ -992,7 +1028,15 @@ def main():
                             'a live trial bound to this enrollment is required; repeat desktop tests')
                     require(setup_trial_reference(state) == args.setup_trial,
                             'trial changed during setup; repeat the desktop test confirmations')
-            if args.operation == 'prepare':
+            if args.operation == 'prepare-accounting':
+                accounting = accounting_module()
+                try:
+                    result = accounting.schedule(sys.modules[__name__], args.setup_uid)
+                except accounting.RPMBusy:
+                    raise Refusal('package transaction in progress; finish package operations before rerunning localpin setup') from None
+                except RuntimeError:
+                    raise Refusal('accounting maintenance could not be scheduled; use administrator recovery') from None
+            elif args.operation == 'prepare':
                 result = prepare(args.uid)
             elif args.operation == 'migrate-legacy':
                 result = migrate_legacy()

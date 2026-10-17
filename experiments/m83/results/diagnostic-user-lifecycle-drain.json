@@ -1,0 +1,11 @@
+{
+  "phase": "diagnostic-clean-user-lifecycle-drain",
+  "passed": true,
+  "candidate": "0.1.0-0.1.alpha1.vm83.10.fc44",
+  "diagnostic_fixture_remediation_not_product_retry": true,
+  "ordinary_stop_user_slice_followed_by_actual_owner_password_login": true,
+  "owner_user_manager_active_user_bus_and_delegated_subgroup_regenerated": true,
+  "actual_kde_unlocked": true,
+  "native_nonowner_failure_bytes_uid_gid_mode_xattrs_preserved": true,
+  "no_counter_reset_or_policy_change": true
+}

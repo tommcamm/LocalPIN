@@ -1,0 +1,65 @@
+{
+  "phase": "maintenance-complete",
+  "passed": true,
+  "same_boot": true,
+  "transaction_complete": true,
+  "persistent_policy_installed": true,
+  "all_native_counters_and_security_metadata_preserved_before_login": true,
+  "non_owner_nonempty_native_counter_preserved": true,
+  "destination_only_root_group_conversion": true,
+  "exact_original_configuration_backed_up": true,
+  "source_tallies_untouched": true,
+  "counter_count": 2,
+  "kernel_cgroups_thawed": true,
+  "services_restored": {
+    "display-manager.service": true,
+    "systemd-logind.service": true,
+    "sshd.service": true,
+    "NetworkManager.service": true,
+    "systemd-user-sessions.service": true
+  },
+  "normal_login_enabled": true,
+  "root_owned_resume_hint_verified": true,
+  "no_pin_enrolled": true,
+  "selinux": "Enforcing",
+  "kernel_barrier_record": {
+    "empty_frozen_slices": {
+      "dev-hugepages.mount": {
+        "frozen": "1",
+        "populated": "0"
+      },
+      "dev-mqueue.mount": {
+        "frozen": "1",
+        "populated": "0"
+      },
+      "sys-fs-fuse-connections.mount": {
+        "frozen": "1",
+        "populated": "0"
+      },
+      "sys-kernel-config.mount": {
+        "frozen": "1",
+        "populated": "0"
+      },
+      "sys-kernel-debug.mount": {
+        "frozen": "1",
+        "populated": "0"
+      },
+      "sys-kernel-tracing.mount": {
+        "frozen": "1",
+        "populated": "0"
+      },
+      "system.slice": {
+        "frozen": "1",
+        "populated": "0"
+      },
+      "user.slice": {
+        "frozen": "1",
+        "populated": "0"
+      }
+    },
+    "init_frozen": true,
+    "old_tasks_killed": true
+  },
+  "candidate": "0.1.0-0.1.alpha1.vm83.5.fc44",
+  "rpm_sha256": "54cf63b75af0bf0a59afcccd4ada7f362af1a2c0a3be4e69dfe73d6d02b14196"
+}

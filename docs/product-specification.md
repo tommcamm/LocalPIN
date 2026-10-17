@@ -1,10 +1,10 @@
 # LocalPIN product specification
 
-**Specification version:** 1.6
+**Specification version:** 1.7
 
-**Date:** 2026-10-17
+**Date:** 2026-10-18
 
-**Status:** M8.1 final source checks and targeted installed RPM acceptance passed for ordinary Fedora KDE 44 x86_64 with SELinux enforcing and a private TPM emulator; see the [M8.1 report](development/m8.1-desktop-compatibility.md) for evidence and each installed case's build scope. Historical M6.1–M8 evidence retains its earlier appliance scope. GUI/DBus AccountsService, full old-TPM-credential migration and physical hardware remain unvalidated. M9 independent review and release gates remain open; hosted CI execution remains unverified.
+**Status:** Targeted desktop, guided-setup and setup-managed accounting cases passed on Fedora KDE 44 x86_64 with SELinux enforcing and a private TPM emulator; the [M8.1](development/m8.1-desktop-compatibility.md), [M8.2](development/m8.2-installed-acceptance.md) and [M8.3](development/m8.3-accounting-maintenance.md) reports identify each case's tested build and limits. Historical M6.1–M8 evidence retains its earlier appliance scope. GUI/DBus AccountsService, full old-TPM-credential migration and physical hardware remain unvalidated. M9 independent review and release gates remain open; hosted CI results are separate from local and installed evidence.
 **Initial deployment:** Fedora Linux, KDE Plasma, local user accounts.  
 **Working component names:** `pam_localpin.so`, `localpind`, `localpin` (CLI; `localpinctl` compatibility name).
 
@@ -82,7 +82,7 @@ Use a pinned stable Rust toolchain, Rust 2024 edition, a declared minimum suppor
 
 ## 3. Required user experience
 
-1. A user verifies and installs the Fedora RPM without changing authentication automatically, then runs `localpin setup` as their normal user in a foreground KDE terminal. The guide checks prerequisites, previews confirmed preparation, guides enrollment and trial/recovery tests, and requests explicit activation. Missing persistent accounting requires the documented one-time offline maintenance handoff; setup never copies live tallies.
+1. A user verifies and installs the Fedora RPM without changing authentication automatically, then runs `localpin setup` as their normal user in a foreground KDE terminal. The guide checks prerequisites, previews confirmed preparation, guides enrollment and trial/recovery tests, and requests explicit activation. A supported fresh installation can explicitly approve setup-managed offline accounting maintenance, including session termination and automatic setup resumption after password login. Unknown or interrupted state requires administrator recovery; setup never copies live tallies or resets counters.
 2. `localpin` opens a compact numbered menu in a terminal and shows help otherwise. `localpin doctor` reports known backend/service availability and the desktop gate, and explains required recovery checks. Passive status does not perform desktop or password recovery tests or establish unprobed TPM usability.
 3. Enrollment requires fresh verification of the existing account password through a trusted password-only PAM policy. Merely knowing an old PIN, controlling an unlocked user process, or having a cached client-side success flag must not authorize enrollment, reset, or backend downgrade.
 4. The user chooses and confirms a six-digit PIN privately. Leading zeroes are valid. The PIN must not be provided through command-line arguments, environment variables, shell history, or normal logs.
@@ -338,6 +338,12 @@ requires repeated tests. Console recovery remains an actual administrator
 console rehearsal and revokes enrollment; rerunning setup requires preparation,
 enrollment and final trial tests before explicit attestation and activation.
 No user-owned progress checkpoint can establish readiness or completed tests.
+The fixed accounting-maintenance operation in
+[ADR 0020](adr/0020-setup-accounting-maintenance.md) can prepare a supported fresh
+installation offline after explicit sign-out approval. Its protected transaction
+and all-account counter-preservation rules are separate from enrollment. The
+post-login launcher supplies only a nonsecret UI hint; setup rechecks privileged
+state and requires fresh account-password authorization.
 Before trial and activation, the broker must establish current account/session
 readiness and an available enrollment; protected pointer inspection alone does
 not prove native account continuity.

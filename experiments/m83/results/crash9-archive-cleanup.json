@@ -1,0 +1,10 @@
+{
+  "phase": "crash9-archive-cleanup",
+  "passed": true,
+  "candidate": "0.1.0-0.1.alpha1.vm83.9.fc44",
+  "failed_task_domain_independent_disk_private_emulator_removed": true,
+  "saved_ram_and_private_raw_journal_removed": true,
+  "temporary_keys_synthetic_root_secret_and_private_shadow_diagnostic_removed": true,
+  "task_only_transient_cleanup_pool_removed": true,
+  "original_vm_remains_defined_and_off": true
+}

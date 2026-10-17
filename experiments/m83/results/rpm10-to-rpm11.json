@@ -1,0 +1,26 @@
+{
+  "phase": "rpm10-to-rpm11-runtime-comparison",
+  "passed": true,
+  "earlier_candidate": "localpin-0.1.0-0.1.alpha1.vm83.10.fc44.x86_64.rpm",
+  "later_candidate": "localpin-0.1.0-0.1.alpha1.vm83.11.fc44.x86_64.rpm",
+  "earlier_rpm_sha256": "3b322ed0641ea11c6241a643fcf7604da0a00e2b661e74a1f34145f39ee4e520",
+  "later_rpm_sha256": "6af7b1aa351248c7b12688b2ab74ca89ba9d896fe5232b9040bd6d770aaabb83",
+  "non_document_files_and_symlinks_compared": 37,
+  "runtime_differences": [
+    {
+      "path": "/usr/lib/systemd/system/localpin-accounting.target",
+      "earlier_sha256": "40d7bb54e1f5020477221f257abaca5dcd076efd5a041c68a3092196f9d1a26b",
+      "later_sha256": "20b1b13f26bf160d56d23bec4d8bf5b5b11fe6a227aa3b2baa710dacdda16727"
+    }
+  ],
+  "exact_only_runtime_text_change": {
+    "removed": "After=display-manager.service systemd-logind.service systemd-user-sessions.service",
+    "added": "Conflicts=user.slice\nAfter=display-manager.service systemd-logind.service systemd-user-sessions.service user.slice"
+  },
+  "target_delta_is_exactly_these_lines": true,
+  "file_modes_owners_groups_flags_symlink_targets_equal": true,
+  "scriptlets_and_triggers_equal_after_candidate_normalization": true,
+  "dependencies_equal_after_candidate_normalization": true,
+  "worker_and_watchdog_logic_identical": true,
+  "installed_behavior_not_inferred_from_comparison": true
+}

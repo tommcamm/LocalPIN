@@ -98,15 +98,19 @@ not independently observe a console or desktop test and does not present it as
 automated evidence.
 
 The one-time persistent password-accounting migration stays offline under
-[ADR 0014](0014-persistent-faillock.md). Setup explains the maintenance handoff
-and refuses a live tally copy or reset. Installation continues to leave services
+[ADR 0014](0014-persistent-faillock.md). The subsequent
+[ADR 0020](0020-setup-accounting-maintenance.md) adds explicitly approved,
+setup-managed maintenance for supported fresh installations, with automatic
+resumption after password login. Unknown or interrupted state retains the
+administrator handoff; a live tally copy or reset remains forbidden.
+Installation continues to leave services
 stopped and authentication unchanged. No sudoers rule, setuid CLI or general
 privileged launcher is installed.
 
 ## Consequences and validation
 
-Owners get `dnf install` followed by `localpin setup`, with an explicit offline
-prerequisite when necessary. Administrators retain the complete manual runbook,
+Owners get `dnf install` followed by `localpin setup`, with approved offline
+maintenance when necessary. Administrators retain the complete manual runbook,
 short `localpin-integration` alias and console recovery path. The wizard adds a
 reviewable privilege boundary and cannot eliminate real tests or offline work.
 

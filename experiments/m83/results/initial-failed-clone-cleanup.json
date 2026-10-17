@@ -1,0 +1,10 @@
+{
+  "phase": "initial-failed-clone-cleanup",
+  "passed": true,
+  "candidate": "0.1.0-0.1.alpha1.vm83.3.fc44",
+  "failed_task_domain_independent_volume_and_private_emulator_removed": true,
+  "private_saved_ram_and_raw_journal_removed": true,
+  "temporary_access_and_synthetic_recovery_secret_removed": true,
+  "task_only_transient_cleanup_pool_removed": true,
+  "original_vm_remains_defined_and_off": true
+}

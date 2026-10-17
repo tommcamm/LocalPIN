@@ -1,0 +1,27 @@
+{
+  "phase": "pre-barrier-safe-abort",
+  "passed": true,
+  "expected_migration_refusal": true,
+  "migration_completed": false,
+  "durable_phase": "aborted",
+  "fixed_failure_reason": "unexpected root cgroup process",
+  "same_boot": true,
+  "stock_policy_unchanged": true,
+  "nonowner_nonempty_counter_unchanged": true,
+  "no_backup_copy_or_resume_hint_created": true,
+  "no_authority_prepared": true,
+  "services_restored": {
+    "display-manager.service": true,
+    "systemd-logind.service": true,
+    "sshd.service": true,
+    "NetworkManager.service": true,
+    "systemd-user-sessions.service": true
+  },
+  "normal_login_enabled": true,
+  "root_task_count": 145,
+  "all_root_tasks_status_Kthread_1": true,
+  "selinux": "Enforcing",
+  "actual_password_display_manager_login_after_abort": true,
+  "candidate": "0.1.0-0.1.alpha1.vm83.4.fc44",
+  "rpm_sha256": "1411e7eec549971cc4bb45e80e07964cb3df4082040da8784b21df9d0af13b83"
+}

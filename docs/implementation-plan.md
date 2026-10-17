@@ -1,8 +1,8 @@
 # LocalPIN implementation plan
 
-- Date: 2026-10-17
-- Status: M0–M8 implemented with historical appliance acceptance; M8.1 final source checks and targeted installed RPM acceptance passed on Fedora KDE 44 x86_64 with SELinux enforcing and a private TPM emulator. The [M8.1 report](development/m8.1-desktop-compatibility.md) records evidence and each installed case's build scope. [M8.2 targeted TPM-required guided setup, recovery and package acceptance](development/m8.2-installed-acceptance.md) also passed in a fresh enforcing VM. GUI/DBus AccountsService, full old-TPM-credential migration and physical hardware remain unvalidated. M9 independent human/specialist review and release gates remain open. [Hosted CI](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml) and its unsigned testing RPMs provide separate build/test evidence; recorded local/VM acceptance does not imply a passing workflow run.
-- Source of requirements: [product-specification.md](product-specification.md), version 1.6. ADR 0017 replaces the frozen lifecycle domain with native shadow-record markers and locking; ADR 0018 defines KDE/native-update compatibility; ADR 0019 defines fixed guided-setup orchestration.
+- Date: 2026-10-18
+- Status: M0–M8 implemented with historical appliance acceptance; M8.1 final source checks and targeted installed RPM acceptance passed on Fedora KDE 44 x86_64 with SELinux enforcing and a private TPM emulator. The [M8.1 report](development/m8.1-desktop-compatibility.md) records evidence and each installed case's build scope. [M8.2 targeted TPM-required guided setup, recovery and package acceptance](development/m8.2-installed-acceptance.md) also passed in a fresh enforcing VM. [M8.3](development/m8.3-accounting-maintenance.md) adds build-scoped installed maintenance, automatic resumption and interruption recovery evidence. GUI/DBus AccountsService, full old-TPM-credential migration and physical hardware remain unvalidated. M9 independent human/specialist review and release gates remain open. [Hosted CI](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml) and its unsigned testing RPMs provide separate build/test evidence; recorded local/VM acceptance does not imply a passing workflow run.
+- Source of requirements: [product-specification.md](product-specification.md), version 1.7. ADR 0017 replaces the frozen lifecycle domain with native shadow-record markers and locking; ADR 0018 defines KDE/native-update compatibility; ADR 0019 defines fixed guided-setup orchestration; ADR 0020 defines setup-managed accounting maintenance.
 
 
 This plan turns the specification into independently reviewable changes and evidence gates. The specification remains authoritative. An unresolved design question below must be resolved in an architecture decision record (ADR), with a specification amendment if necessary, rather than silently changing the requirements.
@@ -43,6 +43,7 @@ M0 repository foundation
   -> M8 Fedora packaging and recovery
   -> M8.1 ordinary Fedora desktop and distribution-update acceptance
   -> M8.2 guided installation and terminal onboarding
+  -> M8.3 setup-managed accounting maintenance and resumption
   -> M9 independent review and staged release
 ```
 
@@ -469,6 +470,34 @@ observations. **Met for the recorded TPM-required VM cases.** A deadline-only
 activation refusal branch and installed software-backend onboarding were not
 isolated in this run. This does not complete M9 independent review, final signed
 candidate reconciliation or hardware gates.
+
+### M8.3 — Setup-managed accounting maintenance
+
+[ADR 0020](adr/0020-setup-accounting-maintenance.md) extends the existing guided
+flow with explicitly approved, same-boot offline accounting preparation for
+supported fresh installations. Installation remains passive. A packaged system
+service terminates sessions, establishes exclusive execution, preserves all
+native counters and backups, publishes persistent accounting atomically and
+restores password login. A normal-user KDE launcher reopens setup from protected
+state; it retains fresh password enrollment, actual recovery rehearsal and
+explicit activation.
+
+The [M8.3 report](development/m8.3-accounting-maintenance.md) records passing
+source/packaging checks and enforcing-VM observations. The complete native PIN
+onboarding and active lifecycle cases identify their `.5`/`.6` RPMs; final `.11`
+evidence covers the corrected maintenance target, real worker interruption,
+authenticated same-boot recovery, healthy user-manager restart, preserved
+counter migration, shipped automatic resume and unprepared package removal.
+An actual pending-request reboot withheld ordinary startup, and authenticated
+emergency recovery refused the lost volatile authority without resetting or
+replacing counters; ordinary package removal also refused while pending.
+Payload comparisons identify unchanged code and the separately tested deltas.
+
+Exit gate: targeted source and packaging checks plus installed enforcing Fedora
+KDE evidence for actual logout, counter preservation, password login, automatic
+resumption, PIN/password tests, interruption/recovery and ordinary reboot.
+Source checks and historical M8.2 results do not establish the new installed
+boundary. M9 independent review and hardware gates remain separate.
 
 ### M9 — Review, hardware validation and versioned release
 

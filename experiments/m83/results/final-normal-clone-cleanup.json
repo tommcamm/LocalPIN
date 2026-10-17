@@ -1,0 +1,12 @@
+{
+  "phase": "normal-clone-cleanup",
+  "passed": true,
+  "candidate": "0.1.0-0.1.alpha1.vm83.11.fc44",
+  "stock_policy_restored": true,
+  "no_authority_present": true,
+  "package_absent": true,
+  "temporary_guest_ssh_key_removed": true,
+  "guarded_task_clone_domain_volume_and_private_emulator_removed": true,
+  "temporary_host_access_and_recovery_secret_removed": true,
+  "original_vm_remains_defined_and_off": true
+}

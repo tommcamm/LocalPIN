@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Resume LocalPIN setup
+Comment=Continue setup after approved password-accounting maintenance
+Exec=/usr/libexec/localpin/localpin-setup-resume
+TryExec=/usr/libexec/localpin/localpin-setup-resume
+OnlyShowIn=KDE;
+NoDisplay=true
+Terminal=false
+X-KDE-autostart-phase=2

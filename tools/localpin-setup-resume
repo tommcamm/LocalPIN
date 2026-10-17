@@ -1,0 +1,126 @@
+#!/usr/bin/python3 -I
+"""Unprivileged KDE setup resumption; a hint only opens the fixed wizard."""
+
+import json
+import os
+from pathlib import Path
+import pwd
+import re
+import stat
+import subprocess
+import sys
+
+
+PUBLIC_HINT = Path("/var/lib/localpin-integration/setup-resume.json")
+PUBLIC_PARENTS = (Path("/var"), Path("/var/lib"), PUBLIC_HINT.parent)
+HINT_LIMIT = 4096
+COMMAND = ("/usr/bin/konsole", "--separate", "-e", "/usr/bin/localpin", "setup")
+
+
+def _root_owned(info, kind):
+    return (kind(info.st_mode) and info.st_uid == 0 and info.st_gid == 0
+            and not info.st_mode & 0o022)
+
+
+def _object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate hint field")
+        result[key] = value
+    return result
+
+
+def read_hint(uid):
+    """Accept only the fixed, bounded, root-owned ready hint for this user."""
+    if not 1000 <= uid <= 59999:
+        return None
+    try:
+        if not all(_root_owned(path.lstat(), stat.S_ISDIR) for path in PUBLIC_PARENTS):
+            return None
+        fd = os.open(PUBLIC_HINT, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
+        try:
+            info = os.fstat(fd)
+            if (not _root_owned(info, stat.S_ISREG) or info.st_nlink != 1
+                    or stat.S_IMODE(info.st_mode) != 0o644 or info.st_size > HINT_LIMIT):
+                return None
+            data = os.read(fd, HINT_LIMIT + 1)
+            if len(data) > HINT_LIMIT:
+                return None
+        finally:
+            os.close(fd)
+        hint = json.loads(data, object_pairs_hook=_object)
+        if (not isinstance(hint, dict)
+                or set(hint) != {"schema_version", "uid", "request_id", "state"}
+                or type(hint["schema_version"]) is not int or hint["schema_version"] != 1
+                or type(hint["uid"]) is not int or hint["uid"] != uid
+                or hint["state"] != "ready"
+                or not isinstance(hint["request_id"], str)
+                or re.fullmatch(r"[a-f0-9]{64}", hint["request_id"], re.ASCII) is None):
+            return None
+        return hint["request_id"]
+    except (OSError, ValueError, UnicodeError, RecursionError):
+        return None
+
+
+def _cache_directory(home, uid):
+    """Open private user cache components without following their symlinks."""
+    directory = os.open(home, os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for name in (".cache", "localpin", "setup-resume"):
+            try:
+                os.mkdir(name, mode=0o700, dir_fd=directory)
+            except FileExistsError:
+                pass
+            child = os.open(name, os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY | os.O_NOFOLLOW,
+                            dir_fd=directory)
+            info = os.fstat(child)
+            if info.st_uid != uid or info.st_mode & 0o022:
+                os.close(child)
+                raise PermissionError("unsafe setup resume cache")
+            os.close(directory)
+            directory = child
+        return directory
+    except BaseException:
+        os.close(directory)
+        raise
+
+
+def resume(uid, home):
+    """Claim a per-request UI marker; it supplies no setup authorization."""
+    request = read_hint(uid)
+    if request is None:
+        return
+    try:
+        directory = _cache_directory(home, uid)
+        try:
+            try:
+                marker = os.open(request, os.O_WRONLY | os.O_CREAT | os.O_EXCL
+                                 | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600, dir_fd=directory)
+            except FileExistsError:
+                return
+            os.close(marker)
+            try:
+                subprocess.Popen(COMMAND, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL, close_fds=True, start_new_session=True)
+            except OSError:
+                os.unlink(request, dir_fd=directory)
+        finally:
+            os.close(directory)
+    except OSError:
+        return
+
+
+def main():
+    uid = os.getuid()
+    if len(sys.argv) != 1 or uid != os.geteuid() or not 1000 <= uid <= 59999:
+        return
+    try:
+        home = pwd.getpwuid(uid).pw_dir
+    except KeyError:
+        return
+    resume(uid, home)
+
+
+if __name__ == "__main__":
+    main()
