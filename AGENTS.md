@@ -9,6 +9,15 @@
 - Never make development commits on `main` or push changes directly to `main`.
   Use descriptive names such as `docs/project-overview`, `fix/frame-limit`, or
   `feat/account-diagnostics`.
+- The manually dispatched experimental release workflow has one narrow
+  exception: it may create a generated version-only commit on a release branch
+  and publish its tag without merging that commit. The commit must be a direct
+  child of reviewed `main`, with only matching manifests, lockfiles, package
+  metadata and changelog changes. A retry may reuse only the exact candidate;
+  release checks must test that exact commit before publication. The workflow
+  never pushes to `main`, force-pushes or replaces tags. Changes to this
+  automation still require a PR; ordinary development and automatic PR merges
+  are not covered by the exception.
 - Commit and push the completed change, then create a pull request targeting
   `main` with a clear problem statement, resulting behavior, and actual
   validation results. Leave it open for the maintainer to review. Do not merge

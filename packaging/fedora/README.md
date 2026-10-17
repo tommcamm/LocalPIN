@@ -25,8 +25,10 @@ package builds do not extend the recorded installed evidence.
 ## Versioned experimental releases
 
 The maintainer can run the [manual release workflow](../../docs/releasing.md)
-from `main` to build the current version and create a tagged GitHub prerelease.
-It reruns CI and includes source, an SPDX dependency inventory, provenance and
+from `main` to select an unused experimental version and create a tagged GitHub
+prerelease. When needed, it commits a version-only bump to a retained release
+branch and tests and publishes that exact commit in the same run. It reruns CI
+and includes source, an SPDX dependency inventory, provenance and
 checksums, with required verified OpenPGP signing in the protected release
 environment. Supported stable releases remain gated on independent M9 review
 and hardware acceptance.
@@ -82,9 +84,10 @@ retains the complete manual administrator procedure. Record the tested commit
 and package version with your results. The guided workflow requires fresh
 installed acceptance; historical M8.1 evidence does not validate it.
 
-CI uses RPM release `0.1.alpha2.ci.<run-number>.<attempt>` so successive workflow
-runs and reruns can upgrade earlier CI packages. This sequence does not promise
-an upgrade from arbitrary historical fixtures, including `0.2.alpha1` or the
+CI derives its RPM release prefix from the committed Cargo workspace version:
+for example, `0.1.0-alpha.2` uses `0.1.alpha2.ci.<run-number>.<attempt>`. Successive
+workflow runs and reruns can upgrade earlier CI packages. This sequence does not
+promise an upgrade from arbitrary historical fixtures, including `0.2.alpha1` or the
 recorded `.5`/`.6` builds; start with a fresh disposable guest for those cases.
 The artifact is a testing convenience, not a signed release or installed
 desktop/hardware acceptance result.

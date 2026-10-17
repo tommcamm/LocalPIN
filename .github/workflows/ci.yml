@@ -6,6 +6,12 @@ on:
   pull_request:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      source_commit:
+        description: Exact prepared source commit to validate
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -20,6 +26,7 @@ defaults:
 
 env:
   CARGO_TERM_COLOR: always
+  LOCALPIN_SOURCE_COMMIT: ${{ inputs.source_commit || github.sha }}
 
 jobs:
   quality:
@@ -30,6 +37,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.source_commit || github.sha }}
           persist-credentials: false
       - name: Install native TPM build inputs
         run: sudo apt-get update && sudo apt-get install -y libtss2-dev libdbus-1-dev pkg-config
@@ -66,6 +74,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.source_commit || github.sha }}
           persist-credentials: false
       - name: Install the pinned Rust toolchain
         run: |
@@ -90,6 +99,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.source_commit || github.sha }}
           persist-credentials: false
       - name: Install the pinned Rust toolchain
         run: |
@@ -121,8 +131,9 @@ jobs:
       - name: Compile confinement and build the opt-in RPM without installing it
         run: |
           python3 packaging/fedora/test_packaging.py
+          LOCALPIN_RPM_PREFIX=$(python3 packaging/fedora/release-policy.py --rpm-prefix)
           python3 packaging/fedora/build-rpm.py --output /tmp/localpin-rpm-ci \
-            --release "0.1.alpha2.ci.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+            --release "${LOCALPIN_RPM_PREFIX}.ci.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
       - name: Collect the testing RPM, provenance, and checksums
         env:
           LOCALPIN_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -144,8 +155,8 @@ jobs:
           # Container steps can run under a different owner than checkout.
           # Trust only this workspace for this read-only Git invocation.
           source_commit = subprocess.check_output(['git', '-c', f'safe.directory={Path.cwd()}', 'rev-parse', 'HEAD'], text=True).strip()
-          if source_commit != os.environ['GITHUB_SHA']:
-              raise SystemExit('Checked-out source differs from the workflow commit')
+          if source_commit != os.environ['LOCALPIN_SOURCE_COMMIT']:
+              raise SystemExit('Checked-out source differs from the selected source commit')
           output = Path(os.environ['RUNNER_TEMP']) / 'localpin-artifact'
           output.mkdir()
           shutil.copy2(packages[0], output / packages[0].name)
@@ -174,7 +185,7 @@ jobs:
         id: rpm_artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: localpin-fedora44-x86_64-${{ github.sha }}-${{ github.run_attempt }}
+          name: localpin-fedora44-x86_64-${{ env.LOCALPIN_SOURCE_COMMIT }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/localpin-artifact/
           if-no-files-found: error
           retention-days: 14
@@ -184,7 +195,7 @@ jobs:
           LOCALPIN_ARTIFACT_URL: ${{ steps.rpm_artifact.outputs.artifact-url }}
         run: |
           printf '## Experimental Fedora KDE 44 x86_64 RPM\n\n[Download the testing RPM bundle](%s)\n\nIncludes the unsigned RPM, SHA256SUMS, BUILD-INPUTS.json, and CI-BUILD.json. Retained for 14 days.\n\nTest in a disposable Fedora KDE VM using the [installation and recovery runbook](%s/%s/blob/%s/docs/integration-administration.md).\n' \
-            "$LOCALPIN_ARTIFACT_URL" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+            "$LOCALPIN_ARTIFACT_URL" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$LOCALPIN_SOURCE_COMMIT" >> "$GITHUB_STEP_SUMMARY"
 
   feasibility:
     name: Isolated M1 experiments (Fedora 44)
@@ -198,6 +209,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.source_commit || github.sha }}
           persist-credentials: false
       - name: Test sanitized PAM graph and session discovery
         run: python3 -m unittest discover -s experiments/m1/platform -p 'test_*.py' -v

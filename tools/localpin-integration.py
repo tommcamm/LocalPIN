@@ -618,7 +618,7 @@ def prepare(uids, *, dry_run=False):
     sync_dir(CONTROL)
     state = {'schema': 2, 'phase': 'preparing', 'uids': sorted(uids),
              'backup': backup.name, 'originals': originals, 'tests': None,
-             'package_version': '0.1.0-alpha.2', 'created_at': int(time.time())}
+             'package_version': '0.1.0-alpha.1', 'created_at': int(time.time())}
     save(state)  # Recovery intent is durable before the first protected edit.
     stop()
     disable_boot()

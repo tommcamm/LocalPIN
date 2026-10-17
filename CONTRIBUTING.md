@@ -90,9 +90,9 @@ physical hardware compatibility. For an RPM build, follow the
 
 ## Branches and pull requests
 
-Every focused change, including documentation, gets its own short-lived branch
-and pull request targeting `main`. Do not commit or push changes directly to
-`main`.
+Every focused development change, including documentation, gets its own
+short-lived branch and pull request targeting `main`. Do not commit or push
+development changes directly to `main`.
 
 1. Start a branch from current `main` and keep unrelated work out of it.
 2. Make clear, focused commits. Include relevant documentation and meaningful
@@ -102,6 +102,15 @@ and pull request targeting `main`. Do not commit or push changes directly to
    resulting behavior, relevant issue or requirement, and remaining limits.
 5. Leave the PR open for maintainer review and approval. Address feedback on the
    same branch; do not merge it automatically or before that review is complete.
+
+The manually dispatched experimental release workflow has a narrow exception:
+it may create a generated version-only commit on a release branch and publish
+its tag without merging that commit. This direct child of reviewed `main` may
+change only matching manifests, lockfiles, package metadata and changelog. A retry
+may reuse only the exact candidate, which must pass release checks before
+publication. The workflow never pushes to `main`, force-pushes or replaces tags.
+The exception does not cover ordinary development, changes to release automation
+or automatic PR merges. See the [release policy](docs/releasing.md).
 
 ## Validation
 
@@ -138,7 +147,10 @@ and link the workflow run and tested commit in testing reports. Pull-request
 builds test GitHub's merge commit; the bundle records the PR head separately.
 
 Versioned experimental releases use the separate
-[manual release workflow](docs/releasing.md), which reruns CI before publishing.
+[manual release workflow](docs/releasing.md). If the committed version has already
+been tagged, it commits the next version to a release branch, then reruns CI and
+publishes from that exact commit in the same run. Record changes under
+`Unreleased` in `CHANGELOG.md` so release preparation can carry them forward.
 Its release helper tests run with:
 
 ```sh

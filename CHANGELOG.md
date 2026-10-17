@@ -6,8 +6,6 @@ experimental builds.
 
 ## Unreleased
 
-## [0.1.0-alpha.2] - 2026-10-17
-
 ### Added
 
 - Primary `localpin` CLI alias and inline terminal menu with guided
@@ -33,6 +31,13 @@ experimental builds.
   invalidating setup's single-account scope check before mutation.
 
 ### Changed
+
+- The manual release workflow bumps an already-tagged experimental version,
+  commits matching manifests, lockfiles, RPM defaults and integration metadata
+  to a release branch, then tests and publishes that exact commit in the same run.
+  The generated version-only commit records its reviewed `main` parent; existing
+  tags and release assets stay intact. CI derives its testing RPM sequence from
+  the committed workspace version.
 
 - Report missing private signing material separately from mismatched public
   primary fingerprints. Release descriptions include features, selected changes,

@@ -3,7 +3,7 @@ members = ["crates/localpin-core", "crates/localpin-protocol", "crates/localpin-
 resolver = "3"
 
 [workspace.package]
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.1"
 edition = "2024"
 rust-version = "1.99.1"
 license = "MIT OR Apache-2.0"
@@ -11,7 +11,7 @@ publish = false
 
 [workspace.dependencies]
 zeroize = { version = "=1.9.1", default-features = false, features = ["alloc"] }
-localpin-core = { path = "crates/localpin-core", version = "=0.1.0-alpha.2" }
+localpin-core = { path = "crates/localpin-core", version = "=0.1.0-alpha.1" }
 rustix = { version = "=1.1.5", default-features = false, features = ["std", "fs"] }
 
 [workspace.lints.rust]

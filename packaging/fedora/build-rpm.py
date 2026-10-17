@@ -2,6 +2,7 @@
 """Build a native project RPM without installing it or altering host policy."""
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -18,6 +19,13 @@ ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS = ("localpind", "localpin-worker", "localpin-auth-worker", "localpin-eligibility-worker", "localpin-account", "localpinctl", "liblocalpin_pam.so")
 
 
+def default_release(version):
+    spec = importlib.util.spec_from_file_location("release_policy", Path(__file__).with_name("release-policy.py"))
+    policy = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(policy)
+    return policy.rpm_prefix(version)
+
+
 def run(argv, **kwargs):
     return subprocess.run(argv, cwd=ROOT, check=True, **kwargs)
 
@@ -32,8 +40,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path, help="new build directory (normally under /tmp)")
     parser.add_argument("--native-sysroot", type=Path, help="optional unpacked native development RPM root")
-    parser.add_argument("--release", default="0.1.alpha2", help="RPM release, for example 0.2.alpha1 for an upgrade fixture")
+    parser.add_argument("--release", help="RPM release override; defaults to the Cargo prerelease identity")
     args = parser.parse_args()
+    version = tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["package"]["version"]
+    if args.release is None:
+        args.release = default_release(version)
     if platform.machine() != "x86_64":
         parser.error("only native x86_64 builds are supported")
     if not args.release or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._" for c in args.release):
@@ -49,7 +60,6 @@ def main():
         env["LIBRARY_PATH"] = str(lib) + os.pathsep + env.get("LIBRARY_PATH", "")
     cargo_target = output / "cargo"
     run(["cargo", "build", "--release", "--workspace", "--locked", "--offline", "--target-dir", str(cargo_target)], env=env)
-    version = tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["package"]["version"]
     rpm_version = version.split("-")[0]
     for name in ("BUILD", "RPMS", "SOURCES", "SPECS", "SRPMS", "TMP"):
         (output / name).mkdir()

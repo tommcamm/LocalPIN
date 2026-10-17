@@ -335,6 +335,7 @@ def create(build, output, tag, commit):
     write_json(output / "NATIVE-RPMS.json", {"scope": "complete installed disposable build environment", "packages": native})
     write_json(output / "SBOM.spdx.json", sbom)
     write_json(output / "RELEASE.json", {"schema": 1, "experimental": True, "tag": tag,
+               "reviewed_main_commit": os.environ.get("LOCALPIN_RELEASE_BASE_COMMIT", commit),
                "project_version": version, "source_commit": commit, "source_archive": archive_name,
                "target": "Fedora KDE 44 x86_64", "cargo_target": TARGET,
                "cargo_features": "workspace default features", "build_inputs_signed": False,

@@ -509,7 +509,7 @@ These are engineering decisions to investigate, not unanswered user-preference q
 
 ## Git and GitHub workflow
 
-Use [tommcamm/LocalPIN](https://github.com/tommcamm/LocalPIN) with `main` and short-lived branches. Every change, including documentation and configuration, must go through its own branch and a pull request for maintainer review. Do not commit or push development changes directly to `main`. [CONTRIBUTING.md](../CONTRIBUTING.md) describes the current contributor workflow.
+Use [tommcamm/LocalPIN](https://github.com/tommcamm/LocalPIN) with `main` and short-lived branches. Every development change, including documentation and configuration, must go through its own branch and a pull request for maintainer review. Do not commit or push development changes directly to `main`. The manually dispatched release workflow may publish a generated version-only release-branch commit without merging it, under the narrow exception defined in [CONTRIBUTING.md](../CONTRIBUTING.md), which describes the current contributor workflow.
 
 1. Start a dedicated branch from the latest `main`. Use the maintainer's existing Git identity; do not invent one or change global settings.
 2. Use one branch per coherent change, for example `docs/recovery-guide`, `fix/frame-limit`, or `feat/tpm-backend`. A milestone can require several small branches/PRs. Address review feedback on the same unmerged branch.

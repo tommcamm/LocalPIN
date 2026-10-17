@@ -271,6 +271,14 @@ checksum = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
                 self.assertNotIn(evidence_file, downloads)
         self.assertEqual(manifest["workflow_run_url"], "https://github.com/tommcamm/LocalPIN/actions/runs/12345")
 
+    def test_provenance_keeps_reviewed_main_and_generated_source_distinct(self):
+        base = "d" * 40
+        with patch.dict(bundle.os.environ, {"LOCALPIN_RELEASE_BASE_COMMIT": base}):
+            self.create()
+        manifest = json.loads((self.output / "RELEASE.json").read_text())
+        self.assertEqual(manifest["reviewed_main_commit"], base)
+        self.assertEqual(manifest["source_commit"], COMMIT)
+
     def test_dirty_source_or_wrong_head_fails(self):
         self.dirty = "?? unreviewed.txt"
         with self.assertRaisesRegex(ValueError, "clean"):

@@ -10,21 +10,29 @@ workflow refuses stable versions. Publishing a prerelease does not close M9.
 
 After the release workflow is reviewed and merged into `main`:
 
-1. Review `Cargo.toml`'s workspace version and `CHANGELOG.md` on `main`. The
-   prepared version is `0.1.0-alpha.2`; each release needs an unused version
-   committed through a PR, including pinned workspace dependency versions and
-   both the main and fuzz workspace lockfiles. Keep RPM defaults, CI package
-   identities and the integration helper's reported package version consistent.
-   Only `alpha.N`, `beta.N` and `rc.N` versions are accepted.
+1. Review `CHANGELOG.md` on `main` and record new changes under `Unreleased`.
+   The workflow reads the workspace version from `Cargo.toml`; only `alpha.N`,
+   `beta.N` and `rc.N` versions are accepted. An unused committed version can
+   release directly. If its tag already exists, the workflow automatically
+   advances to the next unused number in the same prerelease channel.
 2. Configure the `release` environment's signing credentials below before the
    first release. Open **Actions → Experimental release → Run workflow**, select
    **main**, and run it. Signing is required for every release; there is no
-   signing toggle. No tag input is needed: the job derives
-   `v0.1.0-alpha.2` from the committed version and builds the dispatched commit.
-3. The job reruns the complete CI workflow, then tests the shipping default
-   feature set and builds a fresh RPM in Fedora 44. It does not install or
-   activate LocalPIN. All checks must pass before publication is possible.
-4. Approve the `release` environment if its protection rules require it. The
+   signing toggle. No tag or version input is needed.
+3. If a bump is needed, the preparation job updates the manifests, pinned
+   workspace dependency versions, both lockfiles, RPM defaults and integration
+   helper's package version together, and moves `Unreleased` changes into the
+   new version's changelog section. It commits those generated changes to
+   `codex/release-v<version>-<reviewed-main-commit>`, directly above the reviewed
+   `main` commit. The
+   version-only release commit can be published without merging, under the
+   narrow release-automation exception to the ordinary PR workflow.
+4. The same run reruns the complete CI workflow, then tests the shipping default
+   feature set and builds a fresh RPM in Fedora 44. Every check, source archive,
+   RPM and release uses the exact resulting source commit, including the version
+   bump when one was made. It does not install or activate LocalPIN. All checks
+   must pass before publication is possible.
+5. Approve the `release` environment if its protection rules require it. The
    separate publication job signs the RPM and full evidence checksums, verifies
    their signatures, retains the evidence as a workflow artifact, creates an
    annotated tag at the tested commit, uploads the RPM and its checksum file
@@ -35,11 +43,26 @@ After the release workflow is reviewed and merged into `main`:
    [GitHub Releases page](https://github.com/tommcamm/LocalPIN/releases).
 
 The workflow has no push/tag trigger and accepts dispatches only from `main`.
-Build/check jobs have read-only repository access and no signing secrets. Only
-the separate publication job has `contents: write`. The repository's Actions
-policy must permit that requested permission and tag/release creation; repository
-rules may impose additional restrictions. The built-in `GITHUB_TOKEN` is enough;
-no personal access token is required.
+Build/check jobs have read-only repository access and no signing secrets. The
+separate preparation job has `contents: write` to create the release branch and
+generated version metadata; it has no release environment or signing
+credentials. The separate publication job has `contents: write` for tag/release
+creation. The built-in `GITHUB_TOKEN` is sufficient when repository rules permit
+these operations; no personal access token is required.
+
+Preparation requires the dispatched commit to remain the current `main` head.
+The generated source commit is its direct child. A retry can reuse only the
+exact candidate with the same parent and generated file contents; a different
+existing branch stops preparation. Publication verifies that the reviewed base
+remains on `main` and the source commit is that base or its generated direct
+child. CI, building, signing and publication all use the selected source commit.
+
+The release branch is retained for inspection. Development on `main` keeps its
+committed version until a deliberate base-version or channel change is reviewed;
+future release runs select the next number above existing same-channel tags.
+There is no version synchronization PR to prepare after each release. Ordinary
+development continues through reviewed PRs, and the release workflow never
+pushes to `main`, force-pushes or merges PRs.
 
 Each GitHub release has two uploaded assets: the signed Fedora 44 x86_64 RPM and
 `SHA256SUMS`, containing only that RPM's checksum. The description links the
@@ -47,15 +70,15 @@ Each GitHub release has two uploaded assets: the signed Fedora 44 x86_64 RPM and
 release's source commit and the workflow run containing its build evidence.
 
 The publication job retains the full signed bundle in the workflow artifact
-`release-evidence-$GITHUB_SHA-$GITHUB_RUN_ATTEMPT` for 90 days. Download it from the
+`release-evidence-<source-commit>-<run-attempt>` for 90 days. Download it from the
 linked run's **Artifacts** section while it remains available; archive a copy for
 longer-term review. It contains:
 
 - The signed RPM and a committed-source archive.
 - `BUILD-INPUTS.json`, matching the manifest inside the RPM: compiler, lockfile,
   native input versions and hashes of the shipped native files.
-- `RELEASE.json`: exact source commit, workflow run, target, RPM identity/digest
-  and final signing status/fingerprint.
+- `RELEASE.json`: exact `source_commit`, `reviewed_main_commit`, workflow run,
+  target, RPM identity/digest and final signing status/fingerprint.
 - `SBOM.spdx.json`: SPDX 2.3 inventory of the resolved default-feature Cargo
   target graph, locked registry checksums and dependency relationships, plus the
   installed native builder RPM inventory. Development/build inputs can appear;
@@ -75,23 +98,38 @@ than the release RPM. These values do not promise an upgrade from arbitrary
 historical fixtures; inspect the installed EVR and use a fresh VM when needed.
 
 Existing tags/releases and their assets are never replaced. If publication
-fails after tag creation, inspect that run and the tag/draft manually; rerunning
-refuses the existing tag. A failure while uploading leaves a draft for inspection.
-Do not move published tags or use asset clobbering. Repair a public release with
-a new version and a corrective release. Source and RPM builds are traceable but
+fails after tag creation, inspect that run and the tag/draft manually. A failure
+while uploading leaves a draft for inspection. A new release run advances to a
+new version when the committed tag already exists; it does not repair the old
+draft. Do not move published tags or use asset clobbering. Repair a public release
+with a new version and a corrective release. Source and RPM builds are traceable but
 are not yet certified reproducible builds.
 
-## Troubleshoot an existing release tag
+## Retry a failed release
 
-If validation reports that a tag already exists or its lookup failed, inspect
-the repository's tags and releases. An existing `v0.1.0-alpha.1` means that
-version has already been used. Prepare the next unused version and matching
-changelog through a PR, merge it into `main` after review, then start a new manual
-release run on `main`. Keep the existing tag and release assets intact.
+An existing `v0.1.0-alpha.1` means that version has already been used. A new
+manual run on current `main` advances to the next unused version, commits the
+matching metadata on its release branch and continues to checks and publication.
+Existing tags and release assets remain intact. A Git lookup failure stops the
+job; it is not treated as permission to select another version.
+
+If CI, building or signing fails after the automatic version commit, that commit
+remains on its release branch. A retry reuses that candidate only when its parent
+and generated contents match exactly. If publication already created a tag,
+inspect the tag/draft; the next new release run selects a new version. Different
+contents on an existing candidate branch require maintainer inspection; the
+workflow never replaces it or silently changes the release source.
+
+If `main` has advanced since dispatch, start a new run from current `main`.
+Preparation refuses the stale dispatch rather than using an outdated base.
+To change the base version or advance from alpha to beta or rc, prepare that
+deliberate version change through a separate reviewed PR.
 
 A [workflow rerun](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs)
-keeps the original commit and ref, so rerunning the failed job still uses the old
-version. If the tag is absent, investigate the Git lookup failure before retrying.
+keeps the original event commit and ref. Start a new manual run to use current
+source and workflow code. The release evidence records both the reviewed main
+commit and the actual source commit, which differs from the event's original
+`GITHUB_SHA` when an automatic version bump was made.
 
 ## Configure RPM signing
 

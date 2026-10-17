@@ -12,8 +12,8 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 localpin-core.workspace = true
-localpin-auth = { path = "../localpin-auth", version = "=0.1.0-alpha.2" }
-localpin-protocol = { path = "../localpin-protocol", version = "=0.1.0-alpha.2" }
+localpin-auth = { path = "../localpin-auth", version = "=0.1.0-alpha.1" }
+localpin-protocol = { path = "../localpin-protocol", version = "=0.1.0-alpha.1" }
 libc = "=0.2.191"
 zeroize.workspace = true
 
