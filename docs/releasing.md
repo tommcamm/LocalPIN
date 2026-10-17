@@ -140,6 +140,12 @@ key with no subkeys can produce a stub-only export with no signing capability;
 it cannot be used for releases. Never paste private exports or passphrases into
 an issue, PR or workflow input.
 
+For GitHub API HTTP 403 failures, inspect the reported server reason and the
+release job's `contents: write` permission and repository rules. A
+[workflow rerun](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs)
+keeps the original commit and ref. To use a workflow fix merged into `main`,
+start a new manual run on `main`; retrying an old job does not load the new code.
+
 ## Verify and test a download
 
 Download assets from the intended tagged prerelease and read `RELEASE.json`.

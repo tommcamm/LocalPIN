@@ -1,6 +1,8 @@
 # Changelog
 
-Changes will be recorded here before versioned releases. There are no releases yet.
+Changes are recorded here before versioned releases. See
+[GitHub Releases](https://github.com/tommcamm/LocalPIN/releases) for published
+experimental builds.
 
 ## Unreleased
 
