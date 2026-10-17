@@ -34,6 +34,10 @@ def lock():
 
 
 class SbomTests(unittest.TestCase):
+    def test_native_license_field_can_contain_a_url(self):
+        packages = bundle.rpm_inventory("synthetic\t0\t1\t1.fc44\tx86_64\thttps://example.invalid/license/\n")
+        self.assertEqual(packages[0]["license"], "https://example.invalid/license/")
+
     def sbom(self, graph=None, locked=None, runtime=None):
         return bundle.spdx(graph if graph is not None else metadata(), locked if locked is not None else lock(),
                            bundle.rpm_inventory(NATIVE_TEXT), runtime if runtime is not None else ["pam-1.7.2-1.fc44.x86_64"],

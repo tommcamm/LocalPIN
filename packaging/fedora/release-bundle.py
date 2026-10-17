@@ -41,7 +41,7 @@ def rpm_inventory(text):
         if len(fields) != 6 or any(not field for field in fields):
             raise ValueError("Malformed RPM inventory")
         name, epoch, version, release, arch, license_value = fields
-        if not epoch.isdigit() or any("/" in value or "\x00" in value for value in fields):
+        if not epoch.isdigit() or any("/" in value or "\x00" in value for value in fields[:5]) or "\x00" in license_value:
             raise ValueError("Invalid RPM identity")
         packages.append(dict(name=name, epoch=int(epoch), version=version, release=release,
                              architecture=arch, license=license_value))
