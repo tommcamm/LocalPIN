@@ -9,11 +9,11 @@ publish.workspace = true
 
 [dependencies]
 localpin-core.workspace = true
-localpin-protocol = { path = "../localpin-protocol", version = "=0.1.0-alpha.1" }
-localpin-storage = { path = "../localpin-storage", version = "=0.1.0-alpha.1" }
-localpin-credentials = { path = "../localpin-credentials", version = "=0.1.0-alpha.1" }
-localpin-tpm = { path = "../localpin-tpm", version = "=0.1.0-alpha.1" }
-localpin-auth = { path = "../localpin-auth", version = "=0.1.0-alpha.1" }
+localpin-protocol = { path = "../localpin-protocol", version = "=0.1.0-alpha.2" }
+localpin-storage = { path = "../localpin-storage", version = "=0.1.0-alpha.2" }
+localpin-credentials = { path = "../localpin-credentials", version = "=0.1.0-alpha.2" }
+localpin-tpm = { path = "../localpin-tpm", version = "=0.1.0-alpha.2" }
+localpin-auth = { path = "../localpin-auth", version = "=0.1.0-alpha.2" }
 rustix = { workspace = true, features = ["net", "event", "process", "time"] }
 zeroize.workspace = true
 dbus = "=0.9.9"

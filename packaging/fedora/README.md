@@ -82,7 +82,7 @@ retains the complete manual administrator procedure. Record the tested commit
 and package version with your results. The guided workflow requires fresh
 installed acceptance; historical M8.1 evidence does not validate it.
 
-CI uses RPM release `0.1.alpha1.ci.<run-number>.<attempt>` so successive workflow
+CI uses RPM release `0.1.alpha2.ci.<run-number>.<attempt>` so successive workflow
 runs and reruns can upgrade earlier CI packages. This sequence does not promise
 an upgrade from arbitrary historical fixtures, including `0.2.alpha1` or the
 recorded `.5`/`.6` builds; start with a fresh disposable guest for those cases.

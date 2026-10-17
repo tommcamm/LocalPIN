@@ -32,7 +32,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path, help="new build directory (normally under /tmp)")
     parser.add_argument("--native-sysroot", type=Path, help="optional unpacked native development RPM root")
-    parser.add_argument("--release", default="0.1.alpha1", help="RPM release, for example 0.2.alpha1 for an upgrade fixture")
+    parser.add_argument("--release", default="0.1.alpha2", help="RPM release, for example 0.2.alpha1 for an upgrade fixture")
     args = parser.parse_args()
     if platform.machine() != "x86_64":
         parser.error("only native x86_64 builds are supported")

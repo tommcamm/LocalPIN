@@ -11,14 +11,16 @@ workflow refuses stable versions. Publishing a prerelease does not close M9.
 After the release workflow is reviewed and merged into `main`:
 
 1. Review `Cargo.toml`'s workspace version and `CHANGELOG.md` on `main`. The
-   initial version is `0.1.0-alpha.1`; a new release needs a new version committed
-   through a PR, including workspace dependency versions and `Cargo.lock` where
-   applicable. Only `alpha.N`, `beta.N` and `rc.N` versions are accepted.
+   prepared version is `0.1.0-alpha.2`; each release needs an unused version
+   committed through a PR, including pinned workspace dependency versions and
+   both the main and fuzz workspace lockfiles. Keep RPM defaults, CI package
+   identities and the integration helper's reported package version consistent.
+   Only `alpha.N`, `beta.N` and `rc.N` versions are accepted.
 2. Configure the `release` environment's signing credentials below before the
    first release. Open **Actions → Experimental release → Run workflow**, select
    **main**, and run it. Signing is required for every release; there is no
    signing toggle. No tag input is needed: the job derives
-   `v0.1.0-alpha.1` from the committed version and builds the dispatched commit.
+   `v0.1.0-alpha.2` from the committed version and builds the dispatched commit.
 3. The job reruns the complete CI workflow, then tests the shipping default
    feature set and builds a fresh RPM in Fedora 44. It does not install or
    activate LocalPIN. All checks must pass before publication is possible.
@@ -65,8 +67,8 @@ The evidence artifact's checksum file covers all evidence files and differs from
 the RPM-only checksum attached to the release. Keep the downloads in separate
 directories.
 
-The initial RPM release is `0.1.alpha1.release.fc44`, above the same-version
-`0.1.alpha1.ci.*` testing packages in RPM ordering. Subsequent alpha versions use
+The alpha.2 RPM release is `0.1.alpha2.release.fc44`, above the same-version
+`0.1.alpha2.ci.*` testing packages in RPM ordering. Alpha versions use
 `0.1.alphaN.release`, beta versions `0.2.betaN.release`, and release candidates
 `0.3.rcN.release`, followed by `.fc44`. Same-version CI packages are not newer
 than the release RPM. These values do not promise an upgrade from arbitrary
@@ -78,6 +80,18 @@ refuses the existing tag. A failure while uploading leaves a draft for inspectio
 Do not move published tags or use asset clobbering. Repair a public release with
 a new version and a corrective release. Source and RPM builds are traceable but
 are not yet certified reproducible builds.
+
+## Troubleshoot an existing release tag
+
+If validation reports that a tag already exists or its lookup failed, inspect
+the repository's tags and releases. An existing `v0.1.0-alpha.1` means that
+version has already been used. Prepare the next unused version and matching
+changelog through a PR, merge it into `main` after review, then start a new manual
+release run on `main`. Keep the existing tag and release assets intact.
+
+A [workflow rerun](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs)
+keeps the original commit and ref, so rerunning the failed job still uses the old
+version. If the tag is absent, investigate the Git lookup failure before retrying.
 
 ## Configure RPM signing
 
@@ -158,10 +172,9 @@ it cannot be used for releases. Never paste private exports or passphrases into
 an issue, PR or workflow input.
 
 For GitHub API HTTP 403 failures, inspect the reported server reason and the
-release job's `contents: write` permission and repository rules. A
-[workflow rerun](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs)
-keeps the original commit and ref. To use a workflow fix merged into `main`,
-start a new manual run on `main`; retrying an old job does not load the new code.
+release job's `contents: write` permission and repository rules. To use a workflow
+fix merged into `main`, start a new manual run on `main`; retrying an old job does
+not load the new code.
 
 ## Verify and test a download
 

@@ -9,7 +9,7 @@ publish.workspace = true
 
 [dependencies]
 localpin-core.workspace = true
-localpin-protocol = { path = "../localpin-protocol", version = "=0.1.0-alpha.1" }
+localpin-protocol = { path = "../localpin-protocol", version = "=0.1.0-alpha.2" }
 rustix = { workspace = true, features = ["process", "time"] }
 zeroize.workspace = true
 libc = "=0.2.191"

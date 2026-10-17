@@ -122,7 +122,7 @@ jobs:
         run: |
           python3 packaging/fedora/test_packaging.py
           python3 packaging/fedora/build-rpm.py --output /tmp/localpin-rpm-ci \
-            --release "0.1.alpha1.ci.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+            --release "0.1.alpha2.ci.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
       - name: Collect the testing RPM, provenance, and checksums
         env:
           LOCALPIN_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
