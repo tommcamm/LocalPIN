@@ -8,6 +8,7 @@ password as the recovery route.**
 
 [Build from source](#build-from-source) ·
 [Download a testing RPM](packaging/fedora/README.md#download-a-ci-testing-rpm) ·
+[Manual prereleases](docs/releasing.md) ·
 [Installation and recovery](docs/integration-administration.md) ·
 [Contribute](CONTRIBUTING.md) ·
 [Report a security issue](SECURITY.md)
@@ -40,7 +41,8 @@ builds, evidence, and coverage limits.
 Physical TPMs and fingerprint devices, alternate filesystems, AccountsService
 GUI/DBus administration, and the full hardware matrix still need validation.
 [M9](docs/implementation-plan.md#m9--review-hardware-validation-and-versioned-release)
-covers independent review and the remaining release gates.
+covers independent review and the remaining release gates; the
+[readiness checklist](docs/development/m9-release-readiness.md) tracks the evidence.
 
 Hosted CI checks Rust lint/build quality on Ubuntu and runs the full workspace
 tests, native PAM/TPM checks, and RPM build on Fedora 44. Successful Fedora jobs

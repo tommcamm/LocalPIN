@@ -21,6 +21,14 @@ build and test results are available in
 [GitHub Actions](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml);
 package builds do not extend the recorded installed evidence.
 
+## Versioned experimental releases
+
+The maintainer can run the [manual release workflow](../../docs/releasing.md)
+from `main` to build the current version and create a tagged GitHub prerelease.
+It reruns CI and includes source, an SPDX dependency inventory, provenance and
+checksums, with optional protected OpenPGP signing. Supported stable releases
+remain gated on independent M9 review and hardware acceptance.
+
 ## Download a CI testing RPM
 
 CI builds an experimental, unsigned RPM for Fedora KDE 44 x86_64 without

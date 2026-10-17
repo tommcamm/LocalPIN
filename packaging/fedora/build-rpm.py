@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import struct
 import subprocess
@@ -81,7 +82,11 @@ def main():
         with tarfile.open(source, "w:gz") as archive:
             archive.add(bundle, arcname=bundle.name)
     spec = (ROOT / "packaging/fedora/localpin.spec").read_text()
-    spec = spec.replace("Release:        0.1.alpha1%{?dist}", f"Release:        {args.release}%{{?dist}}")
+    # Fail rather than quietly ship the wrong version after a manifest bump.
+    spec, versions = re.subn(r"^Version:.*$", f"Version:        {rpm_version}", spec, flags=re.M)
+    spec, releases = re.subn(r"^Release:.*$", f"Release:        {args.release}%{{?dist}}", spec, flags=re.M)
+    if versions != 1 or releases != 1:
+        raise RuntimeError("expected exactly one RPM Version and Release field")
     spec_path = output / "SPECS/localpin.spec"
     spec_path.write_text(spec)
     # Build-requires are checked by rpmbuild. No --nodeps, mock root, package

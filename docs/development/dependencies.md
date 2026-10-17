@@ -27,11 +27,20 @@ experiment inputs remain separate from production dependencies.
 | GitHub checkout action | `v7.0.1` at `3d3c42e5aac5ba805825da76410c181273ba90b1` | Fetch the source without retaining checkout credentials |
 | GitHub artifact upload action | `v7.0.2` at `cf430e030ddbb5b0abf93d22962f4752f3646cd9` | Publish unsigned Fedora testing RPMs, build metadata, and checksums with 14-day retention |
 | Linux CI environments | GitHub `ubuntu-24.04`; official `fedora:44` container on x86_64 | General quality checks and a separate Fedora build/test job |
+| Release tools | Fedora 44 `rpm-sign`, `gnupg2`, `gh` and Python standard library | Separate manual experimental publication; optional OpenPGP signing uses protected environment secrets and temporary keyrings |
 
 Toolchain and dependency versions belong in their authoritative files. Keep the
 toolchain's `channel` an exact release, and update the workspace minimum version
 when changing the supported compiler contract. CI reads the toolchain file rather
 than keeping a second Rust version in workflow YAML.
+
+The [manual prerelease workflow](../releasing.md) reuses the pinned checkout and
+upload actions above, reruns CI, and tests default features before building the
+shipping RPM. It adds no Rust dependency. Its generated SPDX inventory records
+the locked target Cargo graph and actual installed Fedora builder RPM versions;
+native tools and the `fedora:44` image are resolved at build time rather than
+presented as immutable or reproducible inputs. Release signing/publication tools
+run separately from the compiler and PR CI.
 
 The [checkout release](https://github.com/actions/checkout/releases/tag/v7.0.1)
 links to the [pinned commit](https://github.com/actions/checkout/commit/3d3c42e5aac5ba805825da76410c181273ba90b1).

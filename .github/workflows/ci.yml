@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -48,6 +49,7 @@ jobs:
         run: |
           python3 -m unittest discover -s tools/tests -p 'test_*.py' -v
           python3 -m unittest discover -s experiments/m8 -p 'test_*.py' -v
+          python3 -m unittest discover -s packaging/fedora -p 'test_release*.py' -v
       - name: Build release artifacts
         run: cargo build --workspace --all-features --release --locked
 
