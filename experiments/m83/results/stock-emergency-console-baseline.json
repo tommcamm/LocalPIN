@@ -1,0 +1,13 @@
+{
+  "actual_authenticated_root_emergency_console": true,
+  "before_product_or_counter_fixture": true,
+  "tty": "/dev/tty1",
+  "phase": "stock-emergency-console-baseline",
+  "passed": true,
+  "actual_password_prompt_visually_verified": true,
+  "single_synthetic_root_password_entry_not_echoed": true,
+  "returned_to_graphical_target": true,
+  "emulated_serial_attached_before_emergency": true,
+  "only_tty0_is_kernel_console": true,
+  "no_product_installed": true
+}

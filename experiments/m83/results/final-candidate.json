@@ -1,0 +1,59 @@
+{
+  "phase": "final-candidate-payload-and-source-verification",
+  "pass_scope": "Expected runtime delta against RPM6, unchanged payload metadata/scriptlets/dependencies, all three changed final payloads matching the frozen worktree, and every archived non-document source matching the worktree. Post-build documentation differences are explicitly allowed and listed; installed behavior is established separately by VM evidence.",
+  "passed": true,
+  "earlier_candidate": "localpin-0.1.0-0.1.alpha1.vm83.6.fc44.x86_64.rpm",
+  "final_candidate": "localpin-0.1.0-0.1.alpha1.vm83.11.fc44.x86_64.rpm",
+  "rpm_sha256": "6af7b1aa351248c7b12688b2ab74ca89ba9d896fe5232b9040bd6d770aaabb83",
+  "source_archive_sha256": "e9b59fe076848e0d352e38e2705c4132506e140408970709fa60604389694300",
+  "earlier_rpm_sha256": "94fddac9664738edd5ed1801b344ba22a784b3d8ccddb259f73ad2f9c9a40697",
+  "immediate_previous_candidate_comparison": "rpm10-to-rpm11.json",
+  "runtime_entries_compared": 37,
+  "runtime_differences": [
+    {
+      "path": "/usr/lib/systemd/system/localpin-accounting.target",
+      "earlier_sha256": "6a2471bb832dea9da6975e5a8d2abd0b8175320b0a8f1354ae4f188062768e01",
+      "later_sha256": "20b1b13f26bf160d56d23bec4d8bf5b5b11fe6a227aa3b2baa710dacdda16727"
+    },
+    {
+      "path": "/usr/libexec/localpin/localpin-accounting",
+      "earlier_sha256": "dd16f0a36f84183f710db4c9be92904f5da90ecd3a5d126feeceb2b943611897",
+      "later_sha256": "b64ab4a591a4d972cbff0ab1daa683b33b3629edf86fde2813ba191f28fbc74f"
+    },
+    {
+      "path": "/usr/libexec/localpin/localpin-integration",
+      "earlier_sha256": "8e46281735102ec560d2248767f577a429a3e0bd16080f4a89567b8967dc7d7e",
+      "later_sha256": "1da7aeaf685149cf9b4be0a5e3814dc03da7230de5340ae215566d4a76e26957"
+    }
+  ],
+  "runtime_delta": "The accounting helper adds identity-bound watchdog pidfd signaling, native RPM transaction serialization, locked policy revalidation, and service-before-isolation sequencing. The maintenance target removes its worker Requires/After dependency to permit isolation from the already-running independent worker, and orders target completion after display-manager, logind and user-session stop jobs so virtual-terminal cleanup can finish before the kernel barrier, and explicitly stops and waits for user.slice to drain delegated user-manager and runtime-directory lifecycles before the barrier. The integration helper adds only the fixed native-package-transaction-busy refusal requested for setup. All other runtime files are identical, including the CLI, native workers, remaining units, launcher and policy.",
+  "runtime_mode_uid_gid_equal": true,
+  "all_file_modes_owners_groups_flags_and_symlink_targets_equal": true,
+  "runtime_metadata_differences": [],
+  "scriptlets_and_triggers_equal_after_candidate_normalization": true,
+  "dependencies_equal_after_candidate_normalization": true,
+  "final_accounting_payload_matches_worktree": true,
+  "final_integration_payload_matches_worktree": true,
+  "final_target_payload_matches_worktree": true,
+  "source_archive_files_compared": 215,
+  "non_document_source_files_compared": 145,
+  "source_archive_worktree_differences": [
+    "docs/README.md",
+    "docs/development/m8.3-accounting-maintenance.md",
+    "docs/implementation-plan.md",
+    "docs/product-specification.md"
+  ],
+  "source_archive_missing_worktree_files": [],
+  "runtime_source_worktree_differences": [],
+  "local_validation": {
+    "tools_tests": 140,
+    "m83_fixture_tests": 16,
+    "packaging_tests": 10,
+    "all_passed": true,
+    "git_diff_check": "passed"
+  },
+  "notes": [
+    "The 37 non-document file and symlink entries include the two unchanged license files. RPM candidate release metadata differs as expected. Documentation may evolve after the candidate source snapshot; differences are listed explicitly.",
+    "This comparison is read-only and does not establish installed behavior; VM records provide that evidence."
+  ]
+}

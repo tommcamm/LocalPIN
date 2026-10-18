@@ -1,0 +1,57 @@
+{
+  "phase": "actual-worker-crash-emergency-unavailable",
+  "passed": false,
+  "candidate": "0.1.0-0.1.alpha1.vm83.9.fc44",
+  "actual_worker_stopped_at_quiescent_and_sigkill_confirmed": true,
+  "pid1_actually_frozen_before_kill": true,
+  "kernel_barrier": {
+    "empty_frozen_slices": {
+      "dev-hugepages.mount": {
+        "frozen": "1",
+        "populated": "0"
+      },
+      "dev-mqueue.mount": {
+        "frozen": "1",
+        "populated": "0"
+      },
+      "sys-fs-fuse-connections.mount": {
+        "frozen": "1",
+        "populated": "0"
+      },
+      "sys-kernel-config.mount": {
+        "frozen": "1",
+        "populated": "0"
+      },
+      "sys-kernel-debug.mount": {
+        "frozen": "1",
+        "populated": "0"
+      },
+      "sys-kernel-tracing.mount": {
+        "frozen": "1",
+        "populated": "0"
+      },
+      "system.slice": {
+        "frozen": "1",
+        "populated": "0"
+      },
+      "user.slice": {
+        "frozen": "1",
+        "populated": "0"
+      }
+    },
+    "init_frozen": true,
+    "old_tasks_killed": true
+  },
+  "durable_phase": "quiescent",
+  "watchdog_reached_emergency_target": true,
+  "pid1_resumed_and_normal_boot_guard_refused_pending_request": true,
+  "stock_emergency_service_immediately_deactivated_repeatedly_and_hit_start_limit": true,
+  "restart_loop_preceded_console_input": true,
+  "preboot_synthetic_root_recovery_fixture_unlocked": true,
+  "same_boot_memory_and_volatile_authority_retained_in_managedsave": true,
+  "active_disk_never_mounted": true,
+  "root_recovery_not_yet_performed": true,
+  "original_vm_remains_off": true,
+  "durable_source_snapshot_absent": true,
+  "live_policy_switch_not_reached": true
+}

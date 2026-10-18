@@ -1,0 +1,7 @@
+[Unit]
+Description=LocalPIN one-time password accounting maintenance
+Documentation=man:systemd.special(7)
+DefaultDependencies=no
+AllowIsolate=yes
+Conflicts=user.slice
+After=display-manager.service systemd-logind.service systemd-user-sessions.service user.slice

@@ -1,0 +1,25 @@
+{
+  "phase": "stock-emergency-console-preflight",
+  "passed": true,
+  "before_any_native_counter_or_accounting_fixture": true,
+  "console_inventory": [
+    "tty0                 -WU (EC  p  )    4:1"
+  ],
+  "console_active": "tty0",
+  "cmdline_console_flags": [],
+  "root_unlocked": true,
+  "kernel_release": "7.2.10-200.fc44.x86_64",
+  "packages": {
+    "fedora-release-kde": "not installed",
+    "kernel-core": "kernel-core-6.19.10-300.fc44.x86_64\nkernel-core-7.2.10-200.fc44.x86_64",
+    "systemd": "systemd-259.9-1.fc44.x86_64",
+    "pam": "pam-1.7.2-2.fc44.x86_64",
+    "rpm": "rpm-6.0.2-1.fc44.x86_64",
+    "plasma-workspace": "plasma-workspace-6.7.5-1.fc44.x86_64",
+    "util-linux-core": "util-linux-core-2.41.5-1.fc44.x86_64",
+    "util-linux": "util-linux-2.41.5-1.fc44.x86_64"
+  },
+  "selinux": "Enforcing",
+  "private_tpm_emulator": true,
+  "sulogin_present": true
+}

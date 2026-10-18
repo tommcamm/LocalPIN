@@ -1,0 +1,13 @@
+[Unit]
+Description=Refuse ordinary boot after interrupted LocalPIN accounting migration
+DefaultDependencies=no
+RequiresMountsFor=/var/lib/localpin-integration
+Before=sysinit.target
+OnFailure=emergency.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/localpin/localpin-accounting guard
+RemainAfterExit=yes
+UMask=0077
+LimitCORE=0

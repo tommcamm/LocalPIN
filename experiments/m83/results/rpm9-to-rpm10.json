@@ -1,0 +1,23 @@
+{
+  "phase": "rpm9-to-rpm10-runtime-comparison",
+  "passed": true,
+  "earlier_candidate": "localpin-0.1.0-0.1.alpha1.vm83.9.fc44.x86_64.rpm",
+  "later_candidate": "localpin-0.1.0-0.1.alpha1.vm83.10.fc44.x86_64.rpm",
+  "earlier_rpm_sha256": "bebe0204a21c51311f6b9563b8593ad87ceb4846cc8c7a2580312d6bf0bfb248",
+  "later_rpm_sha256": "3b322ed0641ea11c6241a643fcf7604da0a00e2b661e74a1f34145f39ee4e520",
+  "non_document_files_and_symlinks_compared": 37,
+  "runtime_differences": [
+    {
+      "path": "/usr/lib/systemd/system/localpin-accounting.target",
+      "earlier_sha256": "e1f6384a659e03a803d4a2f2346fd1cbc0ada0f9901cc4e3bfb5f2eaecc6b087",
+      "later_sha256": "40d7bb54e1f5020477221f257abaca5dcd076efd5a041c68a3092196f9d1a26b"
+    }
+  ],
+  "exact_only_runtime_text_addition": "After=display-manager.service systemd-logind.service systemd-user-sessions.service",
+  "target_delta_is_exactly_that_line": true,
+  "file_modes_owners_groups_flags_symlink_targets_equal": true,
+  "scriptlets_and_triggers_equal_after_candidate_normalization": true,
+  "dependencies_equal_after_candidate_normalization": true,
+  "worker_and_watchdog_logic_identical": true,
+  "installed_behavior_not_inferred_from_comparison": true
+}

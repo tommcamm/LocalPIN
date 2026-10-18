@@ -77,8 +77,10 @@ localpin setup
 
 The guide checks prerequisites, previews preparation and guides enrollment,
 a timed trial, actual password/PIN tests, console recovery, fresh enrollment and
-final activation. The one-time persistent-accounting migration still needs an
-offline maintenance console; setup stops with that handoff when needed. The
+final activation. On a supported fresh installation, setup can perform the
+one-time persistent-accounting migration after explicit approval to sign out
+sessions and temporarily stop authentication. Setup resumes after password
+login. Unsupported or interrupted state requires administrator recovery. The
 [installation and recovery runbook](../../docs/integration-administration.md)
 retains the complete manual administrator procedure. Record the tested commit
 and package version with your results. The guided workflow requires fresh

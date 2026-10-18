@@ -1,0 +1,12 @@
+{
+  "phase": "active-reboot-before-login",
+  "passed": true,
+  "candidate": "0.1.0-0.1.alpha1.vm83.6.fc44",
+  "boot_changed": true,
+  "same_enrollment_registry_throttle_native_counters_and_policies_before_authentication": true,
+  "original_nonowner_failure_counter_retained": true,
+  "completed_accounting_boot_guard_permitted_normal_boot": true,
+  "guard_markers_recreated_only_after_independent_identity_checks": true,
+  "fresh_enrollment_performed": false,
+  "selinux": "Enforcing"
+}

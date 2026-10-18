@@ -1,0 +1,16 @@
+{
+  "phase": "real-pending-request-and-erase-refusal",
+  "passed": true,
+  "candidate": "0.1.0-0.1.alpha1.vm83.11.fc44",
+  "normal_setup_created_real_durable_requested_transaction": true,
+  "request_stopped_before_worker_isolation": true,
+  "no_product_journal_edit": true,
+  "test_only_delay_dropin_removed": true,
+  "ordinary_rpm_erase_refused_and_package_helper_units_retained": true,
+  "original_volatile_policy_and_nonowner_native_history_retained": true,
+  "all_normal_services_and_same_desktop_retained": true,
+  "no_account_authority_or_resume_hint_created": true,
+  "selinux": "Enforcing",
+  "fixed_preun_refusal": "accounting maintenance pending; use emergency recovery",
+  "rpm_payload_verification_passed_after_refusal": true
+}

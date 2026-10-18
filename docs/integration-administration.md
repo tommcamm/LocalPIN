@@ -42,8 +42,10 @@ the final enrollment in a new trial, attest the completed tests and explicitly
 activate. No PIN value or user-owned progress file records setup state.
 
 The [one-time offline accounting migration](#prepare-native-accounting-once)
-is still a maintenance-console step. Setup refuses to copy live tallies and
-explains that prerequisite when missing. Multiuser installations, unknown
+can be scheduled by setup on a supported fresh installation after explicit
+approval to save work and sign out. It runs in the same boot and returns to
+password login; setup opens again automatically. Setup never copies live tallies
+or resets counters. Multiuser installations, unknown
 policies, legacy state, incomplete recovery and suspended updates stay with the
 manual administrator procedure. Cancelling retains completed stages and can
 leave the reported trial window open. Rerunning setup reads authoritative state;
@@ -125,6 +127,72 @@ malformed and expired activation gates leave the existing password route.
 Enrollment alone never opens the desktop PIN gate.
 
 ## Prepare native accounting once
+
+### Automatic preparation for a fresh installation
+
+Use a build containing [ADR 0020](adr/0020-setup-accounting-maintenance.md)'s
+maintenance service; older guided builds only explain the manual handoff.
+From your normal foreground KDE terminal, run `localpin setup`. With the exact
+reviewed stock Fedora configuration and no prior managed account authority,
+setup offers the migration before enrollment. Administrator approval is separate
+from the later account-password verification used to create a PIN.
+
+If a package operation is running, setup refuses before signing anyone out.
+Let the package operation finish, then rerun `localpin setup`.
+
+Save all work before confirming. Maintenance signs out **all users**, stops
+system services and background jobs, and temporarily prevents authentication.
+A system service takes over independently of the terminal, preserves all native
+tallies and their exact backups, switches to persistent accounting, and restores
+the graphical login and previously active supported login listeners. No reboot
+precedes the copy: doing so would discard the volatile source counters.
+
+Log back into KDE using your full password. A packaged autostart launcher opens
+`localpin setup` once for this maintenance request; if no window appears, run
+that command yourself. It rechecks privileged state before proceeding. Its
+user-owned duplicate-window cache cannot authorize enrollment or activation.
+Continue the actual PIN/password and console-recovery tests below.
+
+Unknown policy, an existing managed installation, conflicting tallies or an
+incomplete transaction requires administrator review. Automation is deliberately
+limited to the current Fedora KDE target. It is not a general repair utility.
+Keep a recoverable VM snapshot and verified console/offline recovery access.
+If preflight refuses before entering the execution barrier, the service can
+restore password login automatically only after proving this is the same boot,
+the original accounting policy is intact, and no backup, counter copy or policy
+switch has begun. The failed request is retained for diagnosis.
+
+### Interrupted automatic maintenance
+
+Protected maintenance state and exact backups live under
+`/var/lib/localpin-integration/control/accounting/`. Do not delete that directory,
+reset counters, overwrite persistent tallies with backups, or edit the journal
+to claim completion. An incomplete transaction prevents ordinary boot and
+selects emergency recovery. The watchdog releases the kernel execution barrier
+if the migration worker dies; normal authentication remains withheld until the
+accounting authority is verified.
+
+From an administrator root recovery shell, run:
+
+```sh
+/usr/libexec/localpin/localpin-accounting recover
+```
+
+Before the switch, recovery requires the original volatile configuration and
+the same boot, and verifies the source snapshot when one exists. It aborts
+without copying or resetting counters. After the switch, recovery requires the
+exact durable persistent snapshot and original private backups, then completes
+forward and restores login. Different or newer accounting is retained for
+manual review; recovery never overwrites it. After a verified abort, setup may
+offer a new explicitly approved request while retaining the prior evidence.
+
+Power loss before a durable snapshot can destroy `/run/faillock`. The helper
+cannot reconstruct lost counters and refuses to certify preservation. Use the
+prepared offline recovery path and inspect retained backups; a recoverable VM
+snapshot remains the escape route for disposable testing. Fedora emergency
+login itself depends on the VM's configured root recovery access.
+
+### Manual maintenance procedure
 
 Installed activation requires persistent native password accounting:
 

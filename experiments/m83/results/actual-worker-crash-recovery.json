@@ -1,0 +1,63 @@
+{
+  "phase": "actual-worker-crash-same-boot-recovery",
+  "passed": true,
+  "candidate": "0.1.0-0.1.alpha1.vm83.10.fc44",
+  "actual_worker_sigkill_at_quiescent": true,
+  "pid1_actually_frozen_before_kill": true,
+  "real_production_watchdog_thawed_all_cgroups": true,
+  "actual_root_emergency_password_login": true,
+  "actual_root_console_invoked_installed_recover": true,
+  "same_boot": true,
+  "durable_recovery_phase": "aborted",
+  "native_nonowner_failure_bytes_uid_gid_mode_xattrs_preserved": true,
+  "original_volatile_policy_preserved": true,
+  "all_login_network_services_restored": {
+    "display-manager.service": "active",
+    "systemd-logind.service": "active",
+    "systemd-user-sessions.service": "active",
+    "sshd.service": "active",
+    "NetworkManager.service": "active"
+  },
+  "no_nologin_no_authority_no_resume_hint": true,
+  "exact_fault_dropin_and_fixture_removed": true,
+  "recovery_command_returncode": null,
+  "kernel_barrier": {
+    "empty_frozen_slices": {
+      "dev-hugepages.mount": {
+        "frozen": "1",
+        "populated": "0"
+      },
+      "dev-mqueue.mount": {
+        "frozen": "1",
+        "populated": "0"
+      },
+      "sys-fs-fuse-connections.mount": {
+        "frozen": "1",
+        "populated": "0"
+      },
+      "sys-kernel-config.mount": {
+        "frozen": "1",
+        "populated": "0"
+      },
+      "sys-kernel-debug.mount": {
+        "frozen": "1",
+        "populated": "0"
+      },
+      "sys-kernel-tracing.mount": {
+        "frozen": "1",
+        "populated": "0"
+      },
+      "system.slice": {
+        "frozen": "1",
+        "populated": "0"
+      },
+      "user.slice": {
+        "frozen": "1",
+        "populated": "0"
+      }
+    },
+    "init_frozen": true,
+    "old_tasks_killed": true
+  },
+  "selinux": "Enforcing"
+}

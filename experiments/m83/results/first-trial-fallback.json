@@ -1,0 +1,32 @@
+{
+  "phase": "recovery",
+  "passed": true,
+  "selinux": "Enforcing",
+  "observations": {
+    "unlocked": true,
+    "enter_required_observed": false,
+    "locked_before_enter": false,
+    "unlock_elapsed_seconds": 0.362,
+    "before_enter_tally": {
+      "bytes": 128
+    },
+    "after_tally": {
+      "bytes": 128
+    },
+    "wrong_candidate_denied": true,
+    "same_greeter_after_denial": true,
+    "greeter_pid": 15334,
+    "gui_submissions": 2,
+    "before_tally": {
+      "bytes": 0
+    },
+    "denied_tally": {
+      "bytes": 128
+    },
+    "native_auth_failure_events_before": 0,
+    "native_auth_failure_events_after_denial": 1,
+    "native_failure_journal_greeter_verified": true,
+    "stock_password_stack": false
+  },
+  "candidate": "0.1.0-0.1.alpha1.vm83.5.fc44"
+}

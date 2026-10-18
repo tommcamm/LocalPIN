@@ -1,0 +1,17 @@
+{
+  "phase": "compatible-upgrade",
+  "passed": true,
+  "candidate": "0.1.0-0.1.alpha1.vm83.6.fc44",
+  "rpm_sha256": "94fddac9664738edd5ed1801b344ba22a784b3d8ccddb259f73ad2f9c9a40697",
+  "observations": {
+    "same_enrollment_registry_throttle_tally_and_policies": true,
+    "automatic_active_gate_preserved": true,
+    "version_before": "0.1.0-0.1.alpha1.vm83.5.fc44",
+    "version_after": "0.1.0-0.1.alpha1.vm83.6.fc44",
+    "compatible_upgrade_completed": true,
+    "explicit_downgrade_refused": false
+  },
+  "all_private_policy_and_accounting_backups_bytes_metadata_and_original_selinux_labels_unchanged": true,
+  "nonowner_original_native_counter_unchanged": true,
+  "selinux": "Enforcing"
+}

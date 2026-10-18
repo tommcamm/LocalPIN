@@ -41,10 +41,11 @@ Use a disposable **Fedora KDE 44 x86_64 VM with SELinux enforcing** and a
 recoverable snapshot first. Setup requires administrator access and the supported
 local account and authentication policy described in the installation guide.
 
-The published `v0.1.0-alpha.1` predates guided setup; use the
+`v0.1.0-alpha.1` predates guided setup; use the
 [manual setup checklist](docs/integration-administration.md#manual-setup-checklist)
-and `localpinctl` for that release. The steps below require a build containing
-the M8.2 guided CLI.
+and `localpinctl` for that release. The automatic accounting steps below require
+a build containing the current guided CLI and setup-managed maintenance;
+earlier guided builds retain the manual accounting handoff.
 
 1. **Choose and verify the matching build.** For the current guided flow, use a
    [CI testing RPM](packaging/fedora/README.md#download-a-ci-testing-rpm) from a
@@ -64,9 +65,12 @@ the M8.2 guided CLI.
    Installation leaves authentication unchanged and services stopped. Setup
    explains preparation, helps you choose TPM or software protection, enrolls
    your PIN privately, and guides trial, recovery rehearsal and activation.
-3. **Complete the required checks.** The one-time persistent password-accounting
-   migration still needs an [offline maintenance console](docs/integration-administration.md#prepare-native-accounting-once).
-   Setup stops with guidance when that prerequisite is missing. Keep an
+3. **Complete the required checks.** On a supported fresh installation, setup
+   offers to prepare persistent password accounting automatically. Save your
+   work before confirming: maintenance signs out sessions and temporarily stops
+   authentication. After password login, setup resumes automatically. See the
+   [accounting procedure](docs/integration-administration.md#prepare-native-accounting-once)
+   for scope and interrupted-maintenance recovery. Keep an
    administrator console available, perform the actual unlock/recovery tests,
    and rerun `localpin setup` to resume. Console recovery revokes enrollment;
    setup guides fresh preparation, enrollment and final trial tests afterward.
@@ -74,11 +78,11 @@ the M8.2 guided CLI.
 **Installation and enrollment alone do not activate PIN unlocking.** The
 [installation and recovery runbook](docs/integration-administration.md) explains
 all prerequisites and retains the manual administrator procedure. The new guided
-flow has passed [local source, terminal and package checks](docs/development/m8.2-guided-setup.md)
-and [targeted installed VM acceptance](docs/development/m8.2-installed-acceptance.md)
-for TPM setup, console recovery, an identical-payload RPM update, reboot and
-removal. Independent review, physical hardware and signed-release gates remain
-open; historical M8.1 evidence retains its tested scope.
+flow has passed [source and targeted installed VM checks](docs/development/m8.3-accounting-maintenance.md)
+for counter preservation, automatic resumption, interruption recovery, TPM setup,
+actual PIN/password tests, compatible RPM update, reboot and removal. The report
+identifies each tested build. Independent review, physical hardware and
+signed-release gates remain open; historical evidence retains its tested scope.
 
 ## Everyday use
 

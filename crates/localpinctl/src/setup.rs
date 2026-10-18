@@ -31,6 +31,21 @@ struct System {
     uid: u32,
 }
 
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AccountingScheduled {
+    scheduled: bool,
+}
+
+fn accounting_scheduled(bytes: &[u8]) -> Result<(), CliError> {
+    let result: AccountingScheduled =
+        serde_json::from_slice(bytes).map_err(|_| CliError::SetupReport)?;
+    if !result.scheduled {
+        return Err(CliError::SetupReport);
+    }
+    Ok(())
+}
+
 impl Host for System {
     fn inspect(&mut self) -> Result<SetupReport, CliError> {
         SetupReport::parse(&admin::invoke(Operation::Inspect, self.uid, None)?)
@@ -42,6 +57,10 @@ impl Host for System {
         trial_ref: Option<&str>,
     ) -> Result<Option<String>, CliError> {
         let bytes = admin::invoke(operation, self.uid, trial_ref)?;
+        if operation == Operation::PrepareAccounting {
+            accounting_scheduled(&bytes)?;
+            return Ok(None);
+        }
         // Mutation responses cannot confer authority: each next step rereads
         // the root report, and each mutation rechecks its UID scope under lock.
         let result: serde_json::Value =
@@ -94,7 +113,10 @@ fn check_account(host: &mut impl Host, ui: &mut impl Ui) -> Result<(), CliError>
 fn ready(report: &SetupReport, ui: &mut impl Ui) -> Result<(), CliError> {
     let message = match report.blocker {
         Blocker::Accounting => Some(
-            "One-time maintenance needed: preserve native password-failure counters while moving them to persistent storage. This must be done offline with other PAM authentication stopped. Setup will not copy live counters or reset them.",
+            "One-time maintenance needed: preserve native password-failure counters while moving them to persistent storage. This existing installation requires the administrator procedure; setup cannot safely schedule it in the reported state.",
+        ),
+        Blocker::AccountingMaintenance => Some(
+            "Password-accounting maintenance is pending, failed, or interrupted. Setup will not schedule another migration or enroll a PIN. Use the administrator recovery procedure to inspect the protected maintenance state.",
         ),
         Blocker::Multiuser => Some(
             "This installation manages other accounts. The desktop-owner wizard cannot replace that configuration. Use the administrator runbook with the complete account list.",
@@ -111,7 +133,10 @@ fn ready(report: &SetupReport, ui: &mut impl Ui) -> Result<(), CliError> {
         ui.say(message)?;
         ui.say(&format!(
             "Guide: {GUIDE}{}",
-            if report.blocker == Blocker::Accounting {
+            if matches!(
+                report.blocker,
+                Blocker::Accounting | Blocker::AccountingMaintenance
+            ) {
                 "#prepare-native-accounting-once"
             } else {
                 ""
@@ -149,7 +174,23 @@ fn drive(host: &mut impl Host, ui: &mut impl Ui) -> Result<(), CliError> {
         return pause(ui);
     }
     ui.say("[1/5] Check your system")?;
-    let mut report = inspect(host, ui)?;
+    let mut report = host.inspect()?;
+    if report.blocker == Blocker::Accounting
+        && report.phase == Phase::Unprepared
+        && !report.enrolled
+        && !report.trial_valid
+    {
+        ui.say("Your system needs one-time maintenance to preserve every account's password-failure counters in persistent storage before PIN setup.")?;
+        ui.say("Save your work now. After approval, the maintenance service will log out all users, stop running services and background jobs, and briefly stop authentication in this boot. Normal desktop services will restart afterward; background jobs may need restarting. Log back into KDE with your full account password; setup will reopen automatically. No PIN has been created yet.")?;
+        if !ui.confirm(
+            "Have you saved your work, and approve logging out all users and stopping services and background jobs for this maintenance?",
+        )? {
+            return pause(ui);
+        }
+        host.action(Operation::PrepareAccounting, None)?;
+        return ui.say("Password-accounting maintenance is scheduled. Wait for the login screen, then log into KDE with your full account password. Setup will reopen and check system readiness before continuing; if it does not, run localpin setup.");
+    }
+    ready(&report, ui)?;
     if report.phase == Phase::Active {
         if report.enrolled {
             ui.say("Desktop integration is already active. Setup will preserve it; use the menu to change or disable your PIN.")?;

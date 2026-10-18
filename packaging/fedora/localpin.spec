@@ -21,6 +21,7 @@ Requires:       pam >= 1.7.2
 Requires:       pam < 1.8
 Requires:       authselect
 Requires:       kscreenlocker
+Requires:       konsole
 Requires:       systemd >= 259
 Requires:       selinux-policy-targeted >= 44
 Requires:       policycoreutils
@@ -59,10 +60,18 @@ done
 install -m 0755 native/localpinctl %{buildroot}%{_bindir}/localpinctl
 ln -s localpinctl %{buildroot}%{_bindir}/localpin
 install -m 0755 tools/localpin-integration.py %{buildroot}%{_libexecdir}/localpin/localpin-integration
+install -m 0755 tools/localpin-accounting.py %{buildroot}%{_libexecdir}/localpin/localpin-accounting
+install -m 0755 tools/localpin-setup-resume %{buildroot}%{_libexecdir}/localpin/localpin-setup-resume
+install -D -m 0644 packaging/fedora/localpin-setup.desktop %{buildroot}%{_sysconfdir}/xdg/autostart/localpin-setup.desktop
 ln -s ../libexec/localpin/localpin-integration %{buildroot}%{_sbindir}/localpin-integration
 install -D -m 0755 native/liblocalpin_pam.so %{buildroot}%{_libdir}/security/pam_localpin.so
 install -D -m 0644 crates/localpind/systemd/localpin.service %{buildroot}%{_unitdir}/localpin.service
 install -D -m 0644 crates/localpind/systemd/localpin.socket %{buildroot}%{_unitdir}/localpin.socket
+for unit in localpinmaintenance.slice localpin-accounting.target localpin-accounting.service localpin-accounting-delay.service localpin-accounting-guard.service; do
+    install -D -m 0644 packaging/fedora/$unit %{buildroot}%{_unitdir}/$unit
+done
+install -d %{buildroot}%{_unitdir}/sysinit.target.requires
+ln -s ../localpin-accounting-guard.service %{buildroot}%{_unitdir}/sysinit.target.requires/localpin-accounting-guard.service
 install -D -m 0644 packaging/fedora/95-localpin.preset %{buildroot}%{_presetdir}/95-localpin.preset
 install -D -m 0644 packaging/fedora/localpin.tmpfiles %{buildroot}%{_tmpfilesdir}/localpin.conf
 install -D -m 0644 packaging/fedora/software.conf %{buildroot}%{_datadir}/localpin/systemd/software.conf
@@ -90,7 +99,9 @@ fi
 %post
 # A failed upgrade leaves the activation gate closed for console recovery.
 /usr/sbin/semodule -i %{_datadir}/selinux/packages/localpin.pp || exit 1
-/usr/sbin/restorecon -R %{_libexecdir}/localpin %{_sharedstatedir}/localpin %{_sharedstatedir}/localpin-accounts %{_sharedstatedir}/localpin-integration %{_sharedstatedir}/faillock %{_sysconfdir}/pam.d/localpin-enroll %{_sysconfdir}/pam.d/localpin-eligibility %{_sysconfdir}/pam.d/localpin-kde-password %{_sysconfdir}/pam.d/localpin-kde-fingerprint || exit 1
+/usr/sbin/restorecon -R %{_libexecdir}/localpin %{_sharedstatedir}/localpin %{_sharedstatedir}/localpin-accounts %{_sharedstatedir}/faillock %{_sysconfdir}/pam.d/localpin-enroll %{_sysconfdir}/pam.d/localpin-eligibility %{_sysconfdir}/pam.d/localpin-kde-password %{_sysconfdir}/pam.d/localpin-kde-fingerprint || exit 1
+# Preserve exact SELinux xattrs in private accounting backups, including archives.
+/usr/sbin/restorecon %{_sharedstatedir}/localpin-integration %{_sharedstatedir}/localpin-integration/control || exit 1
 /usr/bin/systemd-tmpfiles --create %{_tmpfilesdir}/localpin.conf || exit 1
 /usr/bin/systemctl daemon-reload || exit 1
 # Resumption must wait for the distribution's real ldconfig file triggers.
@@ -131,6 +142,7 @@ fi
 %doc docs/adr/0017-shadow-record-account-authority.md
 %doc docs/adr/0018-kde-native-update-compatibility.md
 %doc docs/adr/0019-guided-setup-orchestration.md
+%doc docs/adr/0020-setup-accounting-maintenance.md
 %{_bindir}/localpinctl
 %{_bindir}/localpin
 %{_sbindir}/localpin-integration
@@ -138,6 +150,13 @@ fi
 %{_libdir}/security/pam_localpin.so
 %{_unitdir}/localpin.service
 %{_unitdir}/localpin.socket
+%{_unitdir}/localpinmaintenance.slice
+%{_unitdir}/localpin-accounting.target
+%{_unitdir}/localpin-accounting.service
+%{_unitdir}/localpin-accounting-delay.service
+%{_unitdir}/localpin-accounting-guard.service
+%{_unitdir}/sysinit.target.requires/localpin-accounting-guard.service
+%{_sysconfdir}/xdg/autostart/localpin-setup.desktop
 %{_presetdir}/95-localpin.preset
 %{_tmpfilesdir}/localpin.conf
 %{_datadir}/localpin/

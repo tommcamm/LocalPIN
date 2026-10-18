@@ -1,0 +1,15 @@
+{
+  "phase": "rpm-runtime-payload-comparison",
+  "passed": true,
+  "earlier_candidate": "localpin-0.1.0-0.1.alpha1.vm83.5.fc44.x86_64.rpm",
+  "later_candidate": "localpin-0.1.0-0.1.alpha1.vm83.6.fc44.x86_64.rpm",
+  "runtime_entries_compared": 37,
+  "runtime_differences": [],
+  "documentation_only_new_adr_in_later_rpm": true,
+  "rpm_sha256": [
+    "54cf63b75af0bf0a59afcccd4ada7f362af1a2c0a3be4e69dfe73d6d02b14196",
+    "94fddac9664738edd5ed1801b344ba22a784b3d8ccddb259f73ad2f9c9a40697"
+  ],
+  "runtime_metadata_equal": true,
+  "scriptlets_and_triggers_equal_after_candidate_normalization": true
+}

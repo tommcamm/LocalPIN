@@ -1,0 +1,13 @@
+{
+  "phase": "native-rpm-lock-refusal",
+  "passed": true,
+  "candidate": "0.1.0-0.1.alpha1.vm83.9.fc44",
+  "existing_native_posix_rpm_transaction_lock_held": true,
+  "normal_setup_refused_before_request_or_isolation": true,
+  "same_graphical_session_and_leader_retained": true,
+  "all_normal_login_services_remained_active": true,
+  "volatile_config_and_nonowner_failure_counter_unchanged": true,
+  "no_authority_or_resume_hint_created": true,
+  "native_lock_released_without_package_transaction_or_file_change": true,
+  "selinux": "Enforcing"
+}

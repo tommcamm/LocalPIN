@@ -1,0 +1,26 @@
+{
+  "phase": "guest-environment",
+  "passed": true,
+  "os": "Fedora 44 KDE",
+  "kernel_release": "7.2.10-200.fc44.x86_64",
+  "native_packages": {
+    "pam": "0:1.7.2-2.fc44.x86_64",
+    "systemd": "0:259.9-1.fc44.x86_64",
+    "authselect": "0:1.7.1-1.fc44.x86_64",
+    "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+    "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+    "glibc-common": "0:2.43-9.fc44.x86_64",
+    "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+  },
+  "authselect_profile": "local with-silent-lastlog with-mdns4 with-fingerprint with-faillock",
+  "rpm": "6.0.2-1.fc44.x86_64",
+  "plasma_workspace": "6.7.5-1.fc44.x86_64",
+  "selinux": "Enforcing",
+  "private_managed_tpm_emulator": true,
+  "physical_tpm": false,
+  "host_filesystem_shares": false,
+  "independent_disk_without_backing_store": true,
+  "original_vm_off": true,
+  "kernel_console": "tty0",
+  "actual_root_emergency_console_verified_before_fixture": true
+}

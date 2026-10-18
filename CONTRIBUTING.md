@@ -6,11 +6,13 @@ contributions are welcome.
 
 LocalPIN is experimental authentication software with no supported production
 release. The current target is an existing Fedora KDE 44 x86_64 session. Targeted
-M8.1 desktop/package and M8.2 guided-setup cases passed in disposable guests with
-SELinux enforcing and private TPM emulators; independent review, physical
-hardware validation and release gates remain open. See the [README](README.md)
-for an overview and the [M8.1](docs/development/m8.1-desktop-compatibility.md) and
-[M8.2 reports](docs/development/m8.2-installed-acceptance.md) for the exact
+M8.1 desktop/package, M8.2 guided-setup and M8.3 accounting-maintenance cases
+passed in disposable guests with SELinux enforcing and private TPM emulators;
+independent review, physical hardware validation and release gates remain open.
+See the [README](README.md) for an overview and the
+[M8.1](docs/development/m8.1-desktop-compatibility.md),
+[M8.2](docs/development/m8.2-installed-acceptance.md) and
+[M8.3 reports](docs/development/m8.3-accounting-maintenance.md) for the exact
 evidence and scope limits.
 
 ## Choose a contribution
@@ -127,6 +129,7 @@ cargo test --workspace --all-features --locked
 python3 -m unittest discover -s tools/tests -p 'test_*.py' -v
 python3 -m unittest discover -s experiments/m8 -p 'test_*.py' -v
 python3 -m unittest discover -s experiments/m82 -p 'test_*.py' -v
+python3 -m unittest discover -s experiments/m83 -p 'test_*.py' -v
 cargo build --workspace --all-features --release --locked
 ```
 
@@ -200,6 +203,7 @@ Use the relevant design and validation references when changing these boundaries
 | Enrollment, terminal input, or password verification | [Enrollment contract](docs/adr/0011-trusted-enrollment-and-cli.md), [enrollment evidence](docs/development/m6-enrollment-cli.md) |
 | Account identity, lifecycle, or provisioning | [Current account authority](docs/adr/0017-shadow-record-account-authority.md), [account administration](docs/account-administration.md) |
 | PAM, fingerprint/password composition, activation, or packaging | [Desktop compatibility contract](docs/adr/0018-kde-native-update-compatibility.md), [persistent accounting](docs/adr/0014-persistent-faillock.md), [integration and recovery](docs/integration-administration.md) |
+| Setup-managed accounting maintenance and post-login resume | [Maintenance contract](docs/adr/0020-setup-accounting-maintenance.md), [guarded VM acceptance](experiments/m83/README.md) |
 
 Preserve password fallback, persistent failure counters, and fail-closed handling
 of unknown policy or missing authority. Never infer account continuity from

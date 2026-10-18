@@ -73,7 +73,8 @@ def main():
         for directory in ("crates", "packaging", "docs"):
             shutil.copytree(ROOT / directory, bundle / directory, ignore=shutil.ignore_patterns("__pycache__"))
         (bundle / "tools").mkdir()
-        shutil.copy2(ROOT / "tools/localpin-integration.py", bundle / "tools/localpin-integration.py")
+        for name in ("localpin-integration.py", "localpin-accounting.py", "localpin-setup-resume"):
+            shutil.copy2(ROOT / "tools" / name, bundle / "tools" / name)
         for name in ("LICENSE-APACHE", "LICENSE-MIT", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml"):
             shutil.copy2(ROOT / name, bundle / name)
         inputs = {

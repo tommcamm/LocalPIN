@@ -11,7 +11,7 @@ software with no supported production release. Begin in a disposable Fedora KDE
 - [Download experimental releases](https://github.com/tommcamm/LocalPIN/releases)
   and [verify a download](releasing.md#verify-and-test-a-download).
 - [Installation and recovery](integration-administration.md): verify/install the RPM,
-  run `localpin setup`, complete the offline accounting prerequisite and real
+  run `localpin setup`, approve supported offline accounting maintenance and real
   unlock/recovery tests, or follow the manual administrator procedure.
 - [Unsigned CI testing RPMs](../packaging/fedora/README.md#download-a-ci-testing-rpm):
   download packages for testing a specific workflow run.
@@ -61,7 +61,12 @@ work and remaining milestones.
 | [`localpin-credentials`](../crates/localpin-credentials) / [`localpin-tpm`](../crates/localpin-tpm) | Software credentials, PIN derivation, and TPM operations |
 | [`packaging/fedora`](../packaging/fedora) / [`tools`](../tools) | RPM/confinement definitions and activation/recovery tooling |
 
-The [guided setup validation report](development/m8.2-guided-setup.md) records
+The [setup-managed accounting report](development/m8.3-accounting-maintenance.md)
+records source checks and build-scoped VM evidence for automatic maintenance,
+counter preservation, shipped setup resumption, crash recovery and user-session
+lifecycle, retaining failed observations and subsequent corrections. It also
+records the TPM setup, recovery and package-lifecycle cases exercised in this
+change. The [guided setup validation report](development/m8.2-guided-setup.md) records
 local source, terminal and RPM checks for the
 [guided setup contract](adr/0019-guided-setup-orchestration.md). The
 [installed acceptance record](development/m8.2-installed-acceptance.md)

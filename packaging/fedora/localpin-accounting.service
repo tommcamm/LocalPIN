@@ -1,0 +1,17 @@
+[Unit]
+Description=LocalPIN same-boot password accounting migration
+DefaultDependencies=no
+IgnoreOnIsolate=yes
+After=local-fs.target
+RequiresMountsFor=/var/lib/localpin-integration /var/lib/faillock
+OnFailure=emergency.target
+
+[Service]
+Type=oneshot
+Slice=localpinmaintenance.slice
+ExecStart=/usr/libexec/localpin/localpin-accounting run
+TimeoutStartSec=120
+TimeoutStopSec=10
+KillMode=process
+UMask=0077
+LimitCORE=0

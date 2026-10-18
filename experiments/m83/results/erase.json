@@ -1,0 +1,14 @@
+{
+  "phase": "erase",
+  "passed": true,
+  "candidate": "0.1.0-0.1.alpha1.vm83.6.fc44",
+  "observations": {
+    "package_and_module_removed": true,
+    "both_original_kde_services_restored": true,
+    "authority_revoked": true,
+    "native_password_tally_preserved": true
+  },
+  "persistent_accounting_and_all_native_counters_retained": true,
+  "original_nonowner_failure_record_unchanged": true,
+  "selinux": "Enforcing"
+}
