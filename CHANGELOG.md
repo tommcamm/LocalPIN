@@ -6,6 +6,8 @@ experimental builds.
 
 ## Unreleased
 
+## [0.1.0-alpha.3] - 2026-10-18
+
 ### Added
 
 - Flexible credential selection: TPM numeric PINs of 4–16 digits, software PINs

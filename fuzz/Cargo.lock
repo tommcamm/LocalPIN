@@ -234,14 +234,14 @@ dependencies = [
 
 [[package]]
 name = "localpin-core"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.3"
 dependencies = [
  "zeroize",
 ]
 
 [[package]]
 name = "localpin-credentials"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.3"
 dependencies = [
  "argon2",
  "base64ct",
@@ -263,7 +263,7 @@ dependencies = [
 
 [[package]]
 name = "localpin-protocol"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.3"
 dependencies = [
  "listenfd",
  "localpin-core",
