@@ -4,6 +4,8 @@ Date: 2026-10-16. Original M1 status: accepted experimental candidate contract a
 eligibility path, supported by Enforcing-VM evidence. Production eligibility
 implementation and activation remain release blockers.
 
+Credential-format amendment: [ADR 0021](0021-flexible-credentials.md) replaces the six-digit routing grammar with an enrolled type/length profile and a generation-bound challenge. Exact password reuse, eligibility and native accounting requirements remain in force.
+
 ## Context and evidence
 
 LocalPIN must preserve a single submitted candidate through the PIN route and

@@ -1,5 +1,5 @@
 use crate::wire::*;
-use localpin_core::secret::{Pin, SecretBytes};
+use localpin_core::secret::{MAX_CREDENTIAL_BYTES, Pin, SecretBytes};
 use zeroize::Zeroize;
 
 const HEADER_BYTES: usize = 18;
@@ -99,12 +99,17 @@ pub fn encode_request(envelope: &RequestEnvelope) -> Result<EncodedFrame, Protoc
         Request::Status | Request::BeginVerify | Request::Cancel => {}
         Request::Verify { challenge, pin } => {
             f.id(*challenge)?;
-            f.put(pin.expose())?;
+            f.blob(pin.expose(), MAX_CREDENTIAL_BYTES)?;
         }
-        Request::BeginEnroll { action, backend } => {
-            validate_enroll(*action, *backend)?;
+        Request::BeginEnroll {
+            action,
+            backend,
+            kind,
+        } => {
+            validate_enrollment_kind(*action, *backend, *kind)?;
             f.byte(*action as u8)?;
             f.byte(backend.map_or(0, |backend| backend as u8))?;
+            f.byte(kind.map_or(0, encode_kind))?;
         }
         Request::EnrollConversation {
             transaction,
@@ -117,7 +122,7 @@ pub fn encode_request(envelope: &RequestEnvelope) -> Result<EncodedFrame, Protoc
         }
         Request::CommitEnrollment { transaction, pin } => {
             f.id(*transaction)?;
-            f.put(pin.expose())?;
+            f.blob(pin.expose(), MAX_CREDENTIAL_BYTES)?;
         }
         Request::Disable { transaction } => f.id(*transaction)?,
         Request::RecoverDisable { target_uid } => {
@@ -149,7 +154,15 @@ pub fn encode_response(envelope: &ResponseEnvelope) -> Result<EncodedFrame, Prot
         Response::Hello => {}
         Response::Status(s) => {
             f.byte(s.configured as u8)?;
+            validate_status_profile(s.enrolled, s.profile, s.availability)?;
             f.byte(s.enrolled.map_or(0, |backend| backend as u8))?;
+            match s.profile {
+                Some(profile) => {
+                    f.byte(1)?;
+                    put_profile(&mut f, profile)?;
+                }
+                None => f.byte(0)?,
+            }
             f.byte(s.availability as u8)?;
             f.u32(s.cooldown_ms)?;
             f.byte(s.integration as u8)?;
@@ -159,10 +172,20 @@ pub fn encode_response(envelope: &ResponseEnvelope) -> Result<EncodedFrame, Prot
         }
         Response::VerifyChallenge {
             challenge,
+            generation,
+            backend,
+            profile,
             valid_for_ms,
         } => {
             validate_interval(*valid_for_ms, VERIFY_LIFETIME_MS)?;
+            if *generation == 0 {
+                return Err(ProtocolError::InvalidField);
+            }
+            validate_profile(*profile, *backend)?;
             f.id(*challenge)?;
+            f.u64(*generation)?;
+            f.byte(*backend as u8)?;
+            put_profile(&mut f, *profile)?;
             f.u32(*valid_for_ms)?;
         }
         Response::EnrollmentStarted {
@@ -232,6 +255,57 @@ pub(crate) fn validate_enroll(
     } else {
         Err(ProtocolError::InvalidField)
     }
+}
+
+pub(crate) fn validate_enrollment_kind(
+    action: EnrollmentAction,
+    backend: Option<Backend>,
+    kind: Option<CredentialKind>,
+) -> Result<(), ProtocolError> {
+    validate_enroll(action, backend)?;
+    if (action == EnrollmentAction::Disable) == kind.is_none() {
+        Ok(())
+    } else {
+        Err(ProtocolError::InvalidField)
+    }
+}
+
+pub(crate) fn validate_profile(
+    profile: CredentialProfile,
+    backend: Backend,
+) -> Result<(), ProtocolError> {
+    profile
+        .validate(match backend {
+            Backend::Tpm => localpin_core::types::Backend::Tpm2,
+            Backend::Software => localpin_core::types::Backend::Software,
+        })
+        .map_err(|_| ProtocolError::InvalidField)
+}
+
+fn validate_status_profile(
+    backend: Option<Backend>,
+    profile: Option<CredentialProfile>,
+    availability: Availability,
+) -> Result<(), ProtocolError> {
+    match (backend, profile) {
+        (Some(backend), Some(profile)) => validate_profile(profile, backend),
+        (None, None) => Ok(()),
+        (Some(_), None) if availability == Availability::Unavailable => Ok(()),
+        _ => Err(ProtocolError::InvalidField),
+    }
+}
+
+fn encode_kind(kind: CredentialKind) -> u8 {
+    match kind {
+        CredentialKind::NumericPin => 1,
+        CredentialKind::Passcode => 2,
+    }
+}
+
+fn put_profile(f: &mut EncodedFrame, profile: CredentialProfile) -> Result<(), ProtocolError> {
+    f.byte(profile.policy)?;
+    f.byte(encode_kind(profile.kind))?;
+    f.byte(profile.length)
 }
 
 fn validate_interval(value: u32, max: u64) -> Result<(), ProtocolError> {
@@ -318,6 +392,23 @@ fn backend(r: &mut Reader<'_>) -> Result<Option<Backend>, ProtocolError> {
     }
 }
 
+fn kind(r: &mut Reader<'_>) -> Result<Option<CredentialKind>, ProtocolError> {
+    match r.byte()? {
+        0 => Ok(None),
+        1 => Ok(Some(CredentialKind::NumericPin)),
+        2 => Ok(Some(CredentialKind::Passcode)),
+        _ => Err(ProtocolError::UnknownValue),
+    }
+}
+
+fn profile(r: &mut Reader<'_>) -> Result<CredentialProfile, ProtocolError> {
+    Ok(CredentialProfile {
+        policy: r.byte()?,
+        kind: kind(r)?.ok_or(ProtocolError::InvalidField)?,
+        length: r.byte()?,
+    })
+}
+
 fn reason(r: &mut Reader<'_>) -> Result<Reason, ProtocolError> {
     Ok(
         read_enum!(r, 0 => Reason::None, 1 => Reason::Account, 2 => Reason::Session,
@@ -347,15 +438,21 @@ fn decode_request(body: &[u8]) -> Result<RequestEnvelope, ProtocolError> {
         2 => Request::BeginVerify,
         3 => Request::Verify {
             challenge: r.id()?,
-            pin: Pin::parse(r.take(6)?).map_err(|_| ProtocolError::InvalidField)?,
+            pin: Pin::parse(r.blob(MAX_CREDENTIAL_BYTES)?)
+                .map_err(|_| ProtocolError::InvalidField)?,
         },
         4 => Request::Cancel,
         5 => {
             let action = read_enum!(r, 1 => EnrollmentAction::Enroll, 2 => EnrollmentAction::Rotate,
                 3 => EnrollmentAction::Migrate, 4 => EnrollmentAction::Disable);
             let backend = backend(&mut r)?;
-            validate_enroll(action, backend)?;
-            Request::BeginEnroll { action, backend }
+            let kind = kind(&mut r)?;
+            validate_enrollment_kind(action, backend, kind)?;
+            Request::BeginEnroll {
+                action,
+                backend,
+                kind,
+            }
         }
         6 => Request::EnrollConversation {
             transaction: r.id()?,
@@ -368,7 +465,8 @@ fn decode_request(body: &[u8]) -> Result<RequestEnvelope, ProtocolError> {
         },
         7 => Request::CommitEnrollment {
             transaction: r.id()?,
-            pin: Pin::parse(r.take(6)?).map_err(|_| ProtocolError::InvalidField)?,
+            pin: Pin::parse(r.blob(MAX_CREDENTIAL_BYTES)?)
+                .map_err(|_| ProtocolError::InvalidField)?,
         },
         8 => Request::Disable {
             transaction: r.id()?,
@@ -393,26 +491,48 @@ fn decode_response(body: &[u8]) -> Result<ResponseEnvelope, ProtocolError> {
     let (mut r, connection, operation) = header(body)?;
     let response = match operation {
         0x80 => Response::Hello,
-        0x81 => Response::Status(Status {
-            configured: read_enum!(r, 0 => BackendPreference::Auto, 1 => BackendPreference::Tpm,
-                2 => BackendPreference::Software),
-            enrolled: backend(&mut r)?,
-            availability: read_enum!(r, 0 => Availability::Available, 1 => Availability::NotEnrolled,
+        0x81 => {
+            let configured = read_enum!(r, 0 => BackendPreference::Auto, 1 => BackendPreference::Tpm,
+                2 => BackendPreference::Software);
+            let enrolled = backend(&mut r)?;
+            let profile = match r.byte()? {
+                0 => None,
+                1 => Some(profile(&mut r)?),
+                _ => return Err(ProtocolError::UnknownValue),
+            };
+            let availability = read_enum!(r, 0 => Availability::Available, 1 => Availability::NotEnrolled,
                 2 => Availability::Disabled, 3 => Availability::Cooldown, 4 => Availability::Ineligible,
-                5 => Availability::Unavailable),
-            cooldown_ms: r.u32()?,
-            integration: read_enum!(r, 0 => Integration::Inactive, 1 => Integration::Active,
+                5 => Availability::Unavailable);
+            validate_status_profile(enrolled, profile, availability)?;
+            Response::Status(Status {
+                configured,
+                enrolled,
+                profile,
+                availability,
+                cooldown_ms: r.u32()?,
+                integration: read_enum!(r, 0 => Integration::Inactive, 1 => Integration::Active,
                 2 => Integration::NeedsAttention),
-            tpm_detected: r.boolean()?,
-            tpm_usable: r.boolean()?,
-            reason: reason(&mut r)?,
-        }),
+                tpm_detected: r.boolean()?,
+                tpm_usable: r.boolean()?,
+                reason: reason(&mut r)?,
+            })
+        }
         0x82 => {
             let challenge = r.id()?;
+            let generation = r.u64()?;
+            let backend = backend(&mut r)?.ok_or(ProtocolError::InvalidField)?;
+            let profile = profile(&mut r)?;
+            if generation == 0 {
+                return Err(ProtocolError::InvalidField);
+            }
+            validate_profile(profile, backend)?;
             let valid_for_ms = r.u32()?;
             validate_interval(valid_for_ms, VERIFY_LIFETIME_MS)?;
             Response::VerifyChallenge {
                 challenge,
+                generation,
+                backend,
+                profile,
                 valid_for_ms,
             }
         }

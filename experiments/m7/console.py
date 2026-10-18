@@ -23,7 +23,7 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[2]
 PHASES = (
-    "baseline", "pin", "password", "wrong-pin", "sixpassword",
+    "baseline", "pin", "password", "wrong-pin", "sixpassword", "profilepassword",
     "missing-module", "broker-stopped", "broker-crashed", "cooldown",
     "broker-stalled", "worker-missing", "corrupt-state", "tpm-fault",
     "disabled", "not-enrolled", "locked-account", "recovery",
@@ -191,7 +191,8 @@ class Console:
         ]), timeout=timeout)
 
     def candidate(self, selector):
-        require(selector in ("pin", "password", "wrong", "wrongpin", "sixpassword"), "unknown fixed candidate selector")
+        require(selector in ("pin", "password", "wrong", "wrongpin", "sixpassword", "profilepassword"),
+                "unknown fixed candidate selector")
         response = self.guest("\n".join([
             "account = secrets[m.component.NAME]",
             f"selector = {selector!r}",
@@ -199,16 +200,24 @@ class Console:
             "    candidate = 'not-the-disposable-password'",
             "    assert candidate not in (account['password'], account['pin'])",
             "elif selector == 'wrongpin':",
-            "    candidate = '000000'",
+            "    profile = m.component.status()['credential_profile']",
+            "    assert profile is not None and profile['kind'] == 'numeric-pin'",
+            "    candidate = '0' * profile['length']",
             "    assert candidate not in (account['password'], account['pin'])",
             "elif selector == 'sixpassword':",
             "    candidate = account.get('sixpassword', account['password'])",
             "    assert len(candidate) == 6 and candidate.isascii() and candidate.isdigit()",
             "    assert candidate != account['pin']",
+            "elif selector == 'profilepassword':",
+            "    candidate = account['password']",
+            "    profile = m.component.status()['credential_profile']",
+            "    assert profile is not None and profile['kind'] == 'numeric-pin'",
+            "    assert len(candidate) == profile['length'] and candidate.isascii() and candidate.isdigit()",
+            "    assert candidate != account['pin']",
             "else:",
             "    candidate = account[selector]",
             "if selector == 'pin':",
-            "    assert len(candidate) == 6 and candidate.isascii() and candidate.isdigit()",
+            "    assert 8 <= len(candidate) <= 16 and candidate.isascii() and candidate.isdigit()",
             "    assert candidate != account['password']",
             "assert isinstance(candidate, str) and 0 < len(candidate) <= 64",
             "assert all(c in 'abcdefghijklmnopqrstuvwxyz0123456789-' for c in candidate)",
@@ -355,11 +364,11 @@ class Console:
                     "explicit recovery requires the dedicated desktop already locked")
             result = {**self.unlock("password"), "greeter_pid": initial["greeter_pids"][0],
                       "gui_submissions": 1, "before_tally": initial["tally"]}
-        elif phase not in ("pin", "password", "sixpassword"):
+        elif phase not in ("pin", "password", "sixpassword", "profilepassword"):
             result = self.denied_then_password("pin")
         else:
             before = self.lock()
-            selector = "pin" if phase == "pin" else "sixpassword" if phase == "sixpassword" else "password"
+            selector = phase
             result = {**self.unlock(selector, enter_required=phase == "pin"),
                       "greeter_pid": before["greeter_pids"][0],
                       "lock_startup_tally": before["tally"], "gui_submissions": 1}

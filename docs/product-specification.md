@@ -1,6 +1,6 @@
 # LocalPIN product specification
 
-**Specification version:** 1.7
+**Specification version:** 1.8
 
 **Date:** 2026-10-18
 
@@ -10,7 +10,7 @@
 
 ## 1. Product objective
 
-Provide a convenient, six-digit PIN for unlocking an already running local graphical session. The primary user operates a laptop with its lid closed, an external monitor, and an ordinary external keyboard. The workflow must require no fingerprint reader, camera, phone, network connection, or additional security token.
+Provide a convenient numeric PIN or optional passcode for unlocking an already running local graphical session. The primary user operates a laptop with its lid closed, an external monitor, and an ordinary external keyboard. The workflow must require no fingerprint reader, camera, phone, network connection, or additional security token.
 
 The production product must preserve the existing full-password route and normal desktop locking behavior. Initial graphical login, virtual-terminal login, SSH, sudo, polkit, disk encryption, and password managers must retain their existing authentication requirements. Installation must not replace an account password or repurpose the disk-encryption passphrase.
 
@@ -85,11 +85,50 @@ Use a pinned stable Rust toolchain, Rust 2024 edition, a declared minimum suppor
 1. A user verifies and installs the Fedora RPM without changing authentication automatically, then runs `localpin setup` as their normal user in a foreground KDE terminal. The guide checks prerequisites, previews confirmed preparation, guides enrollment and trial/recovery tests, and requests explicit activation. A supported fresh installation can explicitly approve setup-managed offline accounting maintenance, including session termination and automatic setup resumption after password login. Unknown or interrupted state requires administrator recovery; setup never copies live tallies or resets counters.
 2. `localpin` opens a compact numbered menu in a terminal and shows help otherwise. `localpin doctor` reports known backend/service availability and the desktop gate, and explains required recovery checks. Passive status does not perform desktop or password recovery tests or establish unprobed TPM usability.
 3. Enrollment requires fresh verification of the existing account password through a trusted password-only PAM policy. Merely knowing an old PIN, controlling an unlocked user process, or having a cached client-side success flag must not authorize enrollment, reset, or backend downgrade.
-4. The user chooses and confirms a six-digit PIN privately. Leading zeroes are valid. The PIN must not be provided through command-line arguments, environment variables, shell history, or normal logs.
+4. The user chooses Numeric PIN or Passcode, then enters and confirms any permitted length under the policy below. Leading zeroes and passcode spaces are preserved. Secrets must not be provided through command-line arguments, environment variables, shell history, or normal logs.
 5. Root preparation leaves the desktop gate closed. A bounded current-boot trial permits actual PIN, full-password and console-recovery tests. The administrator explicitly attests those tests before final activation; enrollment alone never opens the gate.
-6. At the lock screen the user types the PIN and presses Enter. Do not auto-submit after the sixth character: explicit submission avoids accidental attempts and preserves the password route.
+6. At the lock screen the user types the credential and presses Enter. Never auto-submit at an expected length: explicit submission avoids accidental attempts and preserves the password route.
 7. Full-password fallback must remain available after a wrong PIN, during PIN cooldown, when the broker is stopped, and after backend or state failures.
 8. The user can inspect status, change the PIN, disable PIN unlocking, and restore the previous PAM configuration.
+
+The credential policy is:
+
+| Credential | TPM protection | Software protection | Recommendation |
+| --- | --- | --- | --- |
+| Numeric PIN | 4–16 ASCII digits | 8–16 ASCII digits | 6 with TPM; 10 with software |
+| Optional passcode | 8–64 printable ASCII characters | 8–64 printable ASCII characters | Suggest 12+ characters |
+
+Recommendations never prefill or generate a secret. Numeric PINs accept only
+`0`–`9`; passcodes accept bytes `0x20`–`0x7e`, including leading, trailing and
+repeated spaces, without trimming, normalization or case folding. An explicitly
+selected passcode may contain only digits. No uppercase/symbol composition rule
+is required. Existing version-1 six-digit software credentials keep working;
+status and management recommend replacement. Every new enrollment, change or
+backend migration must satisfy the current policy for its target backend.
+
+Setup, enrollment, change and migration share one terminal form: show protection,
+select type, show limits and recommendation, collect and confirm a new secret,
+resolve local errors and advisory warnings, obtain mutation confirmation, then
+open a fresh connection for account-password verification and commit immediately
+after success. Enrollment defaults to Numeric PIN; changes and migration default
+to the existing type. There is no length picker. Show one `*` per new-credential
+character and keep account-password entry fully hidden. Preserve editing,
+cancellation, terminal restoration and plain `NO_COLOR`/`TERM=dumb` output.
+Preparation, including retries, expires after five minutes; the existing
+password deadline and strictly less-than-60-second authorization grant remain.
+Erase prepared secrets on completion, cancellation or failure; authentication
+retries require new preparation.
+
+Predictable-choice detection is advisory, local to the terminal, and requires
+an explicit **Use anyway** override that defaults to re-entry. Warn for repeated
+characters, complete repeated blocks of one through four characters,
+ascending/descending digit sequences wrapping modulo ten, and exact
+ASCII-case-insensitive matches in the bundled list: `password`, `password1`,
+`password123`, `qwerty123`, `qwertyuiop`, `letmein123`, `welcome1`, `iloveyou`,
+`changeme`, `localpin`. Never print the entered value or an entropy score. The
+broker independently enforces format and length without accepting a client
+claim that validation succeeded. [ADR 0021](adr/0021-flexible-credentials.md)
+records this contract and its compatibility limits.
 
 Disabling only an own-user PIN leaves system integration active. Guided setup
 must offer fresh enrollment in that state without repeating system preparation
@@ -116,7 +155,7 @@ Keyboard acceptance includes top-row digits, numpad with Num Lock enabled, leadi
 
 - Root, a compromised kernel/firmware, or a compromised desktop compositor can bypass local screen authentication. The product does not repair those trust boundaries.
 - Malware already executing as the logged-in user can capture future input or interact with that user's session. UID checks and a claimed PAM service name do not prove that the caller is a genuine lock-screen window.
-- A six-digit PIN has only one million possible values. Hashing does not turn it into a strong offline secret.
+- Short numeric PINs have limited entropy: a six-digit PIN has only one million possible values. Predictable passcodes may also be weak. Hashing does not turn them into strong offline secrets.
 - Software mode provides online throttling and protected system storage, but copied verifier material remains susceptible to offline guessing. Full-disk encryption remains a separate defense.
 - Hardware protection depends on the TPM implementation and platform security. Do not claim immunity to physical hardware attacks, malicious firmware, or all forms of rollback.
 - Password fallback depends on the existing password authentication system. A broken global PAM stack or an expired account may also prevent password unlocking; LocalPIN must not bypass those policies.
@@ -148,15 +187,17 @@ No setuid general-purpose CLI, shell evaluation, network listener, or arbitrary 
 
 ## 6. Identity and IPC protocol
 
-Use a filesystem Unix stream socket under a root-controlled runtime directory. Version 1 uses a bounded, length-prefixed binary message format with explicit message types and rejected unknown fields/versions. A request frame must be at most 4 KiB; credential/config parsing has separate limits. Do not accept file descriptors or other ancillary capabilities from clients.
+Use a filesystem Unix stream socket under a root-controlled runtime directory. Version 2 uses a bounded, length-prefixed binary message format with explicit message types and rejected unknown fields/versions. A request frame must be at most 4 KiB; credential/config parsing has separate limits. Do not accept file descriptors or other ancillary capabilities from clients.
 
 The broker obtains peer UID/GID/PID through kernel-provided credentials such as `SO_PEERCRED`. A supplied username, UID, PID, executable path, or session name is never authoritative. Normal verification is permitted only for the peer's own non-root UID and an eligible local graphical session associated with that UID. Resolve session properties through logind and handle Plasma processes launched under a user manager correctly. Test multiple seats and multiple sessions; do not assume the locker always has a direct session cgroup.
 
 Client-supplied PAM service names are defense-in-depth policy inputs, not caller attestation. A same-UID process may reproduce them. The PAM adapter additionally requires the configured screen-lock service, checks that its real/effective identity agrees with the target, and refuses use as sudo, SSH, login, or another user's authentication module.
 
-Each connection has a fresh random request identifier and each authentication challenge a short expiry, bound to that connection and UID. Responses cannot become reusable bearer tokens. No reusable “PIN already verified” file or global session-unlocked flag is permitted.
+Each connection has a fresh random request identifier and each authentication challenge a short expiry, bound to that connection, account incarnation, committed generation, backend and credential profile. Before reserving an attempt, recheck these bindings under the user lock; any intervening credential change invalidates the challenge. Responses cannot become reusable bearer tokens. No reusable “PIN already verified” file or global session-unlocked flag is permitted.
 
 Required message operations are `Status`, `BeginVerify`, `Verify`, `Cancel`, `BeginEnroll`, `EnrollConversation`, `CommitEnrollment`, `Disable`, and administrator-only recovery operations. Enrollment authorization is stored only in the broker/worker transaction and bound to the UID, action, proposed generation, and a maximum 60-second commit interval after password authentication. A client cannot send a Boolean claiming authentication succeeded.
+
+Public and private worker protocols version variable-length credential inputs, capped at 64 bytes. Reject mixed protocol versions before sending secrets; the PAM adapter continues through password fallback and the CLI explains that components must be updated. Preserve the separate password-conversation limits.
 
 Set bounded connection, read, write, queue, and backend deadlines. Initial target: connect within 250 ms and return PIN-unavailable within 2 seconds when the broker cannot serve the request. Allow up to 5 seconds for a genuine TPM attempt before falling back. Cancelling must release resources; an attempt already durably reserved remains consumed.
 
@@ -172,14 +213,14 @@ Return behavior:
 |---|---|---|
 | Valid PIN, eligible account/session, durable throttle success | `PAM_SUCCESS` | May unlock through the configured sufficient rule |
 | Wrong PIN | PIN failure/ignore according to the adapter contract | Continue to password; never treat as success |
-| Empty input or non-PIN input | Skip PIN | Continue to password |
+| Empty input or input outside the enrolled profile | Skip LocalPIN | Continue to password |
 | PIN cooldown, not enrolled, disabled | `PAM_IGNORE` | Continue to password |
 | Broker/TPM unavailable, timeout, corrupt state, I/O failure | `PAM_IGNORE` plus sanitized diagnostic | Continue to password |
 | Target identity mismatch or unsupported service | Non-success | No PIN authorization; original service policy remains authoritative |
 
 The implementation must distinguish “the PIN route fails closed” from “the entire PAM transaction denies password fallback.” Backend errors must never grant access and must not make an otherwise functioning password route unusable.
 
-For the intended stock-KDE experience, the adapter captures one candidate through PAM. It tries PIN verification only for six ASCII digits. On non-success it places the candidate in PAM's authentication token using the supported PAM API, with lifetime/cleanup rules documented, so the existing password module can consume that same candidate. This avoids demanding the full password twice and permits a six-digit account password to work through the password stack even when it is not the PIN. The exact Fedora stack must be tested for token reuse; if unsupported, activation must either select a verified explicit password-selection conversation or refuse. Do not silently deploy a broken single-entry promise.
+For the intended stock-KDE experience, the adapter captures one candidate through PAM. It obtains the enrolled public profile in its verification challenge and tries LocalPIN only when the candidate has that exact length and format. On non-success it places the candidate in PAM's authentication token using the supported PAM API, with lifetime/cleanup rules documented, so the existing password module can consume that same candidate. Preserve the original candidate byte-for-byte for fallback. This avoids demanding the full password twice and permits an account password matching the credential profile to work through the password stack even when it is not the LocalPIN credential. The exact Fedora stack must be tested for token reuse; if unsupported, activation must either select a verified explicit password-selection conversation or refuse. Do not silently deploy a broken single-entry promise.
 
 All C ABI entrypoints validate pointers/arguments, contain Rust panics, and never unwind into PAM. Use a small reviewed FFI boundary with allocator ownership matched to PAM. Sensitive data must not appear in `Debug`, panic, tracing, or error output. A process-aborting panic strategy that could kill the locker is not a substitute for containment.
 
@@ -232,7 +273,7 @@ OS randomness failures abort enrollment. Secrets use zeroizing buffers, bounded 
 
 ## 11. Authoritative throttling and crash consistency
 
-The same broker-managed throttle applies to both backends. The default is five submitted valid-format guesses per rolling 60-second window, followed by a five-minute PIN cooldown. Candidates outside six ASCII digits do not invoke or consume LocalPIN verification attempts. A six-digit account password is also a PIN-format candidate and may consume a LocalPIN attempt before succeeding through password fallback. The fallback remains governed by the existing password stack, including any failure accounting when a wrong PIN is forwarded as the same candidate. LocalPIN must not suppress or reset those password counters. This accounting clarification is recorded in [ADR 0001](adr/0001-pam-candidate-and-account-policy.md).
+The same broker-managed throttle applies to both backends. The default is five submitted valid-format guesses per rolling 60-second window, followed by a five-minute PIN cooldown. Candidates outside the enrolled exact length/format do not invoke or consume LocalPIN verification attempts. An account password matching the enrolled profile may consume a LocalPIN attempt before succeeding through password fallback; TPM-protected matches can also consume the shared TPM dictionary-attack allowance. Setup must explain this overlap. The fallback remains governed by the existing password stack, including any failure accounting when a wrong PIN is forwarded as the same candidate. LocalPIN must not suppress or reset those password counters. This accounting clarification is recorded in [ADR 0001](adr/0001-pam-candidate-and-account-policy.md).
 
 The window is open at its lower boundary: an attempt exactly 60 seconds old no
 longer counts. The fifth reservation is allowed and immediately installs a full
@@ -298,7 +339,7 @@ Open relative to trusted directory descriptors using no-follow/beneath restricti
 
 Enrollment and rotation create a staged generation, verify it, synchronize it, then atomically switch the authoritative generation pointer. There must never be a state where the old PIN is deleted before a valid new record is committed. A crash leaves either the previous committed generation or the new committed one, with deterministic cleanup. Keep no more than one recoverable previous generation for transaction recovery; it must not remain an alternative accepted PIN after commit.
 
-The enrollment record includes schema version, UID/account identity, generation, backend, policy/KDF parameters, salt, TPM public/private blobs and validated attributes when applicable, and nonsecret creation metadata. No full password, plaintext PIN, derived TPM authorization, or unsealed secret is persisted.
+Credential envelope version 2 adds explicit kind, exact length and credential-policy version to the existing UID/account identity, generation, backend and opaque backend payload. Decode version 1 as legacy six-digit numeric metadata and preserve its original bytes; all new mutations write version 2. Unknown envelope/policy versions fail closed. Configuration, active-pointer and throttle formats remain unchanged. Backend payloads retain reviewed KDF parameters, salt and TPM public/private blobs/attributes where applicable. No full password, plaintext PIN, derived TPM authorization, or unsealed secret is persisted.
 
 ## 13. CLI and operational behavior
 
@@ -351,7 +392,7 @@ The modern terminal interface uses inline choices, clear next actions and
 subtle optional colors, with plain output for `NO_COLOR`, `TERM=dumb` and
 redirected output. Menus use bounded visible input; secrets remain private.
 
-Own-user status is available without disclosing another user's enrollment details. JSON output is versioned and contains only nonsecret status. Status includes configured/enrolled backend, current availability, cooldown, integration state, and actionable failure reason. Public-facing messages should explain what the user can do; internal TPM codes belong only in sanitized diagnostics.
+Own-user status is available without disclosing another user's enrollment details. JSON output is versioned and contains only nonsecret status. Status schema 2 includes configured/enrolled backend, own-user credential kind, exact length and policy version, legacy software upgrade advice, current availability, cooldown, integration state, and actionable failure reason. Public-facing messages should explain what the user can do; internal TPM codes belong only in sanitized diagnostics.
 
 Changing, resetting, disabling, recovery, and backend migration require trusted authorization. Default own-user changes use fresh existing-password PAM verification. Administrators can perform explicitly identified recovery with system administrative authority; no old PIN is required and no PIN is revealed. A normal user cannot clear durable cooldown files or call an unauthenticated reset endpoint.
 
@@ -359,7 +400,7 @@ Interactive input requires a real terminal or an explicitly implemented protecte
 
 Cancellation before a credential commit leaves that credential unchanged. Setup preserves already completed stages and reports a still-open trial when cancelled. Uncertain mutation results require authoritative inspection before retry. CLI output must distinguish “installed,” “enrolled,” “tested,” and “active.” It must never say setup completed merely because files were copied.
 
-Schema-1 status distinguishes `integration: "trial"` from `"active"`; a trial
+Schema-2 status distinguishes `integration: "trial"` from `"active"`; a trial
 does not set `active: true`. `tested: "operator-attested"` requires agreement
 between the readable root active gate and the broker's active status; otherwise
 the test value remains `"not-recorded"`. Operator attestation is not automatic
@@ -394,7 +435,7 @@ fresh identities, so enrollment under the old graph cannot survive migration. Im
 old verifier or weaker software parameters. See the
 [migration runbook](integration-administration.md#migrate-the-temporary-pin-block).
 
-Upgrades preserve committed enrollment and throttle state. State migrations are versioned, transactional, tested in both directions where supported, and run before enabling the new code. Unsupported downgrades must leave the password route usable and explain how to disable integration. Kernel, Plasma, PAM, and authselect upgrades are part of the compatibility matrix.
+Upgrades preserve committed enrollment and throttle bytes, including legacy six-digit software credentials; they never automatically convert credentials. Before reopening a package-resume gate while the broker is stopped, the fixed root-only `localpin-account check-credentials` operation validates records using the shared Rust parsers, without writes, KDF work or TPM attempts. State migrations are versioned, transactional, tested in both directions where supported, and run before enabling the new code. Unsupported downgrades must leave the password route usable and explain how to disable integration. Kernel, Plasma, PAM, and authselect upgrades are part of the compatibility matrix.
 
 M8.1 removes the immutable appliance/cache-window requirement. Routine Fedora
 44 `dnf upgrade` must preserve native account markers, registry incarnations,
@@ -462,7 +503,7 @@ CI must run formatting, clippy with an agreed deny policy, tests, dependency adv
 
 | Area | Required evidence before release |
 |---|---|
-| PIN behavior | Correct/wrong/empty input, leading zeroes, malformed/Unicode digits, six-digit account-password fallback, no auto-submit |
+| Credential behavior | Every backend/type length boundary, leading zeroes, exact spaces/case, all-digit passcodes, malformed/Unicode/control input, legacy software verification/replacement, profile-overlapping password fallback, no auto-submit |
 | Password fallback | Success after PIN mismatch, PIN cooldown, daemon stop/crash, module load error, TPM unavailable/reset, malformed state, read-only/full disk |
 | PAM/account policy | Real KDE flow and isolated PAM tests; locked/expired users, wrong target, unsupported service, existing required checks and failure counters preserved |
 | Throttling | Concurrent clients/processes, reservation crash, success-write failure, broker restart, suspend, clock changes, reboot, corrupted/missing state; no unreserved verification |

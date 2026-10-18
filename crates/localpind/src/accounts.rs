@@ -204,8 +204,36 @@ impl IntegrationLease {
         group: u32,
         open: impl Fn(&str) -> Result<File>,
     ) -> Result<Option<Self>> {
+        Self::open_mode(path, inherited, owner, group, open, true)
+    }
+
+    fn open_existing(inherited: Option<i32>) -> Result<Self> {
+        root_required()?;
+        Self::open_mode(
+            INTEGRATION_ROOT,
+            inherited,
+            0,
+            0,
+            |path| fixed_open(path, OFlags::RDONLY | OFlags::DIRECTORY),
+            false,
+        )?
+        .ok_or(AccountError::Unavailable)
+    }
+
+    fn open_mode(
+        path: &str,
+        inherited: Option<i32>,
+        owner: u32,
+        group: u32,
+        open: impl Fn(&str) -> Result<File>,
+        create: bool,
+    ) -> Result<Option<Self>> {
         match std::fs::symlink_metadata(path) {
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound && inherited.is_none() => {
+            Err(error)
+                if error.kind() == std::io::ErrorKind::NotFound
+                    && inherited.is_none()
+                    && create =>
+            {
                 return Ok(None);
             }
             Err(_) => return Err(AccountError::Unavailable),
@@ -220,8 +248,16 @@ impl IntegrationLease {
             None => child(
                 &control,
                 "lock",
-                OFlags::RDWR | OFlags::CREATE,
-                Mode::RUSR | Mode::WUSR,
+                if create {
+                    OFlags::RDWR | OFlags::CREATE
+                } else {
+                    OFlags::RDONLY
+                },
+                if create {
+                    Mode::RUSR | Mode::WUSR
+                } else {
+                    Mode::empty()
+                },
             )?,
         };
         let lease = Self {
@@ -952,6 +988,56 @@ fn storage_guard() -> Result<localpin_storage::Storage> {
     })
 }
 
+/// Validate committed credential formats before an offline package resume.
+/// This operation never repairs state, opens a TPM, derives a key or writes a record.
+pub fn check_credentials_with_integration_lock(inherited: Option<i32>) -> Result<()> {
+    root_required()?;
+    let _integration = IntegrationLease::open_existing(inherited)?;
+    let lease = Lease::open(true, false)?;
+    let _password = PasswordLease::open(false, false)?;
+    let storage = localpin_storage::Storage::open_existing(fixed_open(
+        STORAGE_ROOT,
+        OFlags::RDONLY | OFlags::DIRECTORY,
+    )?)
+    .map_err(|_| AccountError::Unavailable)?;
+    let registry = lease.read()?;
+    if !registry.active() {
+        return Err(AccountError::Unavailable);
+    }
+    let mut authority = ProvisionAuthority {
+        accounts: registry
+            .bindings
+            .iter()
+            .map(|binding| binding.account)
+            .collect(),
+    };
+    let passwd = read_input("/etc/passwd")?;
+    let shadow = read_input("/etc/shadow")?;
+    for binding in &registry.bindings {
+        validate_binding(
+            std::str::from_utf8(&passwd).map_err(|_| AccountError::Invalid)?,
+            std::str::from_utf8(&shadow).map_err(|_| AccountError::Invalid)?,
+            binding,
+        )?;
+        let (_, record) = storage
+            .inspect_committed(binding.account.uid, &mut authority)
+            .map_err(|_| AccountError::Unavailable)?;
+        if let Some(record) = record {
+            match record.backend() {
+                localpin_core::types::Backend::Software => {
+                    localpin_credentials::SoftwareVerifier::new(&record)
+                        .map_err(|_| AccountError::Invalid)?;
+                }
+                localpin_core::types::Backend::Tpm2 => {
+                    localpin_tpm::TpmRecord::from_credential(&record)
+                        .map_err(|_| AccountError::Invalid)?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 // Compatibility entrypoints for existing package scripts. There is no mutable
 // cache window with marker authority and no journal from which to restore state.
 fn package_check(inherited: Option<i32>) -> Result<()> {
@@ -1509,6 +1595,28 @@ mod tests {
             fixture.directory.metadata().unwrap().gid(),
             integration_test_open,
         )
+    }
+
+    #[test]
+    fn offline_integration_inspection_never_creates_a_missing_lock() {
+        let fixture = integration_fixture();
+        let open = || {
+            IntegrationLease::open_mode(
+                fixture.path.to_str().unwrap(),
+                None,
+                fixture.owner,
+                fixture.directory.metadata().unwrap().gid(),
+                integration_test_open,
+                false,
+            )
+        };
+        assert!(open().is_err());
+        assert!(!fixture.path.join("control/lock").exists());
+        {
+            let created = integration_test_lease(&fixture, None).unwrap().unwrap();
+            assert_eq!(created.lock.metadata().unwrap().len(), 0);
+        }
+        assert!(open().unwrap().is_some());
     }
 
     // Return true after the parent has checked the exact-test child. Only the

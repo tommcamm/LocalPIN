@@ -42,7 +42,7 @@ def exact(stream, count):
 
 
 def frame(operation, connection, payload=b""):
-    body = bytes([1, operation]) + connection + payload
+    body = bytes([2, operation]) + connection + payload
     return struct.pack("!I", len(body)) + body
 
 
@@ -51,6 +51,8 @@ class Broker:
 
     def __init__(self):
         self.mode = "mismatch"
+        self.profile = bytes([0, 1, 6])
+        self.backend = 2
         self.requests = []
         self.connections = 0
         self.errors = []
@@ -79,12 +81,17 @@ class Broker:
         size = struct.unpack("!I", exact(client, 4))[0]
         assert 18 <= size <= 4092, "adapter emitted oversized frame"
         body = exact(client, size)
-        assert body[0] == 1 and body[2:18] == connection
+        assert body[0] == 2 and body[2:18] == connection
         operation, payload = body[1], body[18:]
         assert operation in (1, 2, 3), "unlock adapter emitted a non-unlock request"
         if operation == 3:
-            assert len(payload) == 22 and payload[:16] == CHALLENGE
-            assert len(payload[16:]) == 6 and all(48 <= byte <= 57 for byte in payload[16:])
+            assert len(payload) >= 22 and payload[:16] == CHALLENGE
+            length = struct.unpack("!H", payload[16:18])[0]
+            assert 4 <= length <= 64 and len(payload[18:]) == length
+            assert length == self.profile[2]
+            assert all(32 <= byte <= 126 for byte in payload[18:])
+            if self.profile[1] == 1:
+                assert all(48 <= byte <= 57 for byte in payload[18:])
         else:
             assert payload == b"", "password bytes appeared in a non-PIN request"
         self.requests.append((operation, payload))
@@ -116,14 +123,21 @@ class Broker:
         if mode == "malformed":
             client.sendall(struct.pack("!I", 4093))
             return
+        if mode == "old-version":
+            greeting = bytearray(frame(0x80, connection))
+            greeting[4] = 1
+            client.sendall(greeting)
+            assert client.recv(1) == b"", "version mismatch must close before secret traffic"
+            return
         client.sendall(frame(0x80, connection))
         assert self.receive(client, connection) == 1, "expected status before PIN verification"
         availability = {"not-enrolled": 1, "disabled": 2, "cooldown": 3,
-                        "ineligible": 4, "unavailable": 5}.get(mode, 0)
-        enrolled = 0 if mode == "not-enrolled" else 2
+                        "ineligible": 4, "unavailable": 5, "unreadable-profile": 5}.get(mode, 0)
+        enrolled = 0 if mode == "not-enrolled" else self.backend
         cooldown = 1000 if mode == "cooldown" else 0
-        reason = 3 if mode == "unavailable" else 0
-        status = bytes([2, enrolled, availability]) + struct.pack("!I", cooldown) + bytes([1, 0, 0, reason])
+        reason = 3 if mode in ("unavailable", "unreadable-profile") else 0
+        metadata = bytes([1]) + self.profile if enrolled and mode != "unreadable-profile" else bytes([0])
+        status = bytes([2, enrolled]) + metadata + bytes([availability]) + struct.pack("!I", cooldown) + bytes([1, 0, 0, reason])
         if mode == "binding":
             client.sendall(frame(0x81, CHALLENGE, status))
             return
@@ -136,7 +150,7 @@ class Broker:
             client.sendall(frame(0x86, connection, bytes([1])))
             return
         challenge = connection if mode == "reused-challenge" else CHALLENGE
-        client.sendall(frame(0x82, connection, challenge + struct.pack("!I", 5000)))
+        client.sendall(frame(0x82, connection, challenge + struct.pack("!Q", 1) + bytes([self.backend]) + self.profile + struct.pack("!I", 5000)))
         if mode == "reused-challenge":
             return
         assert self.receive(client, connection) == 3
@@ -161,8 +175,11 @@ class Pam:
 
     def attempt(self, name, candidate, password=None, *, mode="mismatch", success=True,
                 prompts=1, password_calls=1, operations=(), cancel=False,
-                guard=False, account=False, failures=0, mutation=0):
+                guard=False, account=False, failures=0, mutation=0,
+                profile=(0, 1, 6), backend=2):
         self.broker.mode = mode
+        self.broker.profile = bytes(profile)
+        self.broker.backend = backend
         before = len(self.broker.requests)
         password = candidate if password is None else password
         line = f"{candidate.hex() or '-'} {password.hex() or '-'} {int(cancel)} {int(guard)} {int(account)} {mutation}\n"
@@ -187,7 +204,7 @@ class Pam:
         observed = self.broker.requests[before:]
         assert tuple(operation for operation, _ in observed) == tuple(operations), f"{name}: unexpected requests"
         if operations and operations[-1] == 3:
-            assert observed[-1][1][16:] == candidate, f"{name}: changed PIN bytes"
+            assert observed[-1][1][18:] == candidate, f"{name}: changed PIN bytes"
         assert not self.broker.errors, f"fake broker: {self.broker.errors}"
         print(f"PASS {name}", flush=True)
         return result
@@ -312,17 +329,31 @@ def inside():
             ("511-byte password", b"A" * 511),
             ("4096-byte password", b"B" * 4096),
         ]:
-            pam.attempt(name, candidate)
+            plausible = (4 <= len(candidate) <= 64 and all(48 <= byte <= 57 for byte in candidate)) or (8 <= len(candidate) <= 64 and all(32 <= byte <= 126 for byte in candidate))
+            pam.attempt(name, candidate, operations=(1, 2) if plausible else ())
         for name, candidate in [("six-digit account password after PIN mismatch", b"481516"),
                                 ("leading-zero password", b"001122")]:
             pam.attempt(name, candidate, operations=(1, 2, 3))
+        for name, candidate, profile, backend in [
+            ("four-digit TPM PIN", b"0012", (1, 1, 4), 1),
+            ("sixteen-digit software PIN", b"0012345678901234", (1, 1, 16), 2),
+            ("space-preserving passcode", b" two spaces ", (1, 2, 12), 2),
+            ("numeric-looking passcode", b"00112233", (1, 2, 8), 2),
+            ("maximum passcode", b"A" * 64, (1, 2, 64), 2),
+        ]:
+            pam.attempt(name, candidate, b"different-password", mode="granted", password_calls=0,
+                        operations=(1, 2, 3), profile=profile, backend=backend)
+        pam.attempt("profile length mismatch preserves password", b"00112233", operations=(1, 2))
+        pam.attempt("profile type mismatch preserves password", b"ABCDEFGH", operations=(1, 2))
+        pam.attempt("passcode-shaped password survives credential mismatch", b" exact ASCII ",
+                    operations=(1, 2, 3), profile=(1, 2, 13))
         pam.attempt("PIN success short circuits password", b"001122", b"different-password", mode="granted", password_calls=0, operations=(1, 2, 3))
         gate.write_bytes(b'LPINT01\ndisabled\n')
         pam.attempt('gate revocation on reused successful PAM handle preserves fresh password', b'new-password')
         gate.write_bytes(b'LPINT01\nactive\n')
         pam.attempt("reused handle obtains fresh six-digit password", b"481516", operations=(1, 2, 3))
-        pam.attempt("previous success cannot authorize wrong password", b"wrong", b"481516", success=False, failures=1)
-        pam.attempt("failed PIN followed by fresh full password", b"synthetic-password")
+        pam.attempt("previous success cannot authorize wrong password", b"wrongpass", b"481516", success=False, failures=1, operations=(1, 2))
+        pam.attempt("failed PIN followed by fresh full password", b"synthetic-password", operations=(1, 2))
         pam.attempt("cancelled conversation cannot authorize", b"481516", success=False, cancel=True, prompts=2)
         for mode, description in ((3, "nonzero response retcode"),
                                   (4, "null response string")):
@@ -330,6 +361,9 @@ def inside():
         pam.attempt("reused handle after cancellation", b"481516", operations=(1, 2, 3))
         for mode in ("not-enrolled", "disabled", "cooldown", "ineligible", "unavailable"):
             pam.attempt(f"{mode} preserves six-digit password", b"481516", mode=mode, operations=(1,))
+        pam.attempt("unreadable credential profile preserves exact full password", b" full ASCII password ",
+                    mode="unreadable-profile", operations=(1,))
+        pam.attempt("old broker version preserves password before secret transmission", b"481516", mode="old-version")
         for mode in ("binding", "premature-grant", "reused-challenge", "verify-crash",
                      "final-cooldown", "storage-fault", "tpm-fault", "crashed", "malformed", "silent"):
             operations = (1,) if mode == "binding" else (1, 2) if mode in ("premature-grant", "reused-challenge") else () if mode in ("crashed", "malformed", "silent") else (1, 2, 3)
@@ -388,7 +422,7 @@ def inside():
     pam.attempt("pam_unix fresh full password recovery", SYNTHETIC_PASSWORD, password_calls=0, operations=(1, 2, 3))
     assert tally.stat().st_size == 0, "normal password success accounting"
     for index in range(3):
-        pam.attempt(f"pam_faillock retained failure {index + 1}", b"wrong-synthetic", success=False, password_calls=0)
+        pam.attempt(f"pam_faillock retained failure {index + 1}", b"wrong-synthetic", success=False, password_calls=0, operations=(1, 2))
     size = tally.stat().st_size
     pam.attempt("preexisting password lockout denies before PIN", b"001122", mode="granted", success=False, prompts=0, password_calls=0)
     assert tally.stat().st_size == size, "lockout must not reset original counters"

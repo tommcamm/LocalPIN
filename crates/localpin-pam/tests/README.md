@@ -21,8 +21,10 @@ Linux-PAM application as UID 1000 in that same namespace. Namespace root maps
 to the ordinary invoking host user; other UIDs use subordinate mappings. The
 application loads the exact release module and connects through its production
 `/run/localpin/broker.sock` endpoint. The fake broker sends normal public wire
-frames and checks connection/challenge binding, operation order and that only
-six ASCII digits appear in verification requests. Candidate values remain in
+frames and checks connection/challenge binding, operation order, bounded credential
+encoding and exact agreement with the issued profile. Numeric candidates retain
+leading zeroes; passcodes retain spaces and case. Profile mismatches never emit
+a verification request. Candidate values remain in
 test process memory and are not printed or saved.
 
 The private filesystem contains read-only `/usr`, read-only test artifacts, and
@@ -36,6 +38,8 @@ Known native permit/deny and correct/wrong `pam_unix` baselines precede adapter
 checks. A test-only downstream PAM module compares the original candidate
 byte-for-byte and records normal password calls/failures. Cases cover all 255
 non-NUL byte values, empty/Unicode/long values, six-digit account passwords,
+flexible numeric and space-preserving passcode profiles, mixed-version greeting
+refusal and profile-mismatch routing without a submitted attempt,
 leading zeros, no second prompt, repeated authentication on one handle,
 cancellation and malformed/error-return conversation responses, target/service changes during the callback, identity restrictions,
 missing module, preceding required/requisite failure, explicit account-phase

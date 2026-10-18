@@ -250,16 +250,16 @@ def bypass(secrets):
 
 def leases(secrets):
     fresh(secrets)
-    process = subprocess.Popen(user_command('enroll'), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    process = subprocess.Popen(user_command('hold-enrollment'), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
-        process.stdin.write(frame(secrets[NAME]['password']))
+        process.stdin.write(frame(secrets[NAME]['password']) + frame(secrets[NAME]['pin']))
         process.stdin.flush()
         wait_ready(process)
         identity = incarnation()
         result = command([ACCOUNT, 'begin-mutation'], check=False)
         require(result.returncode != 0 and b'Busy' in result.stderr and incarnation() == identity,
                 'revocation crossed retained production enrollment grant')
-        code, output, _ = finish(process, frame(secrets[NAME]['pin']))
+        code, output, _ = finish(process, frame(b''))
         require(code == 0 and b'Enrolled(Software)' in output, 'held enrollment failed to complete')
     finally:
         if process.poll() is None:

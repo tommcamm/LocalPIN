@@ -4,12 +4,16 @@
 //! Only this test utility reads bounded length-prefixed secrets on private stdin.
 #![forbid(unsafe_code)]
 
-use localpin_core::secret::{Pin, SecretBytes};
+use localpin_core::secret::{CredentialKind, Pin, SecretBytes};
 use localpin_protocol::{
     Backend, EnrollmentAction, Request, Response,
     transport::{CONNECT_TIMEOUT, Client, Deadline},
 };
-use localpinctl::{CliError, terminal::Conversation};
+use localpinctl::{
+    CliError,
+    terminal::Conversation,
+    workflow::{BrokerClient, PreparedCredential},
+};
 use std::{
     io::{Read, Write},
     os::unix::fs::MetadataExt,
@@ -41,11 +45,55 @@ impl Conversation for PrivateInput {
     fn message(&mut self, _: &str) -> Result<(), CliError> {
         Ok(())
     }
-    fn new_pin(&mut self, deadline: Deadline) -> Result<Pin, CliError> {
-        println!("ready");
-        std::io::stdout().flush().map_err(|_| CliError::Service)?;
-        let input = self.secret("", 6, deadline)?;
-        Pin::parse(input.expose()).map_err(|_| CliError::PinFormat)
+}
+
+// Only the evidence command holds the real workflow at its granted-commit
+// boundary. The installed CLI has no gate or additional input after password.
+struct EnrollmentClient {
+    client: Client,
+    held: bool,
+}
+impl EnrollmentClient {
+    fn next(&mut self, response: Response, deadline: Deadline) -> Result<Response, CliError> {
+        if self.held && matches!(response, Response::EnrollmentReady { .. }) {
+            println!("ready");
+            std::io::stdout().flush().map_err(|_| CliError::Service)?;
+            let release = PrivateInput.secret("", 0, deadline)?;
+            if !release.expose().is_empty() {
+                return Err(CliError::Protocol);
+            }
+            self.held = false;
+        }
+        Ok(response)
+    }
+}
+impl BrokerClient for EnrollmentClient {
+    fn connection_id(&self) -> localpin_protocol::Id {
+        self.client.id()
+    }
+    fn exchange(&mut self, request: Request, deadline: Deadline) -> Result<Response, CliError> {
+        let response = self.client.request(request, deadline)?.response;
+        self.next(response, deadline)
+    }
+    fn receive(&mut self, deadline: Deadline) -> Result<Response, CliError> {
+        let response = self.client.receive(deadline)?.response;
+        self.next(response, deadline)
+    }
+    fn close(&mut self) {
+        self.client.close();
+    }
+}
+
+struct PasswordInput(Option<SecretBytes>);
+impl Conversation for PasswordInput {
+    fn secret(&mut self, _: &str, _: usize, deadline: Deadline) -> Result<SecretBytes, CliError> {
+        if deadline.expired() {
+            return Err(CliError::Expired);
+        }
+        self.0.take().ok_or(CliError::Protocol)
+    }
+    fn message(&mut self, _: &str) -> Result<(), CliError> {
+        Ok(())
     }
 }
 
@@ -89,7 +137,7 @@ fn run() -> Result<(), CliError> {
             );
         }
         "verify" if args.len() == 1 => {
-            let secret = PrivateInput.secret("", 6, Deadline::after(Duration::from_secs(2)))?;
+            let secret = PrivateInput.secret("", 64, Deadline::after(Duration::from_secs(2)))?;
             let pin = Pin::parse(secret.expose()).map_err(|_| CliError::PinFormat)?;
             println!("{:?}", client.verify(pin, Backend::Software)?);
         }
@@ -103,7 +151,7 @@ fn run() -> Result<(), CliError> {
             };
             println!("ready");
             std::io::stdout().flush().map_err(|_| CliError::Service)?;
-            let input = PrivateInput.secret("", 6, Deadline::after(Duration::from_secs(2)))?;
+            let input = PrivateInput.secret("", 64, Deadline::after(Duration::from_secs(2)))?;
             let pin = Pin::parse(input.expose()).map_err(|_| CliError::PinFormat)?;
             let result = client.request(
                 Request::Verify { challenge, pin },
@@ -111,18 +159,42 @@ fn run() -> Result<(), CliError> {
             )?;
             println!("{:?}", result.response);
         }
-        "enroll" | "change" | "disable" if args.len() == 1 => {
+        "enroll" | "hold-enrollment" | "change" | "disable" if args.len() == 1 => {
             let action = match operation {
-                "enroll" => EnrollmentAction::Enroll,
+                "enroll" | "hold-enrollment" => EnrollmentAction::Enroll,
                 "change" => EnrollmentAction::Rotate,
                 _ => EnrollmentAction::Disable,
             };
             let backend = (action != EnrollmentAction::Disable).then_some(Backend::Software);
+            client.close();
+            let preparation_deadline = Deadline::after(Duration::from_secs(300));
+            let password = PrivateInput.secret(
+                "",
+                localpin_protocol::MAX_CONVERSATION_BYTES,
+                preparation_deadline,
+            )?;
+            let prepared = if backend.is_some() {
+                let input = PrivateInput.secret("", 64, preparation_deadline)?;
+                Some(PreparedCredential::new(
+                    CredentialKind::NumericPin,
+                    Pin::parse(input.expose()).map_err(|_| CliError::PinFormat)?,
+                ))
+            } else {
+                None
+            };
+            let mut client = EnrollmentClient {
+                client: Client::connect(
+                    Path::new("/run/localpin/broker.sock"),
+                    Deadline::after(CONNECT_TIMEOUT),
+                )?,
+                held: operation == "hold-enrollment",
+            };
             let result = localpinctl::workflow::mutate_confirmed(
                 &mut client,
-                &mut PrivateInput,
+                &mut PasswordInput(Some(password)),
                 action,
                 backend,
+                prepared,
             )?;
             println!("{result:?}");
         }

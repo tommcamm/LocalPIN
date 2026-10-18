@@ -29,18 +29,22 @@ fn requests() -> Vec<RequestEnvelope> {
         request(Request::BeginEnroll {
             action: EnrollmentAction::Enroll,
             backend: Some(Backend::Tpm),
+            kind: Some(CredentialKind::NumericPin),
         }),
         request(Request::BeginEnroll {
             action: EnrollmentAction::Rotate,
             backend: Some(Backend::Software),
+            kind: Some(CredentialKind::NumericPin),
         }),
         request(Request::BeginEnroll {
             action: EnrollmentAction::Migrate,
             backend: Some(Backend::Software),
+            kind: Some(CredentialKind::NumericPin),
         }),
         request(Request::BeginEnroll {
             action: EnrollmentAction::Disable,
             backend: None,
+            kind: None,
         }),
         request(Request::EnrollConversation {
             transaction: id(2),
@@ -67,6 +71,7 @@ fn responses() -> Vec<ResponseEnvelope> {
         Response::Status(Status {
             configured: BackendPreference::Auto,
             enrolled: Some(Backend::Tpm),
+            profile: Some(CredentialProfile::legacy()),
             availability: Availability::Available,
             cooldown_ms: 0,
             integration: Integration::Active,
@@ -77,6 +82,9 @@ fn responses() -> Vec<ResponseEnvelope> {
         Response::VerifyChallenge {
             challenge: id(2),
             valid_for_ms: 5_000,
+            generation: 1,
+            backend: Backend::Tpm,
+            profile: CredentialProfile::legacy(),
         },
         Response::EnrollmentStarted {
             transaction: id(2),
@@ -244,9 +252,10 @@ fn unknown_versions_operations_enum_values_and_trailing_fields_are_rejected() {
     let frame = encode_request(&request(Request::BeginEnroll {
         action: EnrollmentAction::Enroll,
         backend: Some(Backend::Tpm),
+        kind: Some(CredentialKind::NumericPin),
     }))
     .unwrap();
-    for offset in [22, 23] {
+    for offset in [22, 23, 24] {
         let mut bytes = frame.as_bytes().to_vec();
         bytes[offset] = 255;
         assert!(matches!(
@@ -295,14 +304,16 @@ fn variable_fields_are_bounded_and_bytes_are_not_reinterpreted_as_strings() {
     assert!(
         encode_request(&request(Request::BeginEnroll {
             action: EnrollmentAction::Disable,
-            backend: Some(Backend::Software)
+            backend: Some(Backend::Software),
+            kind: None,
         }))
         .is_err()
     );
     assert!(
         encode_request(&request(Request::BeginEnroll {
             action: EnrollmentAction::Enroll,
-            backend: None
+            backend: None,
+            kind: Some(CredentialKind::NumericPin),
         }))
         .is_err()
     );
@@ -374,7 +385,12 @@ fn verification(now: u64) -> Connection {
         &mut connection,
         Request::BeginVerify,
         now,
-        Some(Issued::Verify(id(2))),
+        Some(Issued::Verify {
+            challenge: id(2),
+            generation: 1,
+            backend: Backend::Tpm,
+            profile: CredentialProfile::legacy(),
+        }),
     )
     .unwrap();
     connection
@@ -394,7 +410,11 @@ fn enrollment(
     };
     let result = accept(
         &mut connection,
-        Request::BeginEnroll { action, backend },
+        Request::BeginEnroll {
+            action,
+            backend,
+            kind: backend.map(|_| CredentialKind::NumericPin),
+        },
         now,
         Some(Issued::Enrollment {
             transaction: id(20),
@@ -794,7 +814,12 @@ fn enrollment_expiry_password_failure_and_clock_anomalies_fail_closed() {
             &mut connection,
             Request::BeginVerify,
             u64::MAX,
-            Some(Issued::Verify(id(2)))
+            Some(Issued::Verify {
+                challenge: id(2),
+                generation: 1,
+                backend: Backend::Tpm,
+                profile: CredentialProfile::legacy()
+            })
         ),
         Err(ProtocolError::Clock)
     ));
@@ -959,5 +984,254 @@ fn every_wire_action_backend_combination_resolves_to_the_exact_core_action_or_re
                 );
             }
         }
+    }
+}
+
+#[test]
+fn credential_blobs_preserve_boundaries_and_reject_overflow_without_truncating() {
+    for bytes in [
+        b"0012".as_slice(),
+        b"0012345678901234",
+        b" A passcode ",
+        &[b'X'; 64],
+    ] {
+        for envelope in [
+            request(Request::Verify {
+                challenge: id(2),
+                pin: Pin::parse(bytes).unwrap(),
+            }),
+            request(Request::CommitEnrollment {
+                transaction: id(2),
+                pin: Pin::parse(bytes).unwrap(),
+            }),
+        ] {
+            let frame = encode_request(&envelope).unwrap();
+            let decoded = RequestDecoder::default()
+                .push(frame.as_bytes())
+                .unwrap()
+                .1
+                .unwrap();
+            let candidate = match decoded.request {
+                Request::Verify { pin, .. } | Request::CommitEnrollment { pin, .. } => pin,
+                _ => panic!("unexpected request"),
+            };
+            assert_eq!(candidate.expose(), bytes);
+            let mut overflow = frame.as_bytes().to_vec();
+            overflow[38..40].copy_from_slice(&65u16.to_be_bytes());
+            assert!(matches!(
+                RequestDecoder::default().push(&overflow),
+                Err(ProtocolError::InvalidField)
+            ));
+        }
+    }
+}
+
+#[test]
+fn challenge_carries_the_exact_committed_context_and_filters_wrong_profile() {
+    let profile = CredentialProfile {
+        policy: 1,
+        kind: CredentialKind::Passcode,
+        length: 12,
+    };
+    for (candidate, valid) in [(b" exact case ".as_slice(), true), (b"012345", false)] {
+        let mut connection = Connection::new(id(1), 1000, 0);
+        let issued = Issued::Verify {
+            challenge: id(2),
+            generation: 91,
+            backend: Backend::Software,
+            profile,
+        };
+        let ConnectionAction::Reply(reply) =
+            accept(&mut connection, Request::BeginVerify, 0, Some(issued)).unwrap()
+        else {
+            panic!("unexpected action");
+        };
+        assert!(matches!(reply.response, Response::VerifyChallenge {
+            generation: 91, backend: Backend::Software, profile: bound, ..
+        } if bound == profile));
+        let result = accept(
+            &mut connection,
+            Request::Verify {
+                challenge: id(2),
+                pin: Pin::parse(candidate).unwrap(),
+            },
+            1,
+            None,
+        );
+        if valid {
+            assert!(matches!(result, Ok(ConnectionAction::Verify {
+                generation: 91, backend: Backend::Software, profile: bound, ..
+            }) if bound == profile));
+        } else {
+            assert!(matches!(result, Err(ProtocolError::InvalidField)));
+            assert!(connection.is_finished());
+        }
+    }
+}
+
+#[test]
+fn enrollment_binds_explicit_kind_and_revalidates_new_policy() {
+    for (kind, candidate, valid) in [
+        (CredentialKind::NumericPin, b"001122".as_slice(), false),
+        (CredentialKind::NumericPin, b"00112233", true),
+        (CredentialKind::Passcode, b"00112233", true),
+        (CredentialKind::NumericPin, b"a passcode", false),
+    ] {
+        let mut connection = Connection::new(id(1), 1000, 0);
+        let ConnectionAction::StartPassword {
+            context,
+            kind: bound,
+            ..
+        } = accept(
+            &mut connection,
+            Request::BeginEnroll {
+                action: EnrollmentAction::Enroll,
+                backend: Some(Backend::Software),
+                kind: Some(kind),
+            },
+            0,
+            Some(Issued::Enrollment {
+                transaction: id(2),
+                generation: 9,
+            }),
+        )
+        .unwrap()
+        else {
+            panic!("unexpected action");
+        };
+        assert_eq!(bound, Some(kind));
+        connection.password_authenticated(context, 1).unwrap();
+        let result = accept(
+            &mut connection,
+            Request::CommitEnrollment {
+                transaction: id(2),
+                pin: Pin::parse(candidate).unwrap(),
+            },
+            2,
+            None,
+        );
+        if valid {
+            assert!(
+                matches!(result, Ok(ConnectionAction::CommitEnrollment { kind: bound, .. }) if bound == kind)
+            );
+        } else {
+            assert!(matches!(result, Err(ProtocolError::InvalidField)));
+        }
+    }
+}
+
+#[test]
+fn profiles_reject_impossible_metadata_and_old_hello_before_secret_requests() {
+    let hello = encode_response(&ResponseEnvelope {
+        connection: id(1),
+        response: Response::Hello,
+    })
+    .unwrap();
+    let mut old = hello.as_bytes().to_vec();
+    old[4] = 1;
+    assert!(matches!(
+        ResponseDecoder::default().push(&old),
+        Err(ProtocolError::Version)
+    ));
+    for profile in [
+        CredentialProfile {
+            policy: 99,
+            kind: CredentialKind::NumericPin,
+            length: 8,
+        },
+        CredentialProfile {
+            policy: 1,
+            kind: CredentialKind::NumericPin,
+            length: 6,
+        },
+        CredentialProfile {
+            policy: 0,
+            kind: CredentialKind::Passcode,
+            length: 6,
+        },
+    ] {
+        let response = ResponseEnvelope {
+            connection: id(1),
+            response: Response::VerifyChallenge {
+                challenge: id(2),
+                generation: 1,
+                backend: Backend::Software,
+                profile,
+                valid_for_ms: 100,
+            },
+        };
+        assert!(matches!(
+            encode_response(&response),
+            Err(ProtocolError::InvalidField)
+        ));
+    }
+}
+
+#[test]
+fn unavailable_enrollment_retains_its_backend_when_profile_cannot_be_read() {
+    for backend in [Backend::Software, Backend::Tpm] {
+        let status = Status {
+            configured: BackendPreference::Auto,
+            enrolled: Some(backend),
+            profile: None,
+            availability: Availability::Unavailable,
+            cooldown_ms: 0,
+            integration: Integration::Active,
+            tpm_detected: false,
+            tpm_usable: false,
+            reason: Reason::Storage,
+        };
+        let envelope = ResponseEnvelope {
+            connection: id(1),
+            response: Response::Status(status),
+        };
+        let frame = encode_response(&envelope).unwrap();
+        let Response::Status(decoded) = ResponseDecoder::default()
+            .push(frame.as_bytes())
+            .unwrap()
+            .1
+            .unwrap()
+            .response
+        else {
+            panic!("expected unavailable status");
+        };
+        assert_eq!(decoded, status);
+        for availability in [
+            Availability::Available,
+            Availability::NotEnrolled,
+            Availability::Disabled,
+            Availability::Cooldown,
+            Availability::Ineligible,
+        ] {
+            let incoherent = ResponseEnvelope {
+                connection: id(1),
+                response: Response::Status(Status {
+                    availability,
+                    ..status
+                }),
+            };
+            assert!(matches!(
+                encode_response(&incoherent),
+                Err(ProtocolError::InvalidField)
+            ));
+            let mut bytes = frame.as_bytes().to_vec();
+            bytes[25] = availability as u8;
+            assert!(matches!(
+                ResponseDecoder::default().push(&bytes),
+                Err(ProtocolError::InvalidField)
+            ));
+        }
+        let missing_backend = ResponseEnvelope {
+            connection: id(1),
+            response: Response::Status(Status {
+                enrolled: None,
+                profile: Some(CredentialProfile::legacy()),
+                ..status
+            }),
+        };
+        assert!(matches!(
+            encode_response(&missing_backend),
+            Err(ProtocolError::InvalidField)
+        ));
     }
 }

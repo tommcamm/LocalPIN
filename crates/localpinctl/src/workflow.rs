@@ -5,7 +5,7 @@ use crate::{
     args::Command,
     terminal::{Conversation, Terminal},
 };
-use localpin_core::secret::SecretBytes;
+use localpin_core::secret::{CredentialKind, CredentialProfile, Pin, SecretBytes};
 use localpin_protocol::transport::{
     BootInstant, CONNECT_TIMEOUT, Client, Deadline, UNAVAILABLE_TIMEOUT,
 };
@@ -16,6 +16,7 @@ use localpin_protocol::{
 use std::{fs::File, io::Read, os::unix::fs::MetadataExt, path::Path, time::Duration};
 
 const SOCKET: &str = "/run/localpin/broker.sock";
+const PREPARATION_TIME: Duration = Duration::from_secs(5 * 60);
 const MAX_TRANSACTION: Duration = Duration::from_secs(60);
 
 /// Minimal authenticated client boundary, permitting deterministic test brokers.
@@ -67,18 +68,75 @@ pub fn select_backend(preference: BackendPreference, _status: Status) -> Result<
     }
 }
 
-/// Complete one fresh-password-bound mutation; errors cancel and close it.
+/// An owned, locally confirmed credential, erased when the operation ends.
+pub struct PreparedCredential {
+    kind: CredentialKind,
+    pin: Pin,
+}
+
+impl PreparedCredential {
+    /// Construct a credential for a trusted caller; the workflow revalidates policy.
+    pub fn new(kind: CredentialKind, pin: Pin) -> Self {
+        Self { kind, pin }
+    }
+}
+
+/// Collect locally before opening the fresh password-authorized connection.
+pub fn prepare_mutation(
+    terminal: &mut impl Conversation,
+    action: EnrollmentAction,
+    backend: Option<Backend>,
+    current: Option<CredentialProfile>,
+) -> Result<Option<PreparedCredential>, CliError> {
+    if (action == EnrollmentAction::Disable) != backend.is_none() {
+        return Err(CliError::Protocol);
+    }
+    let Some(backend) = backend else {
+        return Ok(None);
+    };
+    let deadline = Deadline::after(PREPARATION_TIME);
+    terminal.heading(match action {
+        EnrollmentAction::Enroll => "Create credential",
+        EnrollmentAction::Rotate => "Change credential",
+        EnrollmentAction::Migrate => "Switch protection",
+        EnrollmentAction::Disable => return Err(CliError::Protocol),
+    })?;
+    terminal.message(match backend {
+        Backend::Tpm => "Protection  TPM 2.0",
+        Backend::Software => "Protection  Software",
+    })?;
+    if backend == Backend::Software && current == Some(CredentialProfile::legacy()) {
+        terminal.message("Your existing six-digit PIN still works. With software protection, replacement PINs need at least 8 digits; we recommend 10.")?;
+    }
+    let default = if action == EnrollmentAction::Enroll {
+        CredentialKind::NumericPin
+    } else {
+        current.map_or(CredentialKind::NumericPin, |profile| profile.kind)
+    };
+    let kind = terminal.credential_kind(default, deadline)?;
+    let pin = terminal.new_credential(backend, kind, deadline)?;
+    if deadline.expired() {
+        return Err(CliError::Expired);
+    }
+    terminal.message("\nCredential ready. Verify your account password to save.")?;
+    Ok(Some(PreparedCredential { kind, pin }))
+}
+
+/// Prepare and complete one fresh-password-bound mutation; errors close it.
 ///
-/// The client never manufactures a password-success message, nor reuses an old
-/// PIN. The broker remains authoritative for eligibility and durable commit.
+/// Installed execution prepares before connecting. This injectable convenience
+/// boundary closes even when local preparation is cancelled.
 pub fn mutate(
     client: &mut impl BrokerClient,
     terminal: &mut impl Conversation,
     action: EnrollmentAction,
     backend: Option<Backend>,
 ) -> Result<Completion, CliError> {
-    let result = confirm_mutation(terminal, action, backend)
-        .and_then(|()| mutate_inner(client, terminal, action, backend));
+    let result = (|| {
+        let prepared = prepare_mutation(terminal, action, backend, None)?;
+        confirm_mutation(terminal, action, backend)?;
+        mutate_inner(client, terminal, action, backend, prepared)
+    })();
     finish_mutation(client, result)
 }
 
@@ -97,9 +155,9 @@ pub fn confirm_mutation(
         terminal.message(
             "Software protection is an explicit choice and does not provide TPM hardware binding.",
         )?;
-        "Create or replace this account's software PIN credential? Type yes: "
+        "Create or replace this account's software credential? Type yes: "
     } else {
-        "Create or replace this account's TPM PIN credential? Type yes: "
+        "Create or replace this account's TPM credential? Type yes: "
     };
     terminal.confirm(confirmation, Deadline::after(MAX_TRANSACTION))
 }
@@ -110,8 +168,9 @@ pub fn mutate_confirmed(
     terminal: &mut impl Conversation,
     action: EnrollmentAction,
     backend: Option<Backend>,
+    prepared: Option<PreparedCredential>,
 ) -> Result<Completion, CliError> {
-    let result = mutate_inner(client, terminal, action, backend);
+    let result = mutate_inner(client, terminal, action, backend, prepared);
     finish_mutation(client, result)
 }
 
@@ -133,14 +192,32 @@ fn mutate_inner(
     terminal: &mut impl Conversation,
     action: EnrollmentAction,
     backend: Option<Backend>,
+    mut prepared: Option<PreparedCredential>,
 ) -> Result<Completion, CliError> {
     if (action == EnrollmentAction::Disable) != backend.is_none() {
         return Err(CliError::Protocol);
     }
+    if let (Some(backend), Some(prepared)) = (backend, prepared.as_ref()) {
+        CredentialProfile::for_enrollment(
+            crate::terminal::core_backend(backend),
+            prepared.kind,
+            &prepared.pin,
+        )
+        .map_err(|_| CliError::PinFormat)?;
+    } else if action != EnrollmentAction::Disable || prepared.is_some() {
+        return Err(CliError::Protocol);
+    }
+    let kind = prepared.as_ref().map(|prepared| prepared.kind);
     let password_limit = BootInstant::now() + MAX_TRANSACTION;
     let password_deadline = Deadline::at(password_limit);
-    let started =
-        reply(client.exchange(Request::BeginEnroll { action, backend }, password_deadline)?)?;
+    let started = reply(client.exchange(
+        Request::BeginEnroll {
+            action,
+            backend,
+            kind,
+        },
+        password_deadline,
+    )?)?;
     let (transaction, valid_for_ms) = match started {
         Response::EnrollmentStarted {
             transaction,
@@ -205,7 +282,7 @@ fn mutate_inner(
                 } else {
                     Request::CommitEnrollment {
                         transaction,
-                        pin: terminal.new_pin(commit_deadline)?,
+                        pin: prepared.take().ok_or(CliError::Protocol)?.pin,
                     }
                 };
                 let completed = reply(client.exchange(commit, commit_deadline)?)?;
@@ -322,6 +399,42 @@ fn parse_local_uid(contents: &str, account: &str) -> Result<u32, CliError> {
     found.ok_or(CliError::Account)
 }
 
+fn completion_message(
+    completion: Completion,
+    action: EnrollmentAction,
+    integration: Option<localpin_protocol::Integration>,
+    gate: localpin_protocol::integration::Gate,
+) -> Result<String, CliError> {
+    use localpin_protocol::{Integration, integration::Gate};
+    let result = match completion {
+        Completion::Enrolled(_) => match action {
+            EnrollmentAction::Enroll => "Credential created.",
+            EnrollmentAction::Rotate => "Credential changed.",
+            EnrollmentAction::Migrate => "Protection switched and credential replaced.",
+            EnrollmentAction::Disable => return Err(CliError::Protocol),
+        },
+        Completion::Disabled => {
+            return Ok(
+                "LocalPIN credential disabled. Use your existing account password.".to_owned(),
+            );
+        }
+        Completion::RecoveryDisabled => return Err(CliError::Protocol),
+    };
+    let next = match (integration, gate) {
+        (Some(Integration::Active), Gate::Active) => {
+            "Desktop integration is active. Lock KDE, enter your credential in the Password field and press Enter."
+        }
+        (Some(Integration::Active), Gate::Trial) => {
+            "A desktop trial is open. Run localpin setup to finish unlocking and recovery tests before activation."
+        }
+        (None, _) => {
+            "Desktop activation could not be confirmed. Run localpin status before retrying or testing unlocking."
+        }
+        _ => "Next: run localpin setup to test recovery and activate desktop unlocking.",
+    };
+    Ok(format!("{result} {next}"))
+}
+
 /// Execute the installed command against protected system resources.
 pub fn run() -> Result<(), CliError> {
     crate::harden_process()?;
@@ -422,18 +535,32 @@ pub(crate) fn execute(command: Command) -> Result<(), CliError> {
                 }
                 _ => unreachable!(),
             };
+            let prepared = prepare_mutation(&mut terminal, action, backend, status.profile)?;
             confirm_mutation(&mut terminal, action, backend)?;
             let mut client = Client::connect(Path::new(SOCKET), Deadline::after(CONNECT_TIMEOUT))?;
-            let completion = mutate_confirmed(&mut client, &mut terminal, action, backend)?;
+            let completion =
+                mutate_confirmed(&mut client, &mut terminal, action, backend, prepared)?;
+            // Preparation can take several minutes. Read activation after the
+            // durable result instead of presenting the earlier status as current.
+            let integration = if matches!(completion, Completion::Enrolled(_)) {
+                Client::connect(Path::new(SOCKET), Deadline::after(CONNECT_TIMEOUT))
+                    .ok()
+                    .and_then(|mut client| client.status().ok())
+                    .filter(|status| {
+                        status.availability != localpin_protocol::Availability::Unavailable
+                    })
+                    .map(|status| status.integration)
+            } else {
+                None
+            };
             println!(
                 "{}",
-                match completion {
-                    Completion::Enrolled(_) =>
-                        "PIN created. Next: run localpin setup to test recovery and activate desktop unlocking.",
-                    Completion::Disabled =>
-                        "PIN credential disabled. Use the existing account password.",
-                    Completion::RecoveryDisabled => return Err(CliError::Protocol),
-                }
+                completion_message(
+                    completion,
+                    action,
+                    integration,
+                    localpin_protocol::integration::gate()
+                )?
             );
             Ok(())
         }

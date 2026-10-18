@@ -265,10 +265,28 @@ localpin doctor
 localpin enroll --backend software
 ```
 
-Choose `--backend tpm2-required` for a validated TPM deployment. The CLI obtains
-the existing password and new PIN interactively; do not put them in arguments,
+Choose `--backend tpm2-required` for a validated TPM deployment. The CLI first
+prepares and confirms the new numeric PIN or passcode, then obtains
+fresh existing-password verification interactively. New input uses one `*` per
+character; the account password remains hidden. Preparation has a five-minute
+deadline. Do not put secrets in arguments,
 environment variables or pipes. See [account administration](account-administration.md)
 for marker ownership, ordinary account changes and recovery.
+
+TPM numeric PINs accept 4–16 digits (recommend 6); software PINs accept 8–16
+(recommend 10). Optional passcodes accept 8–64 printable ASCII characters in
+either backend (suggest 12+), preserving spaces and case exactly. The shared
+form selects type and accepts any permitted length. Predictability warnings
+require an explicit local override and do not replace broker format validation.
+See [credential policy](adr/0021-flexible-credentials.md).
+
+KDE keeps its stock Password field and explicit Enter submission. An account
+password matching the enrolled exact length/format can consume a LocalPIN
+attempt before exact-byte password fallback; with TPM protection it can also
+consume shared dictionary-attack allowance. Test this overlap deliberately in
+the disposable VM. Wrong LocalPIN candidates can count as native password
+failures. Preserve native counters, cooldowns and TPM safety reserves; never
+reset them to advance acceptance.
 
 ## Test and activate
 
@@ -316,6 +334,22 @@ service/activation state. A prepared or disabled installation stays unactivated.
 Failures retain password recovery and a closed gate. `package-resume` retries a
 suspended compatible transaction. Unsupported schema changes and downgrades
 require explicit disable/migration; they never silently reset state.
+
+Credential envelope 2 and IPC 2 add numeric/passcode profile metadata. Supported
+updates preserve legacy envelope-1 credential and throttle bytes, including
+six-digit software PINs. Such PINs keep working with replacement advice; new
+changes and backend migrations enforce the target backend's current policy.
+There is no automatic credential conversion. While the broker is stopped,
+package resume invokes the fixed root-only `localpin-account check-credentials`
+operation using shared Rust parsers before reopening the gate. The check writes
+nothing and performs no KDF work or TPM attempts. Mixed CLI/broker protocol
+versions are rejected before secret transmission; PAM continues to password.
+Update all components together and verify status schema 2/profile reporting.
+
+[Flexible-credential validation](development/flexible-credentials.md) tracks the
+new boundary and legacy-upgrade acceptance separately. Earlier M8.1–M8.3
+installed results retain their exact tested build scope; they do not establish
+this feature's installed behavior or physical-hardware/M9 readiness.
 
 The old LPACCT01/LPACCT02 appliance registry and schema-1 activation cannot be
 adopted as live desktop identity. Disable with the old tools, verify password

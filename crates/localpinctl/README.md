@@ -24,7 +24,8 @@ localpin recover --user <local-account>
 With no arguments, a foreground terminal opens an inline numbered menu for
 setup/resume, status, diagnostics and credential management. Without a terminal,
 it prints help without waiting for input. Menus use bounded visible input;
-passwords and PINs use the hardened private input path below. Human output uses
+new credentials use asterisk masking and passwords stay fully hidden on the
+hardened private input path below. Human output uses
 subtle colors where supported and plain text when `NO_COLOR` is present,
 `TERM=dumb`, or output is redirected. There is no full-screen UI dependency.
 
@@ -69,8 +70,32 @@ descriptor to its fixed account tool so the scope check and native changes
 remain serialized without recursively locking the parent-held file.
 
 Enrollment, change, migration, and own-user disable require explicit confirmation
-and a fresh password-only worker conversation. New PINs must be six ASCII digits,
-including leading zeroes, and must be entered twice. `auto` and `tpm2-required`
+and a fresh password-only worker conversation. The shared credential form selects
+Numeric PIN or optional Passcode, shows the chosen protection, and confirms the
+new value twice before opening the password-authorized broker connection:
+
+| Credential | TPM protection | Software protection | Suggested length |
+| --- | --- | --- | --- |
+| Numeric PIN | 4–16 digits | 8–16 digits | 6 with TPM; 10 with software |
+| Passcode | 8–64 characters | 8–64 characters | 12+ |
+
+PINs preserve leading zeroes. Passcodes accept printable ASCII, including spaces,
+and preserve exact bytes and case; an explicitly selected passcode may be all
+digits. The form defaults to Numeric PIN on enrollment and the current type for
+changes and migration. It never generates, prefills, truncates, or trims a secret.
+Invalid input, confirmation mismatch, and oversized paste retry locally within a
+single five-minute preparation deadline. Predictable patterns and a small bundled
+common-choice list show an advisory warning; **Re-enter** is the default and
+**Use anyway** requires an explicit selection. The warning never displays the
+entered value. Backspace and Ctrl-U edit the masked field; cancellation restores
+the terminal. There is no plaintext-reveal switch.
+
+Existing six-digit software PINs keep working. Status and change screens recommend
+replacement; every new enrollment, change, or migration applies the current
+backend-specific policy. A matching-format account password can still consume a
+LocalPIN attempt and potentially TPM allowance before password fallback.
+
+`auto` and `tpm2-required`
 attempt TPM creation and trial verification; neither silently chooses software.
 Software must be selected explicitly. Cancellation before commit preserves the
 committed credential; if communication fails around commit, check status before
@@ -89,10 +114,14 @@ The executable and public terminal entry point disable process dumpability and
 set both core-dump limits to zero before accepting input. Fatal signals cannot
 persist the in-memory password or PIN through a core dump.
 
-The CLI obtains confirmation before opening the mutation connection, preserving
+The CLI prepares and confirms the new credential, then obtains mutation
+confirmation before opening the fresh mutation connection, preserving
 the broker's short unauthenticated idle limit. Authorization and commit remain
 bound to one connection and one server-issued transaction. Neither a client
-Boolean nor the old PIN can authorize a credential change.
+Boolean nor the old credential can authorize a credential change. The prepared
+credential is sent only after password success, with no further user input before
+commit. Password rejection or cancellation erases preparation; retries begin again.
+Successful output describes the action and actual desktop gate state.
 
 `recover` requires an already-root caller and identifies one non-root account in
 the protected local `/etc/passwd`; the broker revalidates authority and account
@@ -114,7 +143,7 @@ physical TPM validation remain open. The
 [M8.2 report](../../docs/development/m8.2-guided-setup.md) records source and
 hosted CI evidence with its revision scope.
 
-Status JSON has independent `schema_version: 1` and only closed nonsecret fields.
+Status JSON has independent `schema_version: 2` and only closed nonsecret fields.
 `installed: "client-present"` proves the CLI is present; `broker_available` reports
 whether the protected broker answered. `enrolled` and `active` are separate Boolean
 fields, or `null` when no authoritative state is available, including a broker
@@ -129,11 +158,16 @@ active status agree. This labels an administrator attestation, not automatic
 proof of desktop or password tests; missing or inconsistent state does not
 invent an attestation. Backend preference, committed backend, availability,
 cooldown duration, integration state, TPM detection/usability, and sanitized reason
-are also reported. `doctor` provides actions for the broker's failure category
+are also reported. `credential_profile` is `null` when unknown or absent, otherwise
+contains `kind` (`numeric-pin` or `passcode`), `length`, and `policy_version`
+(`0` for a legacy record; `1` for current enrollment). The
+`credential_upgrade_recommended` Boolean advises replacing legacy software PINs,
+or is `null` when enrollment is unknown. These fields describe only the requesting
+user’s credential. `doctor` provides actions for the broker's failure category
 without reading protected credential state or claiming installation is activation.
 
 Tests use synthetic inputs and pseudoterminals. They cover the closed parser,
-secret-channel rejection, exact PIN confirmation, no echo, non-UTF-8 password
-bytes, terminal restoration, fresh password mutation sequencing, transaction and
+secret-channel rejection, exact credential confirmation, asterisk masking, no
+password echo, non-UTF-8 password bytes, terminal restoration, fresh password mutation sequencing, transaction and
 prompt binding, cancellation, and separate status states. They do not modify PAM,
 local accounts, or the host broker.

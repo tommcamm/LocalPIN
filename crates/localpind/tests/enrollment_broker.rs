@@ -9,19 +9,22 @@ use localpin_core::{
     enrollment::{LifecycleAuthority, LifecycleError, PasswordWorkerError, PasswordWorkerRequest},
     limits::ResourceBudget,
     records::CredentialRecord,
-    secret::{Pin, SecretBytes},
+    secret::{CredentialKind, CredentialProfile, Pin, SecretBytes},
     throttle::ThrottleRecord,
-    types::{AccountId, Clock, Incarnation, TimePoint, Uid},
+    types::{AccountId, Clock, Generation, Incarnation, TimePoint, Uid},
 };
 use localpin_protocol::{
-    Backend, Completion, EnrollmentAction, ErrorCode, Id, PromptStyle, Request, RequestEnvelope,
-    Response, VerificationOutcome,
+    Availability, Backend, Completion, EnrollmentAction, ErrorCode, Id, PromptStyle, Reason,
+    Request, RequestEnvelope, Response, Status, VerificationOutcome,
     transport::{BootInstant as Instant, Client, Deadline, SocketConnection, TransportError},
 };
 use localpin_storage::Storage;
 use localpind::{
     BootClock,
-    broker::{Authorities, Engine, ProtectedEngine, serve_connection},
+    broker::{
+        Authorities, Engine, ProtectedEngine, VerificationContext, VerificationDeadlines,
+        serve_connection,
+    },
     enrollment::PasswordAuthority,
     platform::Peer,
     worker::WorkerSupervisor,
@@ -98,6 +101,7 @@ struct Controls {
     cancel_before_pointer: AtomicBool,
     cancel_window_opened: AtomicBool,
     transaction: Mutex<Option<[u8; 16]>>,
+    stale_snapshot: AtomicUsize,
 }
 
 struct SyntheticLifecycle(Arc<Controls>);
@@ -191,6 +195,76 @@ impl PasswordAuthority for SyntheticPassword {
             .now()
             .map_err(|_| PasswordWorkerError::Unavailable)
     }
+}
+
+// Synthetic authority injection represents a challenge snapshot which no longer
+// agrees with the protected record at submission. The real ProtectedEngine must
+// reject it under its user lock before any durable reservation or worker call.
+struct SnapshotEngine {
+    actual: ProtectedEngine,
+    controls: Arc<Controls>,
+}
+impl Engine for SnapshotEngine {
+    fn check(&self, peer: Arc<Peer>, deadline: Instant) -> Result<EligibilitySnapshot, Reason> {
+        self.actual.check(peer, deadline)
+    }
+    fn status(&self, peer: Arc<Peer>, deadline: Instant) -> Status {
+        self.actual.status(peer, deadline)
+    }
+    fn challenge(
+        &self,
+        peer: Arc<Peer>,
+        expected: EligibilitySnapshot,
+        deadline: Instant,
+    ) -> Result<VerificationContext, Reason> {
+        let mut context = self.actual.challenge(peer, expected, deadline)?;
+        match self.controls.stale_snapshot.load(Ordering::SeqCst) {
+            1 => context.generation += 1,
+            2 => context.profile.kind = CredentialKind::Passcode,
+            _ => {}
+        }
+        Ok(context)
+    }
+    fn enroll(
+        &self,
+        peer: Arc<Peer>,
+        expected: EligibilitySnapshot,
+        request: RequestEnvelope,
+        channel: &mut localpind::enrollment::EnrollmentIo<'_>,
+    ) -> Result<(), TransportError> {
+        self.actual.enroll(peer, expected, request, channel)
+    }
+    fn verify(
+        &self,
+        peer: Arc<Peer>,
+        expected: EligibilitySnapshot,
+        context: VerificationContext,
+        pin: Pin,
+        deadlines: VerificationDeadlines,
+        cancelled: &mut dyn FnMut() -> bool,
+        deliver: &mut dyn FnMut(VerificationOutcome, Instant),
+    ) {
+        self.actual
+            .verify(peer, expected, context, pin, deadlines, cancelled, deliver);
+    }
+    fn recover(
+        &self,
+        peer: &Peer,
+        target: Uid,
+        connection: Id,
+        deadline: Instant,
+        deliver: &mut dyn FnMut(Result<(), Reason>),
+    ) {
+        self.actual
+            .recover(peer, target, connection, deadline, deliver);
+    }
+}
+
+fn credential_path(generation: u64) -> std::path::PathBuf {
+    Path::new(STATE).join(format!("users/1000/generation-{generation}/credential"))
+}
+fn throttle_bytes(generation: u64) -> Vec<u8> {
+    fs::read(Path::new(STATE).join(format!("users/1000/generation-{generation}/throttle"))).unwrap()
 }
 
 fn committed(generation: u64, enrolled: bool) {
@@ -312,15 +386,16 @@ fn enrollment_engine_complete_lifecycle_and_authorization_fences() {
             &mut lifecycle,
         )
         .unwrap();
-    let engine: Arc<dyn Engine> = Arc::new(
-        ProtectedEngine::new(
+    let engine: Arc<dyn Engine> = Arc::new(SnapshotEngine {
+        actual: ProtectedEngine::new(
             storage,
             Arc::new(SyntheticAuthorities(controls.clone())),
             WorkerSupervisor::new("/app/localpin-worker").unwrap(),
             ResourceBudget::default(),
         )
         .with_password_authority(Arc::new(SyntheticPassword(controls.clone()))),
-    );
+        controls: controls.clone(),
+    });
     let listener = UnixListener::bind(SOCKET).unwrap();
     fs::set_permissions(SOCKET, fs::Permissions::from_mode(0o666)).unwrap();
     listener.set_nonblocking(true).unwrap();
@@ -360,6 +435,55 @@ fn enrollment_engine_complete_lifecycle_and_authorization_fences() {
     exchange(&listener, &engine, &controls, "enroll", 1000);
     committed(2, true);
     exchange(&listener, &engine, &controls, "verify-first", 1000);
+    let original = fs::read(credential_path(2)).unwrap();
+    let throttle_before = throttle_bytes(2);
+    fs::write(credential_path(2), b"synthetic corrupt selected credential").unwrap();
+    exchange(&listener, &engine, &controls, "status-corrupt", 1000);
+    assert_eq!(throttle_bytes(2), throttle_before);
+    fs::write(credential_path(2), original).unwrap();
+    for (mode, scenario) in [(1, "verify-stale-generation"), (2, "verify-stale-profile")] {
+        let before = throttle_bytes(2);
+        controls.stale_snapshot.store(mode, Ordering::SeqCst);
+        exchange(&listener, &engine, &controls, scenario, 1000);
+        controls.stale_snapshot.store(0, Ordering::SeqCst);
+        assert_eq!(
+            throttle_bytes(2),
+            before,
+            "stale metadata must consume no attempt"
+        );
+    }
+    for scenario in ["verify-wrong-length", "verify-wrong-kind"] {
+        let before = throttle_bytes(2);
+        exchange(&listener, &engine, &controls, scenario, 1000);
+        assert_eq!(
+            throttle_bytes(2),
+            before,
+            "profile mismatch must consume no attempt"
+        );
+    }
+    // Install an explicitly synthetic historical record only inside the disposable
+    // namespace, retaining its active generation and throttle bytes. No host
+    // credential or account state is available to this fixture.
+    let legacy = localpin_credentials::enroll(
+        account(),
+        Generation::new(2).unwrap(),
+        &Pin::parse(b"012345").unwrap(),
+        &ResourceBudget::default(),
+    )
+    .unwrap();
+    fs::write(credential_path(2), legacy.encode().unwrap().expose()).unwrap();
+    exchange(&listener, &engine, &controls, "verify-legacy", 1000);
+    for scenario in [
+        "change-invalid-short",
+        "change-invalid-long",
+        "change-invalid-kind",
+    ] {
+        let before = fs::read(credential_path(2)).unwrap();
+        let throttle = throttle_bytes(2);
+        exchange(&listener, &engine, &controls, scenario, 1000);
+        assert_eq!(fs::read(credential_path(2)).unwrap(), before);
+        assert_eq!(throttle_bytes(2), throttle);
+    }
     let calls = controls.password_calls.load(Ordering::SeqCst);
     for scenario in ["rotate-backend-mismatch", "migrate-same-backend"] {
         exchange(&listener, &engine, &controls, scenario, 1000);
@@ -378,6 +502,16 @@ fn enrollment_engine_complete_lifecycle_and_authorization_fences() {
     committed(3, true);
     exchange(&listener, &engine, &controls, "verify-old", 1000);
     exchange(&listener, &engine, &controls, "verify-new", 1000);
+    for (generation, change, verify) in [
+        (4, "change-passcode-min", "verify-passcode-min"),
+        (5, "change-passcode-max", "verify-passcode-max"),
+        (6, "change-numeric-passcode", "verify-numeric-passcode"),
+        (7, "change-pin-max", "verify-pin-max"),
+    ] {
+        exchange(&listener, &engine, &controls, change, 1000);
+        committed(generation, true);
+        exchange(&listener, &engine, &controls, verify, 1000);
+    }
     exchange(
         &listener,
         &engine,
@@ -385,15 +519,15 @@ fn enrollment_engine_complete_lifecycle_and_authorization_fences() {
         "disable-wrong-password",
         1000,
     );
-    committed(3, true);
+    committed(7, true);
     exchange(&listener, &engine, &controls, "disable", 1000);
-    committed(4, false);
+    committed(8, false);
     exchange(&listener, &engine, &controls, "enroll", 1000);
-    committed(5, true);
+    committed(9, true);
     exchange(&listener, &engine, &controls, "ordinary-recover", 1000);
-    committed(5, true);
+    committed(9, true);
     exchange(&listener, &engine, &controls, "root-recover", 0);
-    committed(6, false);
+    committed(10, false);
     exchange(&listener, &engine, &controls, "status-disabled", 1000);
 }
 
@@ -420,9 +554,21 @@ fn terminal_denial(result: Result<localpin_protocol::ResponseEnvelope, Transport
         "expected terminal denial: {result:?}"
     );
 }
-fn begin(client: &mut Client, action: EnrollmentAction, backend: Option<Backend>) -> (Id, Id) {
+fn begin(
+    client: &mut Client,
+    action: EnrollmentAction,
+    backend: Option<Backend>,
+    kind: CredentialKind,
+) -> (Id, Id) {
     let response = client
-        .request(Request::BeginEnroll { action, backend }, deadline())
+        .request(
+            Request::BeginEnroll {
+                action,
+                backend,
+                kind: backend.map(|_| kind),
+            },
+            deadline(),
+        )
         .unwrap();
     let Response::EnrollmentStarted {
         transaction,
@@ -492,6 +638,7 @@ fn cancel_before_pointer() {
         Request::BeginEnroll {
             action: EnrollmentAction::Enroll,
             backend: Some(Backend::Software),
+            kind: Some(CredentialKind::NumericPin),
         },
     );
     let Response::EnrollmentStarted { transaction, .. } = response.response else {
@@ -519,7 +666,7 @@ fn cancel_before_pointer() {
                 connection,
                 request: Request::CommitEnrollment {
                     transaction,
-                    pin: Pin::parse(b"012345").unwrap(),
+                    pin: Pin::parse(b"01234567").unwrap(),
                 },
             },
             deadline(),
@@ -559,6 +706,14 @@ fn enrollment_client_fixture() {
         return;
     }
     let mut client = connect();
+    if scenario == "status-corrupt" {
+        let status = client.status().unwrap();
+        assert_eq!(status.enrolled, Some(Backend::Software));
+        assert_eq!(status.profile, None);
+        assert_eq!(status.availability, Availability::Unavailable);
+        assert_eq!(status.reason, Reason::Storage);
+        return;
+    }
     if scenario == "status-disabled" {
         assert!(client.status().unwrap().enrolled.is_none());
         return;
@@ -581,22 +736,53 @@ fn enrollment_client_fixture() {
         return;
     }
     if scenario.starts_with("verify-") {
-        let candidate = if scenario == "verify-new" {
-            b"654321"
-        } else {
-            b"012345"
+        let candidate: &[u8] = match scenario.as_str() {
+            "verify-new" => b"76543210",
+            "verify-legacy" => b"012345",
+            "verify-passcode-min" => b" spaced ",
+            "verify-passcode-max" => &[b'X'; 64],
+            "verify-numeric-passcode" => b"00112233",
+            "verify-pin-max" => b"0012345678901234",
+            "verify-wrong-length" => b"012345678",
+            "verify-wrong-kind" => b"ABCDEFGH",
+            _ => b"01234567",
         };
-        let result = client
-            .verify(Pin::parse(candidate).unwrap(), Backend::Software)
-            .unwrap();
-        assert_eq!(
-            result,
-            if scenario == "verify-old" {
-                VerificationOutcome::Mismatch
-            } else {
-                VerificationOutcome::Granted
-            }
-        );
+        if scenario == "verify-legacy" {
+            assert_eq!(
+                client.status().unwrap().profile,
+                Some(CredentialProfile::legacy())
+            );
+        }
+        if scenario == "verify-wrong-length" || scenario == "verify-wrong-kind" {
+            let Response::VerifyChallenge { challenge, .. } = client
+                .request(Request::BeginVerify, deadline())
+                .unwrap()
+                .response
+            else {
+                panic!("expected profile challenge");
+            };
+            terminal_denial(client.request(
+                Request::Verify {
+                    challenge,
+                    pin: Pin::parse(candidate).unwrap(),
+                },
+                deadline(),
+            ));
+        } else {
+            let result = client
+                .verify(Pin::parse(candidate).unwrap(), Backend::Software)
+                .unwrap();
+            assert_eq!(
+                result,
+                if scenario.starts_with("verify-stale-") {
+                    VerificationOutcome::Unavailable(Reason::Policy)
+                } else if scenario == "verify-old" {
+                    VerificationOutcome::Mismatch
+                } else {
+                    VerificationOutcome::Granted
+                }
+            );
+        }
         return;
     }
     if scenario == "reconnect-commit" {
@@ -608,7 +794,7 @@ fn enrollment_client_fixture() {
         terminal_denial(client.request(
             Request::CommitEnrollment {
                 transaction: Id::from_bytes(transaction).unwrap(),
-                pin: Pin::parse(b"012345").unwrap(),
+                pin: Pin::parse(b"01234567").unwrap(),
             },
             deadline(),
         ));
@@ -624,6 +810,7 @@ fn enrollment_client_fixture() {
             Request::BeginEnroll {
                 action,
                 backend: Some(backend),
+                kind: Some(CredentialKind::NumericPin),
             },
             deadline(),
         ));
@@ -631,7 +818,9 @@ fn enrollment_client_fixture() {
     }
     let action = if scenario == "disable" || scenario == "disable-wrong-password" {
         EnrollmentAction::Disable
-    } else if ["change", "old-pin-is-not-password", "cancel-ready"].contains(&scenario.as_str()) {
+    } else if scenario.starts_with("change")
+        || ["old-pin-is-not-password", "cancel-ready"].contains(&scenario.as_str())
+    {
         EnrollmentAction::Rotate
     } else {
         EnrollmentAction::Enroll
@@ -641,7 +830,12 @@ fn enrollment_client_fixture() {
     } else {
         Some(Backend::Software)
     };
-    let (transaction, prompt) = begin(&mut client, action, backend);
+    let kind = if scenario.contains("passcode") {
+        CredentialKind::Passcode
+    } else {
+        CredentialKind::NumericPin
+    };
+    let (transaction, prompt) = begin(&mut client, action, backend, kind);
     if scenario == "cancel-prompt" {
         assert!(matches!(
             client
@@ -672,7 +866,7 @@ fn enrollment_client_fixture() {
         let answer: &[u8] = if scenario == "password-authority-failure" {
             PASSWORD
         } else if scenario == "old-pin-is-not-password" {
-            b"012345"
+            b"01234567"
         } else {
             b"wrong full password"
         };
@@ -699,14 +893,24 @@ fn enrollment_client_fixture() {
     } else {
         Request::CommitEnrollment {
             transaction,
-            pin: Pin::parse(if scenario == "change" {
-                b"654321"
-            } else {
-                b"012345"
+            pin: Pin::parse(match scenario.as_str() {
+                "change" => b"76543210".as_slice(),
+                "change-passcode-min" => b" spaced ",
+                "change-passcode-max" => &[b'X'; 64],
+                "change-numeric-passcode" => b"00112233",
+                "change-pin-max" => b"0012345678901234",
+                "change-invalid-short" => b"012345",
+                "change-invalid-long" => b"01234567890123456",
+                "change-invalid-kind" => b"bad passcode",
+                _ => b"01234567",
             })
             .unwrap(),
         }
     };
+    if scenario.starts_with("change-invalid-") {
+        terminal_denial(client.request(request, deadline()));
+        return;
+    }
     let response = client.request(request, deadline()).unwrap();
     assert!(
         matches!(response.response, Response::Completed(Completion::Disabled) if action == EnrollmentAction::Disable)

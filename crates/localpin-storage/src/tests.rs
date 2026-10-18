@@ -124,6 +124,71 @@ impl Drop for Fixture {
     }
 }
 
+#[test]
+fn offline_inspection_preserves_legacy_bytes_and_orphaned_recovery_material() {
+    let fixture = Fixture::new();
+    let identity = account(1000);
+    let state = fixture.enrolled(identity);
+    let generation = fixture.generation(identity, state.generation().get());
+    let credential_path = generation.join("credential");
+    let before = std::fs::read(&credential_path).unwrap();
+    let orphan = fixture.generation(identity, 99);
+    DirBuilder::new().mode(0o700).create(&orphan).unwrap();
+    std::fs::write(
+        orphan.join("recovery-marker"),
+        b"synthetic recovery material",
+    )
+    .unwrap();
+    let (inspected, credential) = fixture
+        .storage
+        .inspect_committed(identity.uid, &mut Authority(identity.incarnation))
+        .unwrap();
+    assert_eq!(inspected, state);
+    assert_eq!(credential.unwrap().encode().unwrap().expose(), before);
+    assert!(orphan.join("recovery-marker").exists());
+    assert_eq!(std::fs::read(&credential_path).unwrap(), before);
+    // Unknown new policy is unavailable and is never repaired by inspection.
+    let record = CredentialRecord::decode(&before)
+        .unwrap()
+        .with_profile(
+            localpin_core::secret::CredentialProfile::for_enrollment(
+                Backend::Software,
+                localpin_core::secret::CredentialKind::NumericPin,
+                &Pin::parse(b"00814639").unwrap(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let mut invalid = record.encode().unwrap().expose().to_vec();
+    invalid[35] = 255;
+    std::fs::write(&credential_path, &invalid).unwrap();
+    assert!(
+        fixture
+            .storage
+            .inspect_committed(identity.uid, &mut Authority(identity.incarnation))
+            .is_err()
+    );
+    assert_eq!(std::fs::read(&credential_path).unwrap(), invalid);
+    assert!(orphan.exists());
+}
+
+#[test]
+fn offline_open_missing_singleton_lock_never_creates_state() {
+    let _serial = TEST_SERIAL
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    let path = std::env::temp_dir().join(format!(
+        "localpin-inspection-{}-{}",
+        std::process::id(),
+        NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed),
+    ));
+    DirBuilder::new().mode(0o700).create(&path).unwrap();
+    let root = Dir::test(File::open(&path).unwrap()).unwrap();
+    assert!(Storage::from_existing_dir(root).is_err());
+    assert_eq!(std::fs::read_dir(&path).unwrap().count(), 0);
+    std::fs::remove_dir(path).unwrap();
+}
+
 #[derive(Clone, Copy)]
 struct Authority(Incarnation);
 

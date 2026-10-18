@@ -6,6 +6,7 @@
 use localpin_core::{
     limits::{KdfParameters, MAX_RECORD_BYTES, MAX_THROTTLE_BYTES},
     records::{ConfigRecord, CredentialRecord},
+    secret::{CURRENT_POLICY, CredentialKind, CredentialProfile},
     throttle::ThrottleRecord,
     types::{
         AccountId, Backend, BackendSelection, BootId, Generation, Incarnation, TimePoint, Uid,
@@ -57,6 +58,7 @@ fn check_credential(bytes: &[u8]) -> bool {
         assert_ne!(record.account().uid.get(), 0);
         assert_ne!(record.account().uid.get(), u32::MAX);
         assert_ne!(record.generation().get(), 0);
+        assert!(record.profile().validate(record.backend()).is_ok());
         true
     } else {
         false
@@ -90,6 +92,20 @@ fn seeded_record_mutations_are_canonical_and_enforce_work_bounds() {
     .unwrap()
     .encode()
     .unwrap();
+    let current_credential = CredentialRecord::new_with_profile(
+        account(),
+        Generation::new(2).unwrap(),
+        Backend::Software,
+        CredentialProfile {
+            policy: CURRENT_POLICY,
+            kind: CredentialKind::Passcode,
+            length: 12,
+        },
+        b"synthetic opaque payload; no verifier material",
+    )
+    .unwrap()
+    .encode()
+    .unwrap();
     let throttle = ThrottleRecord::initial(
         account(),
         Generation::new(1).unwrap(),
@@ -104,6 +120,7 @@ fn seeded_record_mutations_are_canonical_and_enforce_work_bounds() {
     for (original, check) in [
         (config.as_slice(), check_config as fn(&[u8]) -> bool),
         (credential.expose(), check_credential),
+        (current_credential.expose(), check_credential),
         (throttle.as_slice(), check_throttle),
     ] {
         assert!(check(original));

@@ -1,11 +1,12 @@
 //! Closed, explicitly versioned wire vocabulary.
 
 use core::fmt;
+pub use localpin_core::secret::{CredentialKind, CredentialProfile};
 use localpin_core::secret::{Pin, SecretBytes};
 use zeroize::Zeroize;
 
 /// Protocol version carried in every message body.
-pub const VERSION: u8 = 1;
+pub const VERSION: u8 = 2;
 pub use localpin_core::limits::MAX_FRAME_BYTES;
 /// Maximum body size accepted before reading or allocating its payload.
 pub const MAX_BODY_BYTES: usize = MAX_FRAME_BYTES - 4;
@@ -189,6 +190,8 @@ pub struct Status {
     pub configured: BackendPreference,
     /// Actual backend of the committed credential.
     pub enrolled: Option<Backend>,
+    /// Exact enrolled format when readable; unavailable storage can omit it.
+    pub profile: Option<CredentialProfile>,
     /// Current availability.
     pub availability: Availability,
     /// Remaining cooldown duration in milliseconds.
@@ -219,7 +222,7 @@ pub enum Request {
     Status,
     /// Ask for a short-lived verification challenge.
     BeginVerify,
-    /// Submit one six-digit PIN to the issued challenge.
+    /// Submit one bounded credential to the issued challenge.
     Verify {
         /// Issued challenge identifier.
         challenge: Id,
@@ -234,6 +237,8 @@ pub enum Request {
         action: EnrollmentAction,
         /// Proposed backend; absent only for disable.
         backend: Option<Backend>,
+        /// Explicit credential format; absent only for disable.
+        kind: Option<CredentialKind>,
     },
     /// Answer exactly one broker/worker prompt.
     EnrollConversation {
@@ -383,6 +388,12 @@ pub enum Response {
     VerifyChallenge {
         /// Challenge identifier.
         challenge: Id,
+        /// Credential generation bound to this challenge.
+        generation: u64,
+        /// Actual enrolled protection backend.
+        backend: Backend,
+        /// Exact enrolled credential format.
+        profile: CredentialProfile,
         /// Duration remaining in milliseconds.
         valid_for_ms: u32,
     },

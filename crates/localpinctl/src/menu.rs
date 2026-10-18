@@ -65,7 +65,7 @@ pub(crate) fn backend(ui: &mut impl Ui) -> Result<BackendPreference, CliError> {
         "Choose protection explicitly. Device detection alone does not establish TPM usability.",
     )?;
     match ui.choose(
-        "PIN protection",
+        "Credential protection",
         &[
             "TPM 2.0 — hardware bound; requires a separately validated TPM deployment",
             "Software — no TPM binding; copied verifier data can be guessed offline",
@@ -98,9 +98,9 @@ pub(crate) fn run() -> Result<(), CliError> {
                 "Set up or resume setup",
                 "Check status",
                 "Diagnose a problem",
-                "Change my PIN",
-                "Switch PIN protection",
-                "Disable my PIN",
+                "Change my credential",
+                "Switch protection",
+                "Disable my credential",
                 "Exit",
             ],
         )?;

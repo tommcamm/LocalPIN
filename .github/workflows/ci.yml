@@ -64,8 +64,10 @@ jobs:
           python3 -m unittest discover -s experiments/m8 -p 'test_*.py' -v
           python3 -m unittest discover -s experiments/m82 -p 'test_*.py' -v
           python3 -m unittest discover -s experiments/m83 -p 'test_*.py' -v
+          python3 -m unittest discover -s experiments/flexible -p 'test_*.py' -v
           python3 -m py_compile experiments/m82/*.py
           python3 -m py_compile experiments/m83/*.py
+          python3 -m py_compile experiments/flexible/*.py
           python3 -m unittest discover -s packaging/fedora -p 'test_release*.py' -v
       - name: Build release artifacts
         run: cargo build --workspace --all-features --release --locked

@@ -16,13 +16,13 @@ class PromptTests(unittest.TestCase):
 
     def test_most_recent_heading_and_private_prompt_win(self):
         transcript = ('Check system readiness with administrator access?\n' + wizard.CHOICE
-                      + '1\nPIN protection\n'
+                      + '1\nCredential protection\n'
                       + '  1. TPM 2.0 — hardware bound; requires a separately validated TPM deployment\n'
                       + '  2. Software — no TPM binding; copied verifier data can be guessed offline\n'
                       + wizard.CHOICE).encode()
         self.assertEqual(wizard.prompt(transcript)['id'], 'backend')
-        self.assertEqual(wizard.prompt(transcript + b'1\r\nNew six-digit PIN: ')['id'], 'new-pin')
-        self.assertEqual(wizard.prompt(transcript + b'1\r\nNew six-digit PIN: ')['secret_selector'], 'pin')
+        self.assertEqual(wizard.prompt(transcript + b'1\r\nNew PIN      ')['id'], 'new-pin')
+        self.assertEqual(wizard.prompt(transcript + b'1\r\nNew PIN      ')['secret_selector'], 'pin')
 
     def test_all_private_prompts_return_only_fixed_identifiers(self):
         for suffix, (identifier, selector) in wizard.PRIVATE_PROMPTS.items():
@@ -34,8 +34,8 @@ class PromptTests(unittest.TestCase):
     def test_unknown_prompt_and_menu(self):
         self.assertIsNone(wizard.prompt(b'Unexpected privileged question: ')['id'])
         menu = ('What would you like to do?\n  1. Set up or resume setup\n  2. Check status\n'
-                '  3. Diagnose a problem\n  4. Change my PIN\n  5. Switch PIN protection\n'
-                '  6. Disable my PIN\n  7. Exit\n')
+                '  3. Diagnose a problem\n  4. Change my credential\n  5. Switch protection\n'
+                '  6. Disable my credential\n  7. Exit\n')
         self.assertEqual(wizard.prompt((menu + wizard.CHOICE).encode())['id'], 'menu')
         previous = ('Check system readiness with administrator access?\n  1. Yes\n'
                     '  2. No / pause\n' + wizard.CHOICE + '1\n')
@@ -51,3 +51,14 @@ class PromptTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class CredentialPromptTests(unittest.TestCase):
+    def test_type_and_warning_choices_are_fixed_public_identifiers(self):
+        for default in ('1', '2'):
+            result = wizard.prompt(('Type [' + default + '] (q to cancel): ').encode())
+            self.assertEqual(result['id'], 'credential-type')
+            self.assertEqual(result['answers'][''], 'default')
+        result = wizard.prompt(b'Choice [1] (q to cancel): ')
+        self.assertEqual(result['id'], 'predictability-warning')
+        self.assertEqual(result['answers']['2'], 'use-anyway')

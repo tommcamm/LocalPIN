@@ -635,7 +635,10 @@ class PackageLifecycleTests(unittest.TestCase):
         before = copy.deepcopy(self.state)
         result = integration.package_resume(self.state)
         integration.current.assert_called_once_with(self.state, binaries=False)
-        integration.run.assert_called_once_with(["/usr/bin/systemctl", "start", "localpin.socket"])
+        self.assertEqual(integration.run.call_args_list, [
+            mock.call([integration.ACCOUNT, "check-credentials"]),
+            mock.call(["/usr/bin/systemctl", "start", "localpin.socket"]),
+        ])
         self.assertEqual(self.state["phase"], "prepared")
         self.assertEqual(self.state["binaries"], {"binary": "new"})
         self.assertIsNone(self.state["tests"])
@@ -664,11 +667,25 @@ class PackageLifecycleTests(unittest.TestCase):
 
     def test_resume_start_failure_leaves_durable_suspended_state_for_retry(self):
         self.state.update(phase="suspended", services={"socket": True, "service": False}, tests=None)
-        integration.run.side_effect = integration.Refusal("synthetic service start failure")
+        def start_failure(args):
+            if args[0] == "/usr/bin/systemctl":
+                raise integration.Refusal("synthetic service start failure")
+        integration.run.side_effect = start_failure
         with self.assertRaises(integration.Refusal):
             integration.package_resume(self.state)
         self.assertEqual(self.state["phase"], "suspended")
         self.assertEqual(self.saved[-1]["phase"], "suspended")
+
+    def test_invalid_credentials_refuse_resume_before_services_manifest_or_gate(self):
+        self.state.update(phase="suspended", services={"socket": True, "service": False})
+        before = copy.deepcopy(self.state)
+        integration.run.side_effect = integration.Refusal("synthetic invalid credential policy")
+        with self.assertRaises(integration.Refusal):
+            integration.package_resume(self.state)
+        integration.run.assert_called_once_with([integration.ACCOUNT, "check-credentials"])
+        integration.save.assert_not_called()
+        integration.atomic_write.assert_not_called()
+        self.assertEqual(self.state, before)
 
     def test_resume_retries_crash_after_durable_active_intent_before_gate_publication(self):
         self.state.update(phase="suspended", resume_phase="active",
@@ -784,6 +801,7 @@ class PackageLifecycleTests(unittest.TestCase):
                           services={"socket": True, "service": False})
         integration.package_resume(self.state)
         self.assertEqual(integration.run.call_args_list, [
+            mock.call([integration.ACCOUNT, "check-credentials"]),
             mock.call(["/usr/bin/systemctl", "start", "localpin.socket"]),
         ])
         self.assertEqual(self.saved[-1]["phase"], "prepared")

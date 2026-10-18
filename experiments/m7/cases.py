@@ -224,7 +224,10 @@ def prepare(kind):
         m7.require(state['status']['availability'] != 'available' and m7.tally() == state['locked_counter'],
                    'policy check bypassed or changed the original lockout tally')
     elif kind == 'cooldown':
-        wrong = '000000'
+        credential_profile = c.status()['credential_profile']
+        m7.require(credential_profile is not None and credential_profile['kind'] == 'numeric-pin',
+                   'cooldown fixture requires an enrolled numeric PIN profile')
+        wrong = '0' * credential_profile['length']
         m7.require(wrong not in (secrets[c.NAME]['pin'], secrets[c.NAME]['password']), 'fixture collision')
         results = [c.client('verify', wrong).stdout.strip().decode() for _ in range(5)]
         m7.require(all(value == 'Mismatch' for value in results[:4]), 'mismatch baseline')
@@ -362,19 +365,26 @@ def repair():
     return {'repaired': kind, 'status': c.status()}
 
 
-def password(six):
+def password(kind):
     secrets = m7.guard()
     m7.require(not FAULT.exists(), 'repair failure setup first')
-    c.stop()
-    m7.command([c.ACCOUNT, 'begin-mutation'])
     entry = secrets[c.NAME]
-    if six:
-        m7.require('ordinary_password' not in entry, 'six-digit password already configured')
+    if kind != 'ordinary-password':
+        m7.require('ordinary_password' not in entry, 'fixture password already configured')
         entry['ordinary_password'] = entry['password']
-        entry['password'] = '481516'
+        if kind == 'profile-password':
+            credential_profile = c.status()['credential_profile']
+            m7.require(credential_profile is not None and credential_profile['kind'] == 'numeric-pin'
+                       and credential_profile['length'] == len(entry['pin']),
+                       'password-overlap fixture requires the current enrolled numeric profile')
+            entry['password'] = '4815162342481516'[:credential_profile['length']]
+        else:
+            entry['password'] = '481516'
     else:
         entry['password'] = entry.pop('ordinary_password')
     m7.require(entry['password'] != entry['pin'], 'PIN/password collision')
+    c.stop()
+    m7.command([c.ACCOUNT, 'begin-mutation'])
     m7.command(['chpasswd'], data=(c.NAME + ':' + entry['password'] + '\n').encode())
     path = c.WORK / 'secrets.json'
     path.write_text(json.dumps(secrets))
@@ -382,12 +392,14 @@ def password(six):
     c.prune_test_quarantines()
     c.reseal()
     m7.enroll()
-    return {'six_digit_password': six, 'fresh_incarnation_and_enrollment': True}
+    return {'six_digit_password': kind == 'six-password',
+            'password_matches_numeric_profile': kind == 'profile-password',
+            'fresh_incarnation_and_enrollment': True}
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=['prepare', 'repair', 'six-password', 'ordinary-password',
+    parser.add_argument('action', choices=['prepare', 'repair', 'six-password', 'profile-password', 'ordinary-password',
                                          'profile-faillock', 'profile-default'])
     parser.add_argument('--kind', choices=['cooldown', 'broker-stopped', 'broker-crashed',
                         'broker-stalled', 'missing-module', 'corrupt-state', 'worker-missing',
@@ -399,10 +411,10 @@ def main():
         result = prepare(args.kind)
     elif args.action == 'repair':
         result = repair()
-    elif args.action.startswith('profile-'):
+    elif args.action in ('profile-faillock', 'profile-default'):
         result = profile(args.action == 'profile-faillock')
     else:
-        result = password(args.action == 'six-password')
+        result = password(args.action)
     print(json.dumps(result, indent=2))
 
 

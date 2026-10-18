@@ -25,11 +25,11 @@ pub enum Command {
     },
     /// Establish a new enrollment using an explicit backend preference.
     Enroll(BackendPreference),
-    /// Replace the PIN on the committed backend.
+    /// Replace the credential on the committed backend.
     Change,
     /// Disable the own-account credential after fresh password verification.
     Disable,
-    /// Explicitly replace the backend and PIN.
+    /// Explicitly replace the backend and credential.
     Migrate(BackendPreference),
     /// Display system integration state.
     IntegrationStatus,
@@ -100,7 +100,11 @@ pub fn check_environment(
 ) -> Result<(), CliError> {
     for name in names {
         let name = name.as_ref().as_encoded_bytes();
-        if name.starts_with(b"LOCALPIN_") || name == b"PIN" || name == b"PASSWORD" {
+        if name.starts_with(b"LOCALPIN_")
+            || name == b"PIN"
+            || name == b"PASSWORD"
+            || name == b"PASSCODE"
+        {
             return Err(CliError::SecretEnvironment);
         }
     }
@@ -108,7 +112,7 @@ pub fn check_environment(
 }
 
 /// Supported commands and security-relevant input behavior.
-pub const HELP: &str = "LocalPIN — a PIN for your local desktop account\n\nUsage: localpin [command]\n\nGet started\n  setup                                      Set up or resume guided onboarding\n  status [--json]                             See enrollment and activation\n  doctor [--json]                             Diagnose readiness and next steps\n\nManage your PIN\n  enroll --backend auto|tpm2-required|software Create a PIN with fresh password verification\n  change                                     Choose a new PIN\n  disable                                    Disable your PIN credential\n  migrate --backend tpm2-required|software    Replace protection and choose a new PIN\n\nAdministration\n  integration status                         Inspect the desktop integration gate\n  integration enable|disable                 Show the separate administrator command\n  recover --user <account>                   Recover a local account (administrator only)\n\n  --help                                     Show this help\n  --version                                  Show the installed version\n\nRun localpin with no command to open the interactive menu. The existing\nlocalpinctl command remains compatible. For the guided install path, run\nlocalpin setup as your normal desktop user; sudo prompts authorize system changes.\n\nPINs and passwords use private foreground-terminal prompts. No secret arguments,\nenvironment variables, stdin input, or simulator overrides are supported.\nInstallation and enrollment do not activate integration: preparation, a bounded\ntrial, recovery rehearsal, and administrator-recorded tests precede activation.\nAdministrator details: sudo localpin-integration status";
+pub const HELP: &str = "LocalPIN — a PIN for your local desktop account\n\nUsage: localpin [command]\n\nGet started\n  setup                                      Set up or resume guided onboarding\n  status [--json]                             See enrollment and activation\n  doctor [--json]                             Diagnose readiness and next steps\n\nManage your credential\n  enroll --backend auto|tpm2-required|software Create a PIN or passcode with password verification\n  change                                     Choose a new PIN or passcode\n  disable                                    Disable your credential\n  migrate --backend tpm2-required|software    Replace protection and choose a new credential\n\nAdministration\n  integration status                         Inspect the desktop integration gate\n  integration enable|disable                 Show the separate administrator command\n  recover --user <account>                   Recover a local account (administrator only)\n\n  --help                                     Show this help\n  --version                                  Show the installed version\n\nRun localpin with no command to open the interactive menu. The existing\nlocalpinctl command remains compatible. For the guided install path, run\nlocalpin setup as your normal desktop user; sudo prompts authorize system changes.\n\nPINs (4–16 TPM; 8–16 software), passcodes (8–64), and passwords use\nprivate foreground-terminal prompts. New credentials show asterisks; passwords stay hidden. No secret arguments,\nenvironment variables, stdin input, or simulator overrides are supported.\nInstallation and enrollment do not activate integration: preparation, a bounded\ntrial, recovery rehearsal, and administrator-recorded tests precede activation.\nAdministrator details: sudo localpin-integration status";
 
 #[cfg(test)]
 mod tests {

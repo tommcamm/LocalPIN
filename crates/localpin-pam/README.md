@@ -28,14 +28,19 @@ erasing and freeing its transferred C allocation. It never uses
 `pam_get_authtok` or reuses a previous response. All
 native NUL-terminated candidate bytes, including empty, whitespace and non-UTF-8
 passwords, pass unchanged into PAM's owned token. Embedded NUL is outside the
-native PAM string representation. Only exactly six ASCII digits contact the
-broker; Enter remains controlled by KDE's ordinary submitted conversation.
+native PAM string representation. Plausible candidates (4–64 ASCII digits or
+8–64 printable ASCII characters) may contact the broker for metadata. Only a
+candidate matching the authoritative challenge's exact enrolled kind and length
+is submitted for verification. Enter remains controlled by KDE's ordinary
+submitted conversation.
 
 The fixed endpoint is `/run/localpin/broker.sock`. The production protocol
 client authenticates the root-controlled socket path and root kernel peer,
 reads a fresh connection greeting and checks every response binding. The
 adapter requests own-user status, requires an available enrolled credential,
-obtains a fresh valid challenge and submits one PIN. Only the terminal
+obtains a fresh valid challenge with bound generation, backend and credential
+profile, and submits one matching credential. Status metadata alone never
+determines candidate format or the backend deadline. Only the terminal
 `VerificationOutcome::Granted` returns `PAM_SUCCESS`. Every other result,
 conversation failure, unsupported invocation, malformed exchange, timeout or
 contained Rust panic returns `PAM_IGNORE`, preserving the reviewed original
@@ -43,12 +48,21 @@ password route under `[success=done default=ignore]`.
 
 Connect (itself capped at 250 ms), status, challenge and software verification
 share one absolute suspend-inclusive two-second deadline. Only a submitted TPM
-verification selected by authenticated enrolled-backend status receives a
+verification selected by the authenticated challenge backend receives a
 five-second total deadline, measured from the same broker-contact start. The
 generic client's separate per-operation `status()` and
 `verify()` helpers are deliberately unused. Closing the connection discards the
 one-use exchange; no PIN, token pointer, prior-success flag or PAM module data
 is cached.
+
+Numeric PINs support 4–16 digits on TPM and 8–16 in software; passcodes support
+8–64 printable ASCII characters on either backend. Legacy six-digit software
+PINs remain usable until replaced. All-digit passcodes retain their explicitly
+selected kind. No characters are trimmed, normalized or case folded. A password
+with the enrolled kind and exact length can consume one LocalPIN attempt (and
+potential TPM allowance) before the original password route runs; all password
+bytes still reach that route unchanged. The broker rejects a challenge if its
+committed credential changed before reservation.
 
 `pam_sm_setcred` performs no conversation or broker operation. It returns a
 successful no-op for the supported own-user KDE context and `PAM_IGNORE` for an

@@ -12,8 +12,10 @@ Follow [M6.1 preparation](../m61/README.md) for production binaries, the broker,
 account authority, private account schema and a genuine stock KDE/Wayland
 desktop. Retain console/offline-disk recovery. Accounts are `lp61test` UID 21061
 and `lp61other` UID 21062. Generate ordinary passwords as 30 lowercase ASCII
-letters inside the guest, with six ASCII digit PINs distinct from the passwords
-and fixed wrong-PIN fixture. Keep `/root/localpin-m61/secrets.json` guest-root
+letters inside the guest, with distinct 8–16 ASCII digit software PINs
+(10 recommended) following the current M6.1 fixture requirements. Keep PINs
+distinct from passwords and the all-zero wrong-PIN candidate of the same length.
+Keep `/root/localpin-m61/secrets.json` guest-root
 owned mode 0600. Never transfer it to the host or export it as evidence.
 
 Use the independent domain `localpin-m7`; keep original `localpin-m1` off.
@@ -142,13 +144,24 @@ revocation/resealing as needed. Resolve existing fault markers before starting
 another case. After interruption, inspect/repair first, then explicitly recover
 the existing locked greeter.
 
-For six-digit passwords, run guest `cases.py six-password`, host `console.py
---phase sixpassword`, then guest `cases.py ordinary-password`, with confirmation
-arguments. Mutation revokes first and freshly enrolls; keep the PIN distinct.
+For passwords matching the enrolled numeric profile, run guest `cases.py
+profile-password`, host `console.py --phase profilepassword`, then guest
+`cases.py ordinary-password`, with confirmation arguments. The case obtains
+the current profile length from broker status and requires the re-enrolled PIN
+to retain that length. Mutation revokes first and freshly enrolls; keep the
+password distinct from the PIN.
 For stronger budget evidence, issue exactly four actual wrong-PIN verifications
-after the one GUI six-digit password unlock and require durable cooldown. Fresh
-enrollment resets the baseline, so this proves that GUI password consumed one
-PIN guess. Restore the ordinary password and fresh enrollment afterwards.
+using a candidate of that same length after the one GUI matching-profile
+password unlock and require durable cooldown. Fresh enrollment starts the
+baseline, so this proves that GUI password consumed one PIN guess. Restore the
+ordinary password and fresh enrollment afterwards.
+
+The older `six-password` / `sixpassword` selectors remain available to test exact
+password fallback outside the current software PIN profile; that password does
+not consume a LocalPIN guess. Historical JSON results under `results/` retain
+the original six-digit build and overlap test. They do not establish the current
+credential policy; see the [flexible credential evidence](../../docs/development/flexible-credentials.md)
+for new profile, passcode and migration coverage.
 
 ## Native policy restrictions and counters
 

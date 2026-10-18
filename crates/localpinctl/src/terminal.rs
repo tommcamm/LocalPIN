@@ -1,6 +1,7 @@
 //! Foreground controlling-terminal input with bounded, erased secret buffers.
 
-use localpin_core::secret::{Pin, SecretBytes};
+use localpin_core::secret::{CredentialKind, CredentialProfile, Pin, SecretBytes, is_predictable};
+use localpin_protocol::Backend;
 use localpin_protocol::transport::Deadline;
 use rustix::event::{PollFd, PollFlags, Timespec, poll};
 use rustix::fs::{Mode, OFlags, open};
@@ -34,15 +35,149 @@ pub trait Conversation {
             Err(CliError::Cancelled)
         }
     }
-    /// Read and confirm a six-digit ASCII PIN before it can be sent to a broker.
-    fn new_pin(&mut self, deadline: Deadline) -> Result<Pin, CliError> {
-        let first = self.secret("New six-digit PIN: ", 6, deadline)?;
-        let pin = Pin::parse(first.expose()).map_err(|_| CliError::PinFormat)?;
-        let second = self.secret("Confirm new PIN: ", 6, deadline)?;
-        if first.expose() != second.expose() {
-            return Err(CliError::Confirmation);
+    /// Present a trusted form heading; worker text still uses sanitized messages.
+    fn heading(&mut self, title: &str) -> Result<(), CliError> {
+        self.message(&format!("\nLocalPIN  |  {title}\n"))
+    }
+
+    /// Read a new credential with asterisk masking; password replies stay hidden.
+    fn masked(
+        &mut self,
+        prompt: &str,
+        max: usize,
+        deadline: Deadline,
+    ) -> Result<SecretBytes, CliError> {
+        self.secret(prompt, max, deadline)
+    }
+
+    /// Read a visible, nonsecret form choice using the same absolute deadline.
+    fn answer(&mut self, prompt: &str, max: usize, deadline: Deadline) -> Result<String, CliError> {
+        let answer = self.secret(prompt, max, deadline)?;
+        String::from_utf8(answer.expose().to_vec()).map_err(|_| CliError::Arguments)
+    }
+
+    /// Select an explicit kind, with Enter preserving the displayed default.
+    fn credential_kind(
+        &mut self,
+        default: CredentialKind,
+        deadline: Deadline,
+    ) -> Result<CredentialKind, CliError> {
+        self.message(
+            "Credential type\n  1. Numeric PIN\n  2. Passcode (optional; suggest 12+ characters)",
+        )?;
+        let prompt = match default {
+            CredentialKind::NumericPin => "Type [1] (q to cancel): ",
+            CredentialKind::Passcode => "Type [2] (q to cancel): ",
+        };
+        loop {
+            if deadline.expired() {
+                return Err(CliError::Expired);
+            }
+            let answer = match self.answer(prompt, 1, deadline) {
+                Err(CliError::InputTooLong | CliError::Arguments) => {
+                    self.message("Choose 1 or 2, press Enter for the default, or q to cancel.")?;
+                    continue;
+                }
+                result => result?,
+            };
+            match answer.as_str() {
+                "" => return Ok(default),
+                "1" => return Ok(CredentialKind::NumericPin),
+                "2" => return Ok(CredentialKind::Passcode),
+                "q" => return Err(CliError::Cancelled),
+                _ => self.message("Choose 1 or 2, press Enter for the default, or q to cancel.")?,
+            }
         }
-        Ok(pin)
+    }
+
+    /// Prepare and confirm a valid credential locally, before password authorization.
+    fn new_credential(
+        &mut self,
+        backend: Backend,
+        kind: CredentialKind,
+        deadline: Deadline,
+    ) -> Result<Pin, CliError> {
+        let (guide, first_prompt, second_prompt, max) = match (kind, backend) {
+            (CredentialKind::NumericPin, Backend::Tpm) => (
+                "Use 4–16 digits. We recommend 6. Leading zeroes are preserved.",
+                "New PIN      ",
+                "Confirm PIN  ",
+                16,
+            ),
+            (CredentialKind::NumericPin, Backend::Software) => (
+                "Use 8–16 digits. We recommend 10. Leading zeroes are preserved.",
+                "New PIN      ",
+                "Confirm PIN  ",
+                16,
+            ),
+            (CredentialKind::Passcode, _) => (
+                "Use 8–64 printable ASCII characters. We suggest 12+. Spaces and case are preserved.",
+                "New passcode      ",
+                "Confirm passcode  ",
+                64,
+            ),
+        };
+        self.message(guide)?;
+        loop {
+            if deadline.expired() {
+                return Err(CliError::Expired);
+            }
+            let first = match self.masked(first_prompt, max, deadline) {
+                Err(CliError::InputTooLong) => {
+                    self.message(
+                        "That entry is too long. Try again; no characters were truncated.",
+                    )?;
+                    continue;
+                }
+                value => value?,
+            };
+            let pin = match Pin::parse(first.expose()).and_then(|pin| {
+                CredentialProfile::for_enrollment(core_backend(backend), kind, &pin).map(|_| pin)
+            }) {
+                Ok(pin) => pin,
+                Err(_) => {
+                    self.message("That entry does not meet the selected format. Try again.")?;
+                    continue;
+                }
+            };
+            // Keep only the parsed secret while awaiting confirmation.
+            drop(first);
+            let second = match self.masked(second_prompt, max, deadline) {
+                Err(CliError::InputTooLong) => {
+                    self.message("Confirmation is too long. Enter the credential again.")?;
+                    continue;
+                }
+                value => value?,
+            };
+            let confirmed = pin.expose() == second.expose();
+            drop(second);
+            if !confirmed {
+                self.message("The entries did not match. Enter the credential again.")?;
+                continue;
+            }
+            if is_predictable(&pin) {
+                self.message("This choice has a common or predictable pattern. A longer, less predictable choice is safer.\n  1. Re-enter credential (default)\n  2. Use anyway")?;
+                loop {
+                    if deadline.expired() {
+                        return Err(CliError::Expired);
+                    }
+                    let answer = match self.answer("Choice [1] (q to cancel): ", 1, deadline) {
+                        Err(CliError::InputTooLong | CliError::Arguments) => continue,
+                        value => value?,
+                    };
+                    match answer.as_str() {
+                        "2" => return Ok(pin),
+                        "" | "1" => break,
+                        "q" => return Err(CliError::Cancelled),
+                        _ => {
+                            self.message("Choose 1 to re-enter, 2 to use anyway, or q to cancel.")?
+                        }
+                    }
+                }
+                continue;
+            }
+            return Ok(pin);
+        }
     }
 }
 
@@ -135,6 +270,7 @@ impl Terminal {
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum InputStyle {
     Secret,
+    Masked,
     VisibleChoice,
 }
 
@@ -151,7 +287,40 @@ pub fn sanitize_prompt(text: &str) -> String {
         .collect()
 }
 
+pub(crate) fn core_backend(backend: Backend) -> localpin_core::types::Backend {
+    match backend {
+        Backend::Tpm => localpin_core::types::Backend::Tpm2,
+        Backend::Software => localpin_core::types::Backend::Software,
+    }
+}
+
 impl Conversation for Terminal {
+    fn heading(&mut self, title: &str) -> Result<(), CliError> {
+        let color = std::io::stdout().is_terminal()
+            && std::env::var_os("NO_COLOR").is_none()
+            && std::env::var_os("TERM").is_some_and(|term| term != "dumb");
+        let title = sanitize_prompt(title);
+        let heading = if color {
+            format!("\n\x1b[1;36mLocalPIN\x1b[0m  |  \x1b[1m{title}\x1b[0m\n")
+        } else {
+            format!("\nLocalPIN  |  {title}\n")
+        };
+        writeln!(self.file, "{heading}").map_err(|_| CliError::Terminal)
+    }
+
+    fn masked(
+        &mut self,
+        prompt: &str,
+        max: usize,
+        deadline: Deadline,
+    ) -> Result<SecretBytes, CliError> {
+        self.input(prompt, max, deadline, InputStyle::Masked)
+    }
+
+    fn answer(&mut self, prompt: &str, max: usize, deadline: Deadline) -> Result<String, CliError> {
+        self.choice(prompt, max, deadline)
+    }
+
     fn secret(
         &mut self,
         prompt: &str,
@@ -284,7 +453,7 @@ fn read_bounded_input(
                 if let Some(last) = value.last_mut() {
                     last.zeroize();
                     value.pop();
-                    if style == InputStyle::VisibleChoice {
+                    if style != InputStyle::Secret {
                         mode.file
                             .write_all(b"\x08 \x08")
                             .map_err(|_| CliError::Terminal)?;
@@ -293,7 +462,7 @@ fn read_bounded_input(
             }
             21 => {
                 // Ctrl-U.
-                if style == InputStyle::VisibleChoice {
+                if style != InputStyle::Secret {
                     for _ in 0..value.len() {
                         mode.file
                             .write_all(b"\x08 \x08")
@@ -302,21 +471,25 @@ fn read_bounded_input(
                 }
                 value.zeroize();
             }
-            0 => return Err(CliError::Terminal),
+            0 if style != InputStyle::Masked => return Err(CliError::Terminal),
             _ if style == InputStyle::VisibleChoice && !(b' '..=b'~').contains(&byte[0]) => {
                 return Err(CliError::Terminal);
             }
             _ if value.len() == max => return Err(CliError::InputTooLong),
             _ => {
                 value.push(byte[0]);
-                if style == InputStyle::VisibleChoice {
+                if style != InputStyle::Secret {
                     mode.file
-                        .write_all(&byte[..])
+                        .write_all(if style == InputStyle::Masked {
+                            b"*"
+                        } else {
+                            &byte[..]
+                        })
                         .map_err(|_| CliError::Terminal)?;
                 }
             }
         }
-        if style == InputStyle::VisibleChoice {
+        if style != InputStyle::Secret {
             mode.file.flush().map_err(|_| CliError::Terminal)?;
         }
         byte.zeroize();
@@ -408,19 +581,96 @@ mod tests {
         }
     }
     #[test]
-    fn pin_must_be_ascii_six_digits_and_confirmed() {
+    fn credential_preparation_preserves_leading_zeroes_spaces_and_retries_locally() {
         let deadline = Deadline::after(std::time::Duration::from_secs(1));
-        let mut valid = Script([b"000001".to_vec(), b"000001".to_vec()].into());
-        assert_eq!(valid.new_pin(deadline).unwrap().expose(), b"000001");
-        let mut mismatch = Script([b"000001".to_vec(), b"000002".to_vec()].into());
+        let mut valid = Script([b"0019374820".to_vec(), b"0019374820".to_vec()].into());
+        assert_eq!(
+            valid
+                .new_credential(Backend::Software, CredentialKind::NumericPin, deadline)
+                .unwrap()
+                .expose(),
+            b"0019374820"
+        );
+        let mut passcode = Script(
+            [
+                b"  Example phrase!  ".to_vec(),
+                b"  Example phrase!  ".to_vec(),
+            ]
+            .into(),
+        );
+        assert_eq!(
+            passcode
+                .new_credential(Backend::Tpm, CredentialKind::Passcode, deadline)
+                .unwrap()
+                .expose(),
+            b"  Example phrase!  "
+        );
+        let mut retry = Script(
+            [
+                b"short".to_vec(),
+                b"0019374820".to_vec(),
+                b"mismatch".to_vec(),
+                b"1039482057".to_vec(),
+                b"1039482057".to_vec(),
+            ]
+            .into(),
+        );
+        assert_eq!(
+            retry
+                .new_credential(Backend::Software, CredentialKind::NumericPin, deadline)
+                .unwrap()
+                .expose(),
+            b"1039482057"
+        );
+    }
+
+    #[test]
+    fn predictable_choice_requires_explicit_use_anyway_and_defaults_to_reentry() {
+        let deadline = Deadline::after(std::time::Duration::from_secs(1));
+        let mut retry = Script(
+            [
+                b"11111111".to_vec(),
+                b"11111111".to_vec(),
+                vec![],
+                b"1039482057".to_vec(),
+                b"1039482057".to_vec(),
+            ]
+            .into(),
+        );
+        assert_eq!(
+            retry
+                .new_credential(Backend::Software, CredentialKind::NumericPin, deadline)
+                .unwrap()
+                .expose(),
+            b"1039482057"
+        );
+        let mut accepted =
+            Script([b"password".to_vec(), b"password".to_vec(), b"2".to_vec()].into());
+        assert_eq!(
+            accepted
+                .new_credential(Backend::Software, CredentialKind::Passcode, deadline)
+                .unwrap()
+                .expose(),
+            b"password"
+        );
+    }
+
+    #[test]
+    fn type_default_and_preparation_deadline_are_enforced() {
+        let deadline = Deadline::after(std::time::Duration::from_secs(1));
+        assert_eq!(
+            Script([vec![]].into())
+                .credential_kind(CredentialKind::Passcode, deadline)
+                .unwrap(),
+            CredentialKind::Passcode
+        );
         assert!(matches!(
-            mismatch.new_pin(deadline),
-            Err(CliError::Confirmation)
-        ));
-        let mut invalid = Script([b"12345 ".to_vec()].into());
-        assert!(matches!(
-            invalid.new_pin(deadline),
-            Err(CliError::PinFormat)
+            Script([].into()).new_credential(
+                Backend::Tpm,
+                CredentialKind::NumericPin,
+                Deadline::after(std::time::Duration::ZERO)
+            ),
+            Err(CliError::Expired)
         ));
     }
     #[test]
@@ -502,6 +752,77 @@ mod tests {
         assert_eq!(after.input_modes, before.input_modes);
         assert_eq!(after.output_modes, before.output_modes);
         assert_eq!(after.control_modes, before.control_modes);
+    }
+
+    #[test]
+    fn pty_masked_credential_echoes_only_stars_and_edits_correctly() {
+        let (mut master, mut slave) = pty();
+        let before = tcgetattr(&slave).unwrap();
+        {
+            let mut private = PrivateMode::new(&mut slave).unwrap();
+            master.write_all(b"abc\x7fd\x15  Z9! \n").unwrap();
+            let answer = read_bounded_input(
+                &mut private,
+                64,
+                Deadline::after(std::time::Duration::from_secs(1)),
+                None,
+                InputStyle::Masked,
+            )
+            .unwrap();
+            assert_eq!(answer.expose(), b"  Z9! ");
+        }
+        assert_eq!(tcgetattr(&slave).unwrap().local_modes, before.local_modes);
+        let expected = b"***\x08 \x08*\x08 \x08\x08 \x08\x08 \x08******";
+        let mut echoed = vec![0; expected.len()];
+        master.read_exact(&mut echoed).unwrap();
+        assert_eq!(echoed, expected);
+        assert!(!echoed.contains(&b'Z'));
+    }
+
+    #[test]
+    fn masked_paste_overflow_cancellation_and_timeout_restore_terminal() {
+        for (bytes, max, expected) in [
+            (b"123456789".as_slice(), 8, CliError::InputTooLong),
+            (b"secret\x03".as_slice(), 64, CliError::Cancelled),
+            (b"secret\x04".as_slice(), 64, CliError::Cancelled),
+            (b"secret\x1a".as_slice(), 64, CliError::Cancelled),
+        ] {
+            let (mut master, mut slave) = pty();
+            let before = tcgetattr(&slave).unwrap();
+            {
+                let mut private = PrivateMode::new(&mut slave).unwrap();
+                master.write_all(bytes).unwrap();
+                assert_eq!(
+                    read_bounded_input(
+                        &mut private,
+                        max,
+                        Deadline::after(std::time::Duration::from_secs(1)),
+                        None,
+                        InputStyle::Masked
+                    )
+                    .err(),
+                    Some(expected)
+                );
+            }
+            assert_eq!(tcgetattr(&slave).unwrap().local_modes, before.local_modes);
+        }
+        let (_master, mut slave) = pty();
+        let before = tcgetattr(&slave).unwrap();
+        {
+            let mut private = PrivateMode::new(&mut slave).unwrap();
+            assert_eq!(
+                read_bounded_input(
+                    &mut private,
+                    64,
+                    Deadline::after(std::time::Duration::ZERO),
+                    None,
+                    InputStyle::Masked
+                )
+                .err(),
+                Some(CliError::Expired)
+            );
+        }
+        assert_eq!(tcgetattr(&slave).unwrap().local_modes, before.local_modes);
     }
 
     #[test]

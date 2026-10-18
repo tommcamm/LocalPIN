@@ -8,6 +8,15 @@ experimental builds.
 
 ### Added
 
+- Flexible credential selection: TPM numeric PINs of 4–16 digits, software PINs
+  of 8–16 digits, and optional 8–64 character printable-ASCII passcodes. Shared
+  setup/change/migration forms show protection, length guidance, masked new input
+  and advisory predictable-choice warnings before fresh password verification.
+  Recommendations are 6 digits with TPM, 10 with software, and 12+ for passcodes.
+  [ADR 0021](docs/adr/0021-flexible-credentials.md) defines the policy; the
+  [validation record](docs/development/flexible-credentials.md) keeps installed,
+  hardware and independent-review gates separate from source checks.
+
 - Setup-managed same-boot persistent-accounting maintenance for supported fresh
   Fedora KDE installations, with explicit sign-out approval, counter-preserving
   copies, protected interruption state and automatic setup resumption after
@@ -18,7 +27,8 @@ experimental builds.
   enrollment, trial/recovery guidance, resume and final activation. Privileged
   steps use a fixed sudo/helper interface with transaction-scoped single-account
   guards; secrets keep the existing private broker path. Existing `localpinctl`
-  commands and status/doctor JSON stay compatible. Persistent accounting remains
+  commands remain available; status/doctor JSON now follows schema 2. Persistent
+  accounting remains
   an offline operation and real recovery revokes enrollment.
   [ADR 0019](docs/adr/0019-guided-setup-orchestration.md) defines the boundary;
   [targeted installed VM evidence](docs/development/m8.2-installed-acceptance.md)
@@ -48,6 +58,14 @@ experimental builds.
   distinguishes successful local reruns from the original hosted failure.
 
 ### Changed
+
+- Credential envelope 2 and IPC 2 carry explicit kind, length and policy metadata;
+  status/doctor JSON advances to schema 2. Legacy six-digit software credentials
+  remain usable with replacement advice and are preserved byte-for-byte during
+  supported updates. New mutations follow current backend policy. Package resume
+  validates both envelope versions through shared Rust parsers before reopening
+  the gate. Lock-screen challenges bind profile and generation, preserve exact
+  password fallback and retain native counters and shared TPM safety reserves.
 
 - The manual release workflow bumps an already-tagged experimental version,
   commits matching manifests, lockfiles, RPM defaults and integration metadata

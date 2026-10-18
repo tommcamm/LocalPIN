@@ -133,6 +133,44 @@ impl Storage {
         Self::from_dir(Dir::open(root)?)
     }
 
+    /// Open existing state for offline inspection without creating any path.
+    /// The broker singleton lease must be available; no recovery is performed.
+    pub fn open_existing(root: File) -> Result<Self> {
+        Self::from_existing_dir(Dir::open(root)?)
+    }
+
+    fn from_existing_dir(root: Dir) -> Result<Self> {
+        let lock = root.existing_lock("broker.lock")?;
+        let users = root.child("users")?;
+        Ok(Self {
+            broker: Arc::new(Broker {
+                _root: root,
+                users,
+                _lock: lock,
+            }),
+        })
+    }
+
+    /// Validate committed pointer, throttle and credential without cleanup or writes.
+    /// Returns only the selected generation; recovery material is never selected.
+    pub fn inspect_committed(
+        &self,
+        uid: Uid,
+        lifecycle: &mut dyn LifecycleAuthority,
+    ) -> Result<(CommittedState, Option<CredentialRecord>)> {
+        let dir = self.broker.users.child(&uid.get().to_string())?;
+        let guard = self.guard(dir, uid, lifecycle, false)?;
+        let state = guard.committed_state()?;
+        check_lifecycle(guard.lifecycle, state.account())?;
+        guard.read_throttle(state)?;
+        let credential = if state.backend().is_some() {
+            Some(guard.read_credential(state)?)
+        } else {
+            None
+        };
+        Ok((state, credential))
+    }
+
     fn from_dir(root: Dir) -> Result<Self> {
         let lock = root.lock("broker.lock")?;
         let users = root.create_child("users")?;

@@ -504,6 +504,9 @@ fn typed_client_verification_is_exact_and_connection_is_one_use() {
                         connection: id(),
                         response: Response::VerifyChallenge {
                             challenge,
+                            generation: 1,
+                            backend: Backend::Tpm,
+                            profile: localpin_core::secret::CredentialProfile::legacy(),
                             valid_for_ms: 5000,
                         },
                     },
@@ -562,6 +565,9 @@ fn typed_client_refuses_premature_grant_and_invalid_challenge_before_pin() {
         Response::VerifyChallenge {
             challenge: id(),
             valid_for_ms: 5000,
+            generation: 1,
+            backend: Backend::Tpm,
+            profile: localpin_core::secret::CredentialProfile::legacy(),
         },
         Response::Error(ErrorCode::Forbidden),
     ] {

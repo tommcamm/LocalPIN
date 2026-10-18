@@ -1,6 +1,7 @@
 use super::*;
 use localpin_core::{
     limits::{MAX_KDF_KIB, WorkPermit},
+    secret::{CredentialKind, CredentialProfile},
     throttle::{AttemptResponse, DurableThrottleStore, RestoredThrottle, Throttle, ThrottleRecord},
     types::{BootId, Incarnation, TimePoint, Uid, Unavailable},
 };
@@ -96,6 +97,44 @@ fn software_enrollment_is_exact_canonical_phc_and_trial_checks_candidate() {
     assert!(validate_enrollment(&enrolled, &pin, &budget).unwrap());
     assert!(!validate_enrollment(&enrolled, &Pin::parse(b"000001").unwrap(), &budget).unwrap());
     assert!(!format!("{enrolled:?}").contains("CUNrJW"));
+}
+
+#[test]
+fn flexible_software_credentials_keep_exact_bytes_through_version_two_records() {
+    let long = [b'Z'; 64];
+    for (kind, bytes) in [
+        (CredentialKind::NumericPin, b"00000001".as_slice()),
+        (CredentialKind::NumericPin, b"0000000000000001"),
+        (CredentialKind::Passcode, b"  Mixed passcode  "),
+        (CredentialKind::Passcode, long.as_slice()),
+        (
+            CredentialKind::Passcode,
+            b"0000000000000000000000000000000000000000000000000000000000000001",
+        ),
+    ] {
+        let budget = ResourceBudget::default();
+        let secret = Pin::parse(bytes).unwrap();
+        let profile = CredentialProfile::for_enrollment(Backend::Software, kind, &secret).unwrap();
+        let enrolled =
+            enroll_with_random(account(), generation(), &secret, &budget, &mut FixedRandom)
+                .unwrap()
+                .with_profile(profile)
+                .unwrap();
+        let encoded = enrolled.encode().unwrap();
+        let reopened = CredentialRecord::decode(encoded.expose()).unwrap();
+        assert_eq!(reopened.profile(), profile);
+        assert!(validate_enrollment(&reopened, &secret, &budget).unwrap());
+        let mut changed = bytes.to_vec();
+        let last = changed.last_mut().unwrap();
+        *last = if *last == b'0' { b'1' } else { b'0' };
+        assert!(!validate_enrollment(&reopened, &Pin::parse(&changed).unwrap(), &budget).unwrap());
+        if bytes.first() == Some(&b' ') {
+            assert!(
+                !validate_enrollment(&reopened, &Pin::parse(b"Mixed passcode").unwrap(), &budget,)
+                    .unwrap()
+            );
+        }
+    }
 }
 
 #[test]

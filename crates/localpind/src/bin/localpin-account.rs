@@ -9,7 +9,7 @@ fn run() -> Result<(), ()> {
     let mut args: Vec<_> = std::env::args().skip(1).collect();
     if args == ["--help"] {
         println!(
-            "localpin-account check-policy\nlocalpin-account begin-mutation\nlocalpin-account seal --uid UID [--uid UID ...]\nlocalpin-account recover --uid UID [--uid UID ...]\nlocalpin-account cache-window-begin\nlocalpin-account cache-window-finish\n\nRoot only. check-policy reads both fixed KDE native substacks without authenticating or changing state. Provisioning/package checks require the broker stopped. begin-mutation durably revokes every managed account and removes legacy appliance flags. seal/recover rotate root-owned shadow-record markers and create fresh disabled incarnations. Account tools retain their normal native locking. Cache-window commands now validate quiescent identity state; no immutable files or maintenance journal are created."
+            "localpin-account check-policy\nlocalpin-account check-credentials\nlocalpin-account begin-mutation\nlocalpin-account seal --uid UID [--uid UID ...]\nlocalpin-account recover --uid UID [--uid UID ...]\nlocalpin-account cache-window-begin\nlocalpin-account cache-window-finish\n\nRoot only. check-credentials validates existing committed records offline without writes, authentication or TPM access. check-policy reads both fixed KDE native substacks without authenticating or changing state. Provisioning/package checks require the broker stopped. begin-mutation durably revokes every managed account and removes legacy appliance flags. seal/recover rotate root-owned shadow-record markers and create fresh disabled incarnations. Account tools retain their normal native locking. Cache-window commands now validate quiescent identity state; no immutable files or maintenance journal are created."
         );
         return Ok(());
     }
@@ -27,6 +27,9 @@ fn run() -> Result<(), ()> {
         None
     };
     let result = match args.first().map(String::as_str) {
+        Some("check-credentials") if args.len() == 1 => {
+            localpind::accounts::check_credentials_with_integration_lock(inherited)
+        }
         Some("check-policy") if args.len() == 1 && inherited.is_none() => {
             localpind::accounts::check_policy()
         }
