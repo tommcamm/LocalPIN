@@ -59,6 +59,14 @@ for executable in localpind localpin-worker localpin-auth-worker localpin-eligib
 done
 install -m 0755 native/localpinctl %{buildroot}%{_bindir}/localpinctl
 ln -s localpinctl %{buildroot}%{_bindir}/localpin
+install -D -m 0644 packaging/localpin.1 %{buildroot}%{_mandir}/man1/localpin.1
+ln -s localpin.1 %{buildroot}%{_mandir}/man1/localpinctl.1
+install -D -m 0644 packaging/completions/localpin.bash %{buildroot}%{_datadir}/bash-completion/completions/localpin
+ln -s localpin %{buildroot}%{_datadir}/bash-completion/completions/localpinctl
+install -D -m 0644 packaging/completions/localpin.zsh %{buildroot}%{_datadir}/zsh/site-functions/_localpin
+ln -s _localpin %{buildroot}%{_datadir}/zsh/site-functions/_localpinctl
+install -D -m 0644 packaging/completions/localpin.fish %{buildroot}%{_datadir}/fish/vendor_completions.d/localpin.fish
+ln -s localpin.fish %{buildroot}%{_datadir}/fish/vendor_completions.d/localpinctl.fish
 install -m 0755 tools/localpin-integration.py %{buildroot}%{_libexecdir}/localpin/localpin-integration
 install -m 0755 tools/localpin-accounting.py %{buildroot}%{_libexecdir}/localpin/localpin-accounting
 install -m 0755 tools/localpin-setup-resume %{buildroot}%{_libexecdir}/localpin/localpin-setup-resume
@@ -144,8 +152,17 @@ fi
 %doc docs/adr/0019-guided-setup-orchestration.md
 %doc docs/adr/0020-setup-accounting-maintenance.md
 %doc docs/adr/0021-flexible-credentials.md
+%doc docs/adr/0022-command-first-terminal-presentation.md
 %{_bindir}/localpinctl
 %{_bindir}/localpin
+%{_mandir}/man1/localpin.1*
+%{_mandir}/man1/localpinctl.1*
+%{_datadir}/bash-completion/completions/localpin
+%{_datadir}/bash-completion/completions/localpinctl
+%{_datadir}/zsh/site-functions/_localpin
+%{_datadir}/zsh/site-functions/_localpinctl
+%{_datadir}/fish/vendor_completions.d/localpin.fish
+%{_datadir}/fish/vendor_completions.d/localpinctl.fish
 %{_sbindir}/localpin-integration
 %{_libexecdir}/localpin/
 %{_libdir}/security/pam_localpin.so

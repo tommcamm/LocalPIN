@@ -33,23 +33,12 @@ def terminal_prompt(text):
     base = base_module()
     # getAllDisplayedText(false) joins soft line wraps; trim only empty terminal
     # lines, retaining the prompt's trailing space and visible menu boundaries.
-    normalized = text.rstrip('\n')
-    result = base.prompt(normalized.encode())
+    normalized = base.normalize(text.encode()).rstrip('\n')
+    result = base.prompt(normalized.encode(), soft_wrap=True)
     if result['id'] is not None:
         return result
     # Konsole may omit trailing prompt whitespace on an otherwise empty line.
-    result = base.prompt((normalized + ' ').encode())
-    if result['id'] is not None:
-        return result
-    # Konsole can retain a soft-wrap newline inside a word even when requested
-    # not to preserve line breaks. Match only a complete fixed trailing block,
-    # so an older confirmation cannot authorize a different current question.
-    flat = normalized.replace('\n', '')
-    for heading in base.CONFIRMATIONS:
-        block = heading + '\n  1. Yes\n  2. No / pause\n' + base.CHOICE
-        if flat.rstrip().endswith(block.replace('\n', '').rstrip()):
-            return base.prompt(block.encode())
-    result = base.prompt(flat.encode())
+    result = base.prompt((normalized + ' ').encode(), soft_wrap=True)
     if result['id'] is not None:
         return result
     return {'id': None, 'kind': 'unknown-or-running', 'answers': []}

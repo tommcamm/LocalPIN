@@ -98,6 +98,7 @@ impl Host for Fake {
 struct Script {
     answers: VecDeque<Result<usize, CliError>>,
     messages: Vec<String>,
+    policy_diffs: Vec<String>,
 }
 
 impl Script {
@@ -105,6 +106,7 @@ impl Script {
         Self {
             answers: answers.iter().copied().map(Ok).collect(),
             messages: vec![],
+            policy_diffs: vec![],
         }
     }
     fn contains(&self, text: &str) -> bool {
@@ -122,6 +124,11 @@ impl Ui for Script {
         self.answers
             .pop_front()
             .expect("unexpected wizard question")
+    }
+
+    fn policy_diff(&mut self, text: &str) -> Result<(), CliError> {
+        self.policy_diffs.push(text.to_owned());
+        self.say(text)
     }
 }
 
@@ -158,7 +165,11 @@ fn completed_recovery_reprepares_enrolls_tests_and_activates() {
     );
     assert_eq!(host.state.phase, Phase::Active);
     assert!(ui.contains("administrator attestation"));
+    assert!(ui.contains("not automated desktop or hardware verification"));
+    assert!(ui.contains("now and on future boots"));
     assert!(ui.contains("LocalPIN is active"));
+    assert!(ui.contains("localpin menu"));
+    assert!(ui.contains("localpin status"));
     assert!(ui.answers.is_empty());
 }
 
@@ -310,11 +321,15 @@ fn accounting_maintenance_requires_explicit_logout_approval_and_exits_before_enr
     assert!(host.backends.is_empty());
     assert_eq!(host.inspections, 1);
     assert!(ui.contains("Save your work"));
+    assert!(ui.contains("every account's password-failure counters"));
     assert!(ui.contains("log out all users"));
     assert!(ui.contains("stop running services and background jobs"));
+    assert!(ui.contains("In this boot"));
+    assert!(ui.contains("briefly stop authentication"));
     assert!(ui.contains("background jobs may need restarting"));
     assert!(ui.contains("full account password"));
     assert!(ui.contains("setup will reopen automatically"));
+    assert!(ui.contains("No credential has been created yet"));
     assert!(!ui.contains("LocalPIN is active"));
     assert!(ui.answers.is_empty());
 }
@@ -407,6 +422,13 @@ fn declining_readiness_does_not_invoke_sudo() {
     drive(&mut host, &mut ui).unwrap();
     assert_eq!(host.inspections, 0);
     assert!(host.actions.is_empty());
+    assert!(ui.contains("LocalPIN is experimental"));
+    assert!(ui.contains("disposable Fedora KDE VM"));
+    assert!(ui.contains("full password and an administrator console"));
+    assert!(ui.contains("sudo approval does not replace it"));
+    assert!(ui.contains("exact length and format"));
+    assert!(ui.contains("LocalPIN attempt, and potentially TPM allowance"));
+    assert!(ui.contains("before password fallback"));
 }
 
 #[test]
@@ -416,6 +438,18 @@ fn declining_preparation_only_runs_the_read_only_preview() {
     drive(&mut host, &mut ui).unwrap();
     assert_eq!(host.actions, [Operation::Preview]);
     assert_eq!(host.state.phase, Phase::Unprepared);
+    assert_eq!(ui.policy_diffs, ["synthetic policy diff"]);
+    let preview = ui
+        .messages
+        .iter()
+        .position(|message| message == "synthetic policy diff")
+        .unwrap();
+    let confirmation = ui
+        .messages
+        .iter()
+        .position(|message| message == "Apply these system changes for your account?")
+        .unwrap();
+    assert!(preview < confirmation);
 }
 
 #[test]

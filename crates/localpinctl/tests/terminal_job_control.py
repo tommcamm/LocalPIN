@@ -4,6 +4,7 @@ import fcntl
 import os
 import select
 import signal
+import subprocess
 import sys
 import termios
 import time
@@ -51,13 +52,18 @@ def run_case(case, input_kind):
             signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTTOU})
             if case == "foreground-loss":
                 os.tcsetpgrp(slave, os.getpgrp())
+            elif case.startswith("Ctrl-"):
+                os.write(master, {"Ctrl-C": b"\x03", "Ctrl-D": b"\x04",
+                                  "Ctrl-Z": b"\x1a", "Ctrl-\\": b"\x1c"}[case])
             else:
                 os.kill(child, getattr(signal, case))
             status = wait_status(child)
             reaped = not os.WIFSTOPPED(status)
             assert termios.tcgetattr(slave) == original, "terminal remained in private mode"
-            if case == "foreground-loss":
+            if case == "foreground-loss" or case.startswith("Ctrl-"):
                 assert os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0, status
+            elif case == "SIGTERM":
+                assert os.WIFSIGNALED(status) and os.WTERMSIG(status) == signal.SIGTERM, status
             else:
                 assert os.WIFSTOPPED(status) and os.WSTOPSIG(status) == getattr(signal, case), status
                 os.kill(child, signal.SIGCONT)
@@ -117,25 +123,30 @@ def run_case(case, input_kind):
 
 
 for kind in ("secret", "choice", "masked"):
-    for scenario in ("foreground-loss", "SIGTTIN", "SIGTTOU"):
+    for scenario in ("foreground-loss", "SIGTTIN", "SIGTTOU", "SIGTSTP", "SIGTERM",
+                     "Ctrl-C", "Ctrl-D", "Ctrl-Z", "Ctrl-\\"):
         run_case(scenario, kind)
 
 
-def run_form_case(*, term, no_color=False):
+def run_form_case(*, term, no_color=False, redirected=False):
     """Exercise the shared real terminal form, without opening a broker."""
     master, slave = os.openpty()
     original = termios.tcgetattr(slave)
+    output_r, output_w = os.pipe() if redirected else (None, None)
     child = os.fork()
     if child == 0:
         os.setsid()
         fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
-        for descriptor in (0, 1, 2):
-            os.dup2(slave, descriptor)
+        os.dup2(slave, 0)
+        os.dup2(output_w if redirected else slave, 1)
+        os.dup2(slave, 2)
         environment = dict(os.environ, TERM=term, LOCALPIN_CLI_JOB_CONTROL_CHILD="form")
         environment.pop("NO_COLOR", None)
         if no_color:
             environment["NO_COLOR"] = ""
         os.execve(sys.argv[1], [sys.argv[1]], environment)
+    if redirected:
+        os.close(output_w)
     output = b""
     pending = b""
     secret = b"  Demo phrase!? "
@@ -170,6 +181,8 @@ def run_form_case(*, term, no_color=False):
         assert b"Credential ready. Verify your account password to save." in output, output
         assert b"Protection  Software" in output, output
         assert termios.tcgetattr(slave) == original, "form did not restore terminal"
+        if redirected:
+            assert os.read(output_r, 4096) == b"", "private form leaked to stdout"
         expect_color = term != "dumb" and not no_color
         assert (b"\x1b[1;36mLocalPIN\x1b[0m" in output) == expect_color, output
         if not expect_color:
@@ -179,6 +192,8 @@ def run_form_case(*, term, no_color=False):
             os.kill(child, signal.SIGKILL)
             os.waitpid(child, 0)
         termios.tcsetattr(slave, termios.TCSANOW, original)
+        if redirected:
+            os.close(output_r)
         os.close(master)
         os.close(slave)
 
@@ -186,6 +201,9 @@ def run_form_case(*, term, no_color=False):
 run_form_case(term="xterm-256color")
 run_form_case(term="xterm-256color", no_color=True)
 run_form_case(term="dumb")
+run_form_case(term="xterm-256color", redirected=True)
+run_form_case(term="xterm-256color", no_color=True, redirected=True)
+run_form_case(term="dumb", redirected=True)
 
 
 def run_menu_case(*, term, no_color=False, redirected=False):
@@ -203,7 +221,7 @@ def run_menu_case(*, term, no_color=False, redirected=False):
         environment = {"TERM": term}
         if no_color:
             environment["NO_COLOR"] = ""
-        os.execve(sys.argv[2], [sys.argv[2]], environment)
+        os.execve(sys.argv[2], [sys.argv[2], "menu"], environment)
     if redirected:
         os.close(output_w)
     reader = output_r if redirected else master
@@ -216,7 +234,8 @@ def run_menu_case(*, term, no_color=False, redirected=False):
             found, status = os.waitpid(child, os.WNOHANG)
             if found:
                 reaped = True
-                assert os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0, status
+                assert os.WIFEXITED(status), status
+                assert (os.WEXITSTATUS(status) == 0) == (not redirected), status
                 break
             remaining = deadline - time.monotonic()
             assert remaining > 0, "menu did not exit promptly"
@@ -233,8 +252,13 @@ def run_menu_case(*, term, no_color=False, redirected=False):
             output += chunk
         assert termios.tcgetattr(slave) == original, "menu did not restore the terminal"
         if redirected:
-            assert b"Usage: localpin [command]" in output
+            assert output == b"", output
             assert b"Choose a number" not in output
+            diagnostics = b""
+            while select.select([master], [], [], 0)[0]:
+                diagnostics += os.read(master, 4096)
+            assert b"foreground terminal is required" in diagnostics, diagnostics
+            assert b"Usage:" not in diagnostics and b"Choose a number" not in diagnostics
         else:
             assert selected_exit and b"Set up or resume setup" in output
         expect_color = not redirected and term != "dumb" and not no_color
@@ -259,3 +283,57 @@ if os.getuid() != 0:
     run_menu_case(term="xterm-256color", no_color=True)
     run_menu_case(term="dumb")
     run_menu_case(term="xterm-256color", redirected=True)
+
+
+def check_overview(output):
+    assert b"Usage: localpin" in output, output
+    assert b"Get started:" in output and b"All commands:" in output, output
+    assert b"Choose a number" not in output and b"Type [" not in output, output
+    assert b"Set up or resume setup" not in output, "no command opened the menu"
+
+
+def run_overview_terminal_case():
+    """No command must exit without asking for input, even on a real terminal."""
+    master, slave = os.openpty()
+    original = termios.tcgetattr(slave)
+    child = os.fork()
+    if child == 0:
+        os.setsid()
+        fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
+        for descriptor in (0, 1, 2):
+            os.dup2(slave, descriptor)
+        os.execve(sys.argv[2], [sys.argv[2]], {"TERM": "xterm-256color", "NO_COLOR": ""})
+    output = b""
+    reaped = False
+    try:
+        deadline = time.monotonic() + 3
+        while True:
+            found, status = os.waitpid(child, os.WNOHANG)
+            if found:
+                reaped = True
+                assert os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0, output
+                break
+            remaining = deadline - time.monotonic()
+            assert remaining > 0, "no-command CLI waited for input"
+            if select.select([master], [], [], min(remaining, .1))[0]:
+                output += os.read(master, 4096)
+        while select.select([master], [], [], 0)[0]:
+            output += os.read(master, 4096)
+        check_overview(output)
+        assert termios.tcgetattr(slave) == original, "overview changed terminal settings"
+        assert b"\x1b" not in output, output
+    finally:
+        if not reaped:
+            os.kill(child, signal.SIGKILL)
+            os.waitpid(child, 0)
+        termios.tcsetattr(slave, termios.TCSANOW, original)
+        os.close(master)
+        os.close(slave)
+
+
+run_overview_terminal_case()
+overview = subprocess.run([sys.argv[2]], input=b"", capture_output=True, timeout=3,
+                          env={"TERM": "xterm-256color"}, check=False)
+assert overview.returncode == 0 and overview.stderr == b"", overview
+check_overview(overview.stdout)
+assert b"\x1b" not in overview.stdout, overview.stdout

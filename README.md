@@ -32,7 +32,7 @@ password stays in place for password unlocking and recovery.
 | **Password fallback** | Use your account password when you prefer it or the PIN route is unavailable, subject to normal account policy. |
 | **A choice of protection** | TPM 2.0 with 4–16 digit PINs, or explicit software protection with 8–16 digits; either supports 8–64 character passcodes. |
 | **Persistent attempt limits** | PIN throttling survives service restarts and retains protection across reboots. |
-| **Guided setup and management** | An interactive terminal guide for setup, status, PIN changes, backend selection and recovery. |
+| **Guided setup and management** | A command-first CLI with explicit guided setup, readable status, PIN changes, backend selection and recovery. |
 | **Diagnostics and recovery** | Inspect status, follow actionable diagnostics, and recover through a separate administrator console tool. |
 
 ## Get started
@@ -93,7 +93,9 @@ After setup, type your PIN or passcode into KDE's existing lock-screen field and
 or automatic submission. Enter your full account password in
 the same field whenever needed.
 
-Run `localpin` as your normal user for the interactive menu, or use these commands:
+Run `localpin` for a concise command overview, `localpin --help` for full help,
+or `localpin menu` for the optional interactive menu. Use these commands as your
+normal user:
 
 | Task | Command |
 | --- | --- |
@@ -102,7 +104,8 @@ Run `localpin` as your normal user for the interactive menu, or use these comman
 | Change your PIN | `localpin change` |
 | Disable your account's PIN credential | `localpin disable` |
 
-`localpinctl` remains available for existing commands and scripts. Credential
+`localpinctl` remains available for existing commands and scripts. The RPM includes
+`man localpin` and Bash, Zsh and Fish completions. Credential
 changes require confirmation and fresh account-password verification. The shared
 form recommends 6 numeric digits with TPM, 10 with software, or a 12+ character
 passcode. Existing six-digit software PINs keep working with replacement advice.

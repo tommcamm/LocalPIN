@@ -83,7 +83,7 @@ Use a pinned stable Rust toolchain, Rust 2024 edition, a declared minimum suppor
 ## 3. Required user experience
 
 1. A user verifies and installs the Fedora RPM without changing authentication automatically, then runs `localpin setup` as their normal user in a foreground KDE terminal. The guide checks prerequisites, previews confirmed preparation, guides enrollment and trial/recovery tests, and requests explicit activation. A supported fresh installation can explicitly approve setup-managed offline accounting maintenance, including session termination and automatic setup resumption after password login. Unknown or interrupted state requires administrator recovery; setup never copies live tallies or resets counters.
-2. `localpin` opens a compact numbered menu in a terminal and shows help otherwise. `localpin doctor` reports known backend/service availability and the desktop gate, and explains required recovery checks. Passive status does not perform desktop or password recovery tests or establish unprobed TPM usability.
+2. `localpin` prints a concise command overview and exits without interaction; `localpin menu` explicitly opens the compact numbered menu. `localpin doctor` reports known backend/service availability and the desktop gate, and explains required recovery checks. Passive status does not perform desktop or password recovery tests or establish unprobed TPM usability.
 3. Enrollment requires fresh verification of the existing account password through a trusted password-only PAM policy. Merely knowing an old PIN, controlling an unlocked user process, or having a cached client-side success flag must not authorize enrollment, reset, or backend downgrade.
 4. The user chooses Numeric PIN or Passcode, then enters and confirms any permitted length under the policy below. Leading zeroes and passcode spaces are preserved. Secrets must not be provided through command-line arguments, environment variables, shell history, or normal logs.
 5. Root preparation leaves the desktop gate closed. A bounded current-boot trial permits actual PIN, full-password and console-recovery tests. The administrator explicitly attests those tests before final activation; enrollment alone never opens the gate.
@@ -346,7 +346,8 @@ Credential envelope version 2 adds explicit kind, exact length and credential-po
 Required commands (`localpinctl` remains compatible):
 
 ```text
-localpin                                      # interactive menu, or help without a terminal
+localpin                                      # concise help; no interaction or broker access
+localpin menu                                 # explicit interactive menu
 localpin setup
 localpin doctor [--json]
 localpin status [--json]
@@ -356,6 +357,10 @@ localpin disable
 localpin migrate --backend tpm2-required|software
 localpin integration enable|disable|status
 localpin recover --user <account>             # already-root recovery context
+localpin help [command [subcommand]]
+localpin completions bash|zsh|fish
+localpin --help | -h
+localpin --version | -V
 ```
 
 Guided setup follows [ADR 0019](adr/0019-guided-setup-orchestration.md). It runs
@@ -388,9 +393,25 @@ state and requires fresh account-password authorization.
 Before trial and activation, the broker must establish current account/session
 readiness and an available enrollment; protected pointer inspection alone does
 not prove native account continuity.
-The modern terminal interface uses inline choices, clear next actions and
-subtle optional colors, with plain output for `NO_COLOR`, `TERM=dumb` and
-redirected output. Menus use bounded visible input; secrets remain private.
+[ADR 0022](adr/0022-command-first-terminal-presentation.md) defines command-first
+presentation. No-argument help, command help and completions require no terminal
+or broker. `help COMMAND` and `COMMAND --help`/`-h` provide focused guidance.
+Global `--color auto|always|never` and `--color=VALUE` control human styling;
+auto honors the actual output destination, `NO_COLOR`, `TERM=dumb` and redirection.
+JSON is always plain. Global `--no-input` refuses interactive commands, including
+recovery, before terminal/account/broker access; it never bypasses confirmation.
+
+A shared dependency-free semantic renderer supplies inline stage labels, aligned
+status, width-aware paragraphs, warnings and next actions. Required sign-out,
+software-protection and recovery acknowledgements remain adjacent to the action;
+`doctor` and command help carry detail. Menus use bounded visible input and
+preparation offers the complete sanitized policy diff before a separate apply
+confirmation; skipping its display grants no authority. All
+secrets remain on the private terminal path. Sanitized external text cannot
+supply terminal styling. Static Bash, Zsh and Fish completions and a manual page
+ship for both executable names without dynamic account or credential queries.
+Exit codes are 0 for success, 1 for operational failure, 2 for invalid arguments
+and 130 for cancellation; a closed output pipe exits quietly with status 0.
 
 Own-user status is available without disclosing another user's enrollment details. JSON output is versioned and contains only nonsecret status. Status schema 2 includes configured/enrolled backend, own-user credential kind, exact length and policy version, legacy software upgrade advice, current availability, cooldown, integration state, and actionable failure reason. Public-facing messages should explain what the user can do; internal TPM codes belong only in sanitized diagnostics.
 

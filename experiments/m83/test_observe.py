@@ -3,6 +3,7 @@
 """Pure observation/classifier checks; no VM, PAM or authentication operations."""
 import importlib.util
 from pathlib import Path
+import textwrap
 import unittest
 
 SPEC = importlib.util.spec_from_file_location('m83_observer', Path(__file__).with_name('observe.py'))
@@ -44,6 +45,35 @@ class ObservationTests(unittest.TestCase):
                 'Choose a number (q to cancel): 1\nUnknown new operation?\n'
                 '  1. Yes\n  2. No / pause\nChoose a number (q to cancel): ')
         self.assertIsNone(observer.terminal_prompt(text)['id'])
+
+    def test_maintenance_with_renderer_wraps_ansi_and_missing_trailing_space(self):
+        question = textwrap.fill(observer.MAINTENANCE_CONFIRMATION, width=38)
+        text = ('\x1b[1;36m' + question + '\x1b[0m\r\n'
+                '  1. Yes\r\n  2. No / pause\r\nChoose a number (q to cancel):\r\n\r\n')
+        self.assertEqual(observer.terminal_prompt(text)['id'],
+                         'accounting-maintenance-confirmation')
+        self.assertIsNone(observer.terminal_prompt(text.replace('No / pause', 'No, proceed'))['id'])
+
+    def test_new_policy_review_choices_are_observed_without_approving_them(self):
+        text = ('Review proposed policy changes\n'
+                '  1. View policy diff\n  2. Continue to apply\n     confirmation\n'
+                '  3. Pause setup\nChoose a number (q to cancel): ')
+        result = observer.terminal_prompt(text)
+        self.assertEqual(result['id'], 'policy-preview')
+        self.assertEqual(result['answers'],
+                         {'1': 'view', '2': 'continue', '3': 'pause', 'q': 'cancel'})
+
+    def test_soft_wraps_do_not_skip_unknown_words_or_reuse_a_previous_question(self):
+        known = (observer.MAINTENANCE_CONFIRMATION + '\n  1. Yes\n  2. No / pause\n'
+                 'Choose a number (q to cancel): ')
+        for current in (
+                'Unknown new question?\n  1. Yes\n  2. No / pause\n'
+                'Choose a number (q to cancel): ',
+                'Do not ' + known,
+                known.replace('services', 'unreviewed services'),
+                known.replace('No / pause', 'Continue'),
+                known + '1\nUnrecognized password request: '):
+            self.assertIsNone(observer.terminal_prompt(known + '1\n' + current)['id'])
 
 
 if __name__ == '__main__':

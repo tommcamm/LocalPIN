@@ -3,6 +3,7 @@
 mod admin;
 pub mod args;
 mod menu;
+mod presentation;
 mod setup;
 pub mod status;
 pub mod terminal;
@@ -55,12 +56,18 @@ pub enum CliError {
     SetupReport,
     /// Setup needs an explicitly described maintenance or recovery action.
     SetupBlocked,
+    /// Interactive commands were explicitly disabled by the caller.
+    NoInput,
+    /// Writing a nonsecret command result failed.
+    Output,
+    /// A downstream reader closed its input; exit without a diagnostic.
+    BrokenPipe,
 }
 
 impl fmt::Display for CliError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Self::Arguments => "unsupported arguments; run localpin --help; secret arguments are not accepted",
+            Self::Arguments => "unsupported arguments; secret arguments are not accepted. Run localpin --help.",
             Self::SecretEnvironment => "secret or simulator environment variables are not accepted; remove them and use the terminal prompts",
             Self::Terminal => "a real foreground terminal is required; secrets cannot be read from stdin or a pipe",
             Self::Process => "process secret-protection setup failed; no interactive input was accepted",
@@ -81,11 +88,31 @@ impl fmt::Display for CliError {
             Self::Administrator => "the administrator operation was not confirmed; rerun localpin setup to inspect saved state before retrying",
             Self::SetupReport => "setup could not establish authoritative system state; use localpin doctor and the administrator recovery guide",
             Self::SetupBlocked => "setup is paused; complete the maintenance or recovery action shown above, then rerun localpin setup",
+            Self::NoInput => "this command requires private terminal interaction; rerun without --no-input in a foreground terminal",
+            Self::Output => "the command result could not be written",
+            Self::BrokenPipe => "the output reader closed the pipe",
         })
     }
 }
 
 impl std::error::Error for CliError {}
+
+impl CliError {
+    /// Stable executable exit status; usage, failure and cancellation stay distinct.
+    pub fn exit_code(self) -> i32 {
+        match self {
+            Self::BrokenPipe => 0,
+            Self::Arguments => 2,
+            Self::Cancelled => 130,
+            _ => 1,
+        }
+    }
+}
+
+/// Print a sanitized command diagnostic unless the command already explained it.
+pub fn report_error(error: CliError) {
+    presentation::report_error(error);
+}
 
 /// Prevent fatal signals or crashes from persisting password/PIN memory.
 ///

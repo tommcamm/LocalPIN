@@ -439,7 +439,14 @@ fn completion_message(
 pub fn run() -> Result<(), CliError> {
     crate::harden_process()?;
     let args = std::env::args_os().skip(1).collect::<Vec<_>>();
-    let command = crate::args::parse(&args)?;
+    let invocation = match crate::args::parse_invocation(&args) {
+        Ok(invocation) => invocation,
+        Err(error) => {
+            crate::presentation::configure(crate::args::diagnostic_color(&args));
+            return Err(error);
+        }
+    };
+    crate::presentation::configure(invocation.color);
     crate::args::check_environment(std::env::vars_os().map(|(key, _)| key))?;
     // A setuid installation is unsupported: administrative authority must come
     // from an already-root caller using the explicit recovery command or the
@@ -447,24 +454,57 @@ pub fn run() -> Result<(), CliError> {
     if rustix::process::getuid() != rustix::process::geteuid() {
         return Err(CliError::Forbidden);
     }
-    execute(command)
+    if invocation.no_input
+        && matches!(
+            invocation.command,
+            Command::Menu
+                | Command::Setup
+                | Command::Enroll(_)
+                | Command::Change
+                | Command::Disable
+                | Command::Migrate(_)
+                | Command::Recover(_)
+        )
+    {
+        return Err(CliError::NoInput);
+    }
+    execute(invocation.command)
 }
 
 /// Execute a parsed command after the entry point's process and caller checks.
 pub(crate) fn execute(command: Command) -> Result<(), CliError> {
     match command {
+        Command::Overview => crate::presentation::human(crate::args::OVERVIEW),
         Command::Menu => crate::menu::run(),
-        Command::Setup => crate::setup::run(),
-        Command::Help => {
-            println!("{}", crate::args::HELP);
-            Ok(())
+        Command::Setup => {
+            let result = crate::setup::run();
+            if matches!(result, Err(CliError::SetupBlocked | CliError::Cancelled)) {
+                crate::presentation::reported();
+            }
+            result
         }
-        Command::Version => {
-            println!(
-                "LocalPIN {} (localpin / localpinctl)",
-                env!("CARGO_PKG_VERSION")
-            );
-            Ok(())
+        Command::Help => crate::presentation::human(crate::args::HELP),
+        Command::CommandHelp(topic) => crate::presentation::human(crate::args::help(topic)),
+        Command::Version => crate::presentation::stdout(&format!(
+            "LocalPIN {} (localpin / localpinctl)",
+            env!("CARGO_PKG_VERSION")
+        )),
+        Command::Completions(shell) => {
+            use crate::args::CompletionShell;
+            crate::presentation::stdout(
+                match shell {
+                    CompletionShell::Bash => {
+                        include_str!("../../../packaging/completions/localpin.bash")
+                    }
+                    CompletionShell::Zsh => {
+                        include_str!("../../../packaging/completions/localpin.zsh")
+                    }
+                    CompletionShell::Fish => {
+                        include_str!("../../../packaging/completions/localpin.fish")
+                    }
+                }
+                .trim_end(),
+            )
         }
         Command::IntegrationEnable => Err(CliError::Integration),
         Command::IntegrationDisable => Err(CliError::IntegrationDisable),
@@ -472,19 +512,18 @@ pub(crate) fn execute(command: Command) -> Result<(), CliError> {
             let mut client = Client::connect(Path::new(SOCKET), Deadline::after(CONNECT_TIMEOUT));
             let status = client.as_mut().ok().and_then(|client| client.status().ok());
             if json {
-                println!("{}", crate::status::json(status, doctor));
+                crate::presentation::stdout(&crate::status::json(status, doctor))?;
             } else {
-                println!("{}", crate::status::text(status, doctor));
+                crate::presentation::human(&crate::status::text(status, doctor))?;
+                if status.is_none() {
+                    crate::presentation::reported();
+                }
             }
             status.map(|_| ()).ok_or(CliError::Service)
         }
-        Command::IntegrationStatus => {
-            println!(
-                "{}",
-                crate::status::integration_text(localpin_protocol::integration::gate())
-            );
-            Ok(())
-        }
+        Command::IntegrationStatus => crate::presentation::human(&crate::status::integration_text(
+            localpin_protocol::integration::gate(),
+        )),
         Command::Recover(account) => {
             if rustix::process::geteuid().as_raw() != 0 {
                 return Err(CliError::Forbidden);
@@ -497,10 +536,9 @@ pub(crate) fn execute(command: Command) -> Result<(), CliError> {
             confirm_recovery(&mut terminal)?;
             let mut client = Client::connect(Path::new(SOCKET), Deadline::after(CONNECT_TIMEOUT))?;
             recover_confirmed(&mut client, target_uid)?;
-            println!(
-                "Administrator recovery disabled the selected PIN credential. Use the existing account password."
-            );
-            Ok(())
+            crate::presentation::success(
+                "Administrator recovery disabled the selected PIN credential.\nUse your existing account password.",
+            )
         }
         Command::Enroll(_) | Command::Change | Command::Disable | Command::Migrate(_) => {
             if rustix::process::geteuid().as_raw() == 0 {
@@ -553,16 +591,12 @@ pub(crate) fn execute(command: Command) -> Result<(), CliError> {
             } else {
                 None
             };
-            println!(
-                "{}",
-                completion_message(
-                    completion,
-                    action,
-                    integration,
-                    localpin_protocol::integration::gate()
-                )?
-            );
-            Ok(())
+            crate::presentation::success(&completion_message(
+                completion,
+                action,
+                integration,
+                localpin_protocol::integration::gate(),
+            )?)
         }
     }
 }

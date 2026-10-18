@@ -2,6 +2,7 @@
 
 use localpin_protocol::transport::Deadline;
 use localpinctl::{
+    CliError,
     terminal::{Conversation, Terminal},
     workflow::confirm_recovery,
 };
@@ -23,29 +24,30 @@ fn main() {
                 .unwrap()
                 .is_some()
             );
-        } else if kind == "choice" {
-            assert!(
-                terminal
-                    .choice(
-                        "Choose [1]: ",
-                        1,
-                        Deadline::after(std::time::Duration::from_secs(10))
-                    )
-                    .is_err()
-            );
-        } else if kind == "masked" {
-            assert!(
-                terminal
-                    .masked(
-                        "New credential: ",
-                        64,
-                        Deadline::after(std::time::Duration::from_secs(10))
-                    )
-                    .is_err()
-            );
-        } else {
-            assert!(confirm_recovery(&mut terminal).is_err());
+            return;
         }
+        let error = if kind == "choice" {
+            terminal
+                .choice(
+                    "Choose [1]: ",
+                    1,
+                    Deadline::after(std::time::Duration::from_secs(10)),
+                )
+                .unwrap_err()
+        } else if kind == "masked" {
+            terminal
+                .masked(
+                    "New credential: ",
+                    64,
+                    Deadline::after(std::time::Duration::from_secs(10)),
+                )
+                .unwrap_err()
+        } else if kind == "secret" {
+            confirm_recovery(&mut terminal).unwrap_err()
+        } else {
+            panic!("unknown synthetic terminal input kind");
+        };
+        assert!(matches!(error, CliError::Cancelled | CliError::Terminal));
         return;
     }
     let output = Command::new("python3")

@@ -187,6 +187,18 @@ pub struct Terminal {
 }
 
 impl Terminal {
+    /// Write trusted layout using capabilities of the actual private terminal.
+    /// Renderer primitives sanitize external text before adding their own styles.
+    pub(crate) fn present(
+        &mut self,
+        render: impl FnOnce(crate::presentation::Renderer) -> String,
+    ) -> Result<(), CliError> {
+        let renderer = crate::presentation::Renderer::for_output(&self.file);
+        self.file
+            .write_all(render(renderer).as_bytes())
+            .map_err(|_| CliError::Terminal)
+    }
+
     /// Require terminal stdin and open `/dev/tty` without following a symlink.
     pub fn open() -> Result<Self, CliError> {
         crate::harden_process()?;
@@ -296,16 +308,7 @@ pub(crate) fn core_backend(backend: Backend) -> localpin_core::types::Backend {
 
 impl Conversation for Terminal {
     fn heading(&mut self, title: &str) -> Result<(), CliError> {
-        let color = std::io::stdout().is_terminal()
-            && std::env::var_os("NO_COLOR").is_none()
-            && std::env::var_os("TERM").is_some_and(|term| term != "dumb");
-        let title = sanitize_prompt(title);
-        let heading = if color {
-            format!("\n\x1b[1;36mLocalPIN\x1b[0m  |  \x1b[1m{title}\x1b[0m\n")
-        } else {
-            format!("\nLocalPIN  |  {title}\n")
-        };
-        writeln!(self.file, "{heading}").map_err(|_| CliError::Terminal)
+        self.present(|renderer| renderer.heading(title))
     }
 
     fn masked(
@@ -331,7 +334,7 @@ impl Conversation for Terminal {
     }
 
     fn message(&mut self, text: &str) -> Result<(), CliError> {
-        writeln!(self.file, "{}", sanitize_prompt(text)).map_err(|_| CliError::Terminal)
+        self.present(|renderer| renderer.paragraph(text))
     }
 }
 

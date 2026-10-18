@@ -13,6 +13,30 @@ pub(crate) trait Ui {
     fn say(&mut self, text: &str) -> Result<(), CliError>;
     fn choose(&mut self, prompt: &str, choices: &[&str]) -> Result<usize, CliError>;
 
+    fn heading(&mut self, title: &str) -> Result<(), CliError> {
+        self.say(title)
+    }
+
+    fn step(&mut self, current: usize, total: usize, title: &str) -> Result<(), CliError> {
+        self.say(&format!("[{current}/{total}] {title}"))
+    }
+
+    fn warning(&mut self, text: &str) -> Result<(), CliError> {
+        self.say(text)
+    }
+
+    fn success(&mut self, text: &str) -> Result<(), CliError> {
+        self.say(text)
+    }
+
+    fn detail(&mut self, label: &str, value: &str) -> Result<(), CliError> {
+        self.say(&format!("{label}: {value}"))
+    }
+
+    fn policy_diff(&mut self, text: &str) -> Result<(), CliError> {
+        self.say(text)
+    }
+
     fn confirm(&mut self, prompt: &str) -> Result<bool, CliError> {
         self.choose(prompt, &["Yes", "No / pause"])
             .map(|answer| answer == 0)
@@ -24,10 +48,46 @@ impl Ui for Terminal {
         self.message(text)
     }
 
+    fn heading(&mut self, title: &str) -> Result<(), CliError> {
+        self.present(|renderer| renderer.section(title))
+    }
+
+    fn step(&mut self, current: usize, total: usize, title: &str) -> Result<(), CliError> {
+        self.present(|renderer| renderer.step(current, total, title))
+    }
+
+    fn warning(&mut self, text: &str) -> Result<(), CliError> {
+        self.present(|renderer| {
+            renderer.notice("Warning", text, crate::presentation::Tone::Warning)
+        })
+    }
+
+    fn success(&mut self, text: &str) -> Result<(), CliError> {
+        self.present(|renderer| renderer.notice("Done", text, crate::presentation::Tone::Success))
+    }
+
+    fn detail(&mut self, label: &str, value: &str) -> Result<(), CliError> {
+        self.present(|renderer| renderer.detail(label, value))
+    }
+
+    fn policy_diff(&mut self, text: &str) -> Result<(), CliError> {
+        if !review_preview(self)? {
+            return Ok(());
+        }
+        self.present(|_renderer| {
+            let mut output = String::new();
+            // Preserve whitespace and every line of the policy preview. It is
+            // external helper output and must never supply terminal escapes.
+            output.push_str(&crate::terminal::sanitize_prompt(text));
+            output.push('\n');
+            output
+        })
+    }
+
     fn choose(&mut self, prompt: &str, choices: &[&str]) -> Result<usize, CliError> {
-        self.message(prompt)?;
+        self.present(|renderer| renderer.section(prompt))?;
         for (index, choice) in choices.iter().enumerate() {
-            self.message(&format!("  {}. {choice}", index + 1))?;
+            self.present(|renderer| renderer.choice(index + 1, choice))?;
         }
         loop {
             let answer = self.choice(
@@ -49,14 +109,19 @@ impl Ui for Terminal {
     }
 }
 
-pub(crate) fn heading(subtitle: &str) {
-    let color = std::io::stdout().is_terminal()
-        && std::env::var_os("NO_COLOR").is_none()
-        && std::env::var_os("TERM").is_some_and(|term| term != "dumb");
-    if color {
-        println!("\n\x1b[1;36mLocalPIN\x1b[0m  {subtitle}\n");
-    } else {
-        println!("\nLocalPIN  |  {subtitle}\n");
+fn review_preview(ui: &mut impl Ui) -> Result<bool, CliError> {
+    match ui.choose(
+        "Review proposed policy changes",
+        &[
+            "View policy diff",
+            "Continue to apply confirmation",
+            "Pause setup",
+        ],
+    )? {
+        0 => Ok(true),
+        1 => Ok(false),
+        2 => Err(CliError::Cancelled),
+        _ => Err(CliError::Arguments),
     }
 }
 
@@ -79,19 +144,14 @@ pub(crate) fn backend(ui: &mut impl Ui) -> Result<BackendPreference, CliError> {
 
 pub(crate) fn run() -> Result<(), CliError> {
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
-        println!("{}", crate::args::HELP);
-        return Ok(());
+        return Err(CliError::Terminal);
     }
     if rustix::process::getuid().as_raw() == 0 {
-        println!(
-            "Run localpin as your normal user in your KDE terminal.\nAdministrator console recovery: localpin-integration recover\n\n{}",
-            crate::args::HELP
-        );
-        return Ok(());
+        return Err(CliError::Forbidden);
     }
     let mut terminal = Terminal::open()?;
     loop {
-        heading("PIN unlocking for your KDE session");
+        Conversation::heading(&mut terminal, "PIN unlocking for your KDE session")?;
         let selected = terminal.choose(
             "What would you like to do?",
             &[
@@ -121,5 +181,43 @@ pub(crate) fn run() -> Result<(), CliError> {
             _ => return Err(CliError::Arguments),
         };
         crate::workflow::execute(command)?;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct PreviewChoice(usize);
+    impl Ui for PreviewChoice {
+        fn say(&mut self, _text: &str) -> Result<(), CliError> {
+            panic!("preview choice cannot apply or report a system change")
+        }
+        fn choose(&mut self, prompt: &str, choices: &[&str]) -> Result<usize, CliError> {
+            assert_eq!(prompt, "Review proposed policy changes");
+            assert_eq!(
+                choices,
+                [
+                    "View policy diff",
+                    "Continue to apply confirmation",
+                    "Pause setup"
+                ]
+            );
+            Ok(self.0)
+        }
+    }
+
+    #[test]
+    fn preview_is_optional_and_pause_does_not_imply_apply_confirmation() {
+        assert_eq!(review_preview(&mut PreviewChoice(0)), Ok(true));
+        assert_eq!(review_preview(&mut PreviewChoice(1)), Ok(false));
+        assert_eq!(
+            review_preview(&mut PreviewChoice(2)),
+            Err(CliError::Cancelled)
+        );
+        assert_eq!(
+            review_preview(&mut PreviewChoice(3)),
+            Err(CliError::Arguments)
+        );
     }
 }

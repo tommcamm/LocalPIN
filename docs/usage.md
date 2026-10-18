@@ -52,11 +52,25 @@ If you previously disabled your own PIN while desktop integration remains
 active, `localpin setup` offers to create a new PIN. It keeps the active
 integration in place and uses fresh account-password verification.
 
-Run `localpin` without arguments in a terminal for a numbered menu covering
-setup/resume, status, diagnostics and credential management. Outside a terminal,
-it shows help without prompting. Output uses subtle colors when supported and
-plain text with `NO_COLOR`, `TERM=dumb` or redirected output. All existing
-`localpinctl` commands remain available; `localpin` is the packaged primary name.
+Run `localpin` without arguments for a concise command overview; it never starts
+an interaction. Use `localpin menu` for the optional numbered menu covering
+setup/resume, status, diagnostics and credential management. `localpin --help`
+shows all commands; `localpin help setup` or `localpin setup --help` explains a
+specific command. `-h` and `-V` are aliases for `--help` and `--version`.
+
+Output uses subtle colors when supported and plain text with `NO_COLOR`,
+`TERM=dumb` or redirected output. Override this with `--color auto|always|never`
+(or `--color=VALUE`). Status/doctor JSON always stays plain and undecorated.
+`--no-input` refuses commands that require interaction before opening a terminal
+or contacting the broker; it never skips confirmations. For example,
+`localpin --no-input status --json` permits a noninteractive status check.
+All existing `localpinctl` commands remain available; `localpin` is the packaged
+primary name.
+
+The RPM includes `man localpin` and static completions for Bash, Zsh and Fish,
+also supporting `localpinctl`. `localpin completions bash`, `zsh` or `fish` prints
+the corresponding script. Completions suggest public commands and options;
+they never inspect accounts or credentials.
 
 Setup has separate stages:
 

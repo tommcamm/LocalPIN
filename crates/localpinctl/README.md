@@ -9,7 +9,8 @@ existing commands and scripts. Source builds continue to use
 `cargo run -p localpinctl -- <command>`.
 
 ```text
-localpin
+localpin                                      # concise help; never prompts
+localpin menu                                 # optional interactive menu
 localpin setup
 localpin doctor [--json]
 localpin status [--json]
@@ -19,15 +20,44 @@ localpin disable
 localpin migrate --backend tpm2-required|software
 localpin integration enable|disable|status
 localpin recover --user <local-account>
+localpin help [command [subcommand]]
+localpin completions bash|zsh|fish
+localpin --help | -h
+localpin --version | -V
 ```
 
-With no arguments, a foreground terminal opens an inline numbered menu for
-setup/resume, status, diagnostics and credential management. Without a terminal,
-it prints help without waiting for input. Menus use bounded visible input;
-new credentials use asterisk masking and passwords stay fully hidden on the
-hardened private input path below. Human output uses
-subtle colors where supported and plain text when `NO_COLOR` is present,
-`TERM=dumb`, or output is redirected. There is no full-screen UI dependency.
+With no arguments, both names print concise help and exit successfully without
+opening a terminal or contacting the broker. `menu` explicitly opens the inline
+numbered menu; `setup` explicitly starts guided onboarding. Help is available
+through `help [command [subcommand]]` or `--help`/`-h` on a command. `--help`
+shows the complete command list; `--version` and `-V` print the version.
+
+Global `--color auto|always|never` (also `--color=VALUE`) controls human output.
+Auto uses the actual output destination and honors `NO_COLOR`, `TERM=dumb` and
+redirection. `--no-input` refuses menu, setup and credential mutations, including
+root recovery, before account inspection, terminal access or a broker connection;
+it never supplies confirmation or accepts secret input through a pipe. Status,
+diagnostics, help, version, completion output and integration guidance remain
+available. JSON stays uncolored and undecorated regardless of color selection.
+
+A shared dependency-free presentation renderer supplies headings, aligned status
+rows, wrapped paragraphs, step labels, warnings and next actions. Setup shows
+short guidance for the current stage and retains required recovery and sign-out
+confirmations. Detailed diagnostics remain available through `doctor` and command
+help. Menus use bounded visible input; new credentials use asterisk masking and
+passwords stay fully hidden on the hardened private input path below. Sanitized
+worker text stays separate from trusted styling. There is no full-screen UI,
+pager, shell-evaluated prompt or new runtime dependency.
+
+The RPM installs `man localpin` (`man localpinctl` is an alias) and static Bash,
+Zsh and Fish completions for both command names. `completions SHELL` prints the
+same packaged script to stdout; it never runs a shell or probes accounts, a broker
+or credential state. Completion scripts suggest only public commands, flags and
+closed backend/color/shell choices. See [ADR 0022](../../docs/adr/0022-command-first-terminal-presentation.md).
+
+Exit status is 0 on success, 1 for an operational failure, 2 for invalid arguments
+and 130 for cancellation. A closed output pipe exits quietly with status 0.
+Rejected command-line values and environment values are never repeated in errors.
 
 `setup` runs as the current non-root desktop owner. It checks authoritative
 installation/account state, previews preparation, explicitly chooses TPM or
@@ -45,6 +75,10 @@ state requires administrator tooling. Before trial and activation, setup checks
 that the broker can establish an available enrollment for the current account
 and KDE session. Cancellation preserves completed stages and reports any
 remaining trial window.
+
+Preparation summarizes its effects and offers the full sanitized policy diff on
+request. Viewing or skipping the diff leads to a separate apply confirmation;
+pausing the review applies nothing.
 
 On an active installation without a PIN, setup offers fresh own-user enrollment
 without repeating preparation or activation. An active enrolled account remains

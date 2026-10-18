@@ -121,7 +121,11 @@ Installation supplies broker/workers, the root-only integration tool, the shared
 adapter, four fail-closed private PAM services, reviewed policy templates,
 systemd units, tmpfiles rules, a disabled preset and SELinux policy. It starts
 nothing and changes no KDE/authselect/faillock policy. `/usr/bin/localpin` is a
-symlink to `localpinctl`; both names preserve the command interface. The RPM
+symlink to `localpinctl`; both names preserve the command interface. Bare
+`localpin` shows help; `localpin menu` explicitly opens the interactive menu.
+The RPM also installs `man localpin`/`man localpinctl` and static completions for
+Bash, Zsh and Fish. `localpin completions SHELL` prints the matching script
+without querying accounts, credential state or the broker. The RPM
 requires sudo for the explicit foreground setup wizard and installs no sudoers
 rule. The wizard uses absolute fixed paths, a closed operation set and no shell;
 sudo handles its own password prompt and credential enrollment remains a

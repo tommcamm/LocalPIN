@@ -128,6 +128,15 @@ fn text_with_gate(status: Option<Status>, doctor: bool, gate: Gate) -> String {
             "no"
         }
     );
+    output.push_str(&format!(
+        "\nAvailability: {}\nIntegration: {}",
+        available(status.availability),
+        if integration_unknown {
+            "unknown"
+        } else {
+            integrated(status.integration, gate)
+        }
+    ));
     if let Some(profile) = status.profile {
         output.push_str(&format!(
             "\nCredential: {} · {} {}",
@@ -148,13 +157,23 @@ fn text_with_gate(status: Option<Status>, doctor: bool, gate: Gate) -> String {
     }
     if doctor {
         output.push_str(&format!(
-            "\n\nConfigured backend: {}\nAvailability: {}\nCooldown: {}\nIntegration: {}\nTPM detected: {}; usable: {}\nReason: {}",
-            if enrollment_unknown { "unknown" } else { preference(status.configured) },
-            available(status.availability),
-            if enrollment_unknown { "unknown".to_owned() } else { format!("{} ms", status.cooldown_ms) },
-            if integration_unknown { "unknown" } else { integrated(status.integration, gate) },
+            "\n\nConfigured backend: {}\nCooldown: {}\nTPM detected: {}; usable: {}\nReason: {}",
+            if enrollment_unknown {
+                "unknown"
+            } else {
+                preference(status.configured)
+            },
+            if enrollment_unknown {
+                "unknown".to_owned()
+            } else {
+                format!("{} ms", status.cooldown_ms)
+            },
             status.tpm_detected,
-            if status.tpm_usable { "established" } else { "not-established" },
+            if status.tpm_usable {
+                "established"
+            } else {
+                "not-established"
+            },
             failure(status.reason)
         ));
         output.push_str(if tested == "operator-attested" {

@@ -27,7 +27,7 @@ MAX_LOG = 1024 * 1024
 CHOICE = 'Choose a number (q to cancel): '
 ANSI = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
 CASE = re.compile(r'[a-z0-9][a-z0-9-]{0,47}')
-MODES = {'setup': 'setup', 'menu': '', 'disable': 'disable'}
+MODES = {'setup': 'setup', 'menu': 'menu', 'disable': 'disable'}
 PROGRAMS = ('localpin', 'localpinctl')
 
 # Exact strings from the installed menu/setup code. A changed/unrecognized
@@ -54,17 +54,31 @@ PRIVATE_PROMPTS = {
     "Disable this account's LocalPIN credential? Type yes: ": ('confirm-disable', None),
 }
 FIXED_MESSAGES = {
-    'paused': 'Setup paused. Completed preparation and enrollment are retained.',
-    'accounting_handoff': 'One-time maintenance needed: preserve native password-failure counters',
-    'console_recovery_handoff': 'Next: rehearse recovery from an administrator TEXT CONSOLE',
-    'active_noop': 'Desktop integration is already active. Setup will preserve it;',
+    'paused': 'Setup paused Completed preparation and enrollment are retained.',
+    'accounting_handoff': 'Password-failure counters need persistent storage.',
+    'console_recovery_handoff': 'Use an administrator TEXT CONSOLE.',
+    'active_noop': 'Desktop integration is already active.',
     'active_new_pin_ready': 'Your new credential is ready. Desktop integration remains active.',
-    'activated': 'LocalPIN is active. Lock your KDE session,',
-    'enrollment_retained': '[3/5] Your committed credential enrollment is retained.',
+    'activated': 'LocalPIN is active.',
+    'enrollment_retained': 'Your committed credential enrollment is retained.',
     'account_unavailable': 'The broker cannot currently establish an available PIN',
     'trial_changed': 'The trial expired or enrollment changed.',
-    'administrator_recovery_required': 'Existing setup, package, account, or activation state needs administrator recovery.',
+    'administrator_recovery_required': 'Setup, package, account or activation state needs administrator recovery.',
 }
+CHOICE_PROMPTS = (
+    ('Credential protection', 'backend', (
+        'TPM 2.0 — hardware bound; requires a separately validated TPM deployment',
+        'Software — no TPM binding; copied verifier data can be guessed offline'),
+     {'1': 'tpm2-required', '2': 'software', 'q': 'cancel'}),
+    ('What would you like to do?', 'menu', (
+        'Set up or resume setup', 'Check status', 'Diagnose a problem',
+        'Change my credential', 'Switch protection', 'Disable my credential', 'Exit'),
+     {'1': 'setup', '2': 'status', '3': 'doctor', '4': 'change',
+      '5': 'migrate', '6': 'disable', '7': 'exit', 'q': 'cancel'}),
+    ('Review proposed policy changes', 'policy-preview', (
+        'View policy diff', 'Continue to apply confirmation', 'Pause setup'),
+     {'1': 'view', '2': 'continue', '3': 'pause', 'q': 'cancel'}),
+)
 
 
 def require(value, message):
@@ -76,48 +90,62 @@ def normalize(data):
     return ANSI.sub('', data.decode('utf-8', errors='replace')).replace('\r\n', '\n')
 
 
-def prompt(data):
+def fixed_suffix(text, expected, *, soft_wrap=False):
+    """Match a complete fixed trailing block, preserving its line boundary.
+
+    Only whitespace may vary. Konsole observations additionally permit a soft
+    newline inside a known word; no arbitrary text or answered question can be
+    skipped. The final prompt still needs horizontal whitespace, not a newline
+    emitted after the operator submitted an answer.
+    """
+    final_space = expected.endswith((' ', '\t'))
+    fragments = []
+    for word in expected.rstrip(' \t').split():
+        if soft_wrap:
+            fragments.append(r'(?:\n[ \t]*)?'.join(re.escape(char) for char in word))
+        else:
+            fragments.append(re.escape(word))
+    expression = r'(?:\A|\n)' + r'[ \t\n]+'.join(fragments)
+    if final_space:
+        expression += r'[ \t]+'
+    return re.search(expression + r'\Z', text) is not None
+
+
+def choice_block(heading, options):
+    return heading + '\n' + ''.join(
+        f'  {index}. {option}\n' for index, option in enumerate(options, 1)) + CHOICE
+
+
+def fixed_messages(data):
+    """Report fixed outcome identifiers across styled/wrapped layout only."""
+    require(len(data) <= MAX_LOG, 'oversized private terminal transcript')
+    text = ' '.join(normalize(data).split())
+    return {key: ' '.join(message.split()) in text
+            for key, message in FIXED_MESSAGES.items()}
+
+
+def prompt(data, *, soft_wrap=False):
     """Pure bounded classifier; never return transcript excerpts or credentials."""
     require(len(data) <= MAX_LOG, 'oversized private terminal transcript')
     text = normalize(data)
     for default in ('1', '2'):
-        if text.endswith('Type [' + default + '] (q to cancel): '):
+        if fixed_suffix(text, 'Type [' + default + '] (q to cancel): ', soft_wrap=soft_wrap):
             return {'id': 'credential-type', 'kind': 'choice',
                     'answers': {'': 'default', '1': 'numeric-pin', '2': 'passcode', 'q': 'cancel'}}
-    if text.endswith('Choice [1] (q to cancel): '):
+    if fixed_suffix(text, 'Choice [1] (q to cancel): ', soft_wrap=soft_wrap):
         return {'id': 'predictability-warning', 'kind': 'choice',
                 'answers': {'': 're-enter', '1': 're-enter', '2': 'use-anyway', 'q': 'cancel'}}
     for suffix, (identifier, secret) in PRIVATE_PROMPTS.items():
-        if text.endswith(suffix):
+        if fixed_suffix(text, suffix, soft_wrap=soft_wrap):
             return {'id': identifier, 'kind': 'private', 'secret_selector': secret,
                     'answers': ['yes', 'cancel'] if secret is None else ['guest-private-secret']}
-    if text.endswith(CHOICE):
-        segment = text.rsplit(CHOICE, 1)[0]
-        # Only the immediately preceding heading/list can classify this
-        # question. An earlier answered confirmation must not label a new one.
-        lines = segment.splitlines()
-        options = []
-        while lines and re.fullmatch(r'  [1-7]\. .+', lines[-1]):
-            options.insert(0, lines.pop())
-        heading = lines[-1] if lines else ''
-        identifier = CONFIRMATIONS.get(heading)
-        if identifier is not None and options != ['  1. Yes', '  2. No / pause']:
-            identifier = None
-        if heading == 'Credential protection' and options == [
-                '  1. TPM 2.0 — hardware bound; requires a separately validated TPM deployment',
-                '  2. Software — no TPM binding; copied verifier data can be guessed offline']:
-            identifier = 'backend'
-        elif heading == 'What would you like to do?' and options == [
-                '  1. Set up or resume setup', '  2. Check status',
-                '  3. Diagnose a problem', '  4. Change my credential',
-                '  5. Switch protection', '  6. Disable my credential', '  7. Exit']:
-            identifier = 'menu'
-        if identifier is not None:
-            answers = ({'1': 'tpm2-required', '2': 'software', 'q': 'cancel'}
-                       if identifier == 'backend' else
-                       {'1': 'setup', '2': 'status', '3': 'doctor', '4': 'change',
-                        '5': 'migrate', '6': 'disable', '7': 'exit', 'q': 'cancel'}
-                       if identifier == 'menu' else {'1': 'yes', '2': 'pause', 'q': 'cancel'})
+    for heading, identifier in CONFIRMATIONS.items():
+        if fixed_suffix(text, choice_block(heading, ('Yes', 'No / pause')),
+                        soft_wrap=soft_wrap):
+            return {'id': identifier, 'kind': 'choice',
+                    'answers': {'1': 'yes', '2': 'pause', 'q': 'cancel'}}
+    for heading, identifier, options, answers in CHOICE_PROMPTS:
+        if fixed_suffix(text, choice_block(heading, options), soft_wrap=soft_wrap):
             return {'id': identifier, 'kind': 'choice', 'answers': answers}
     return {'id': None, 'kind': 'unknown-or-running', 'answers': []}
 
@@ -267,7 +295,7 @@ def observe(args, secrets):
             'transcript_bytes': len(data), 'secret_echo_absent': echo_absent,
             'sudo_password_prompt_count': text.count('[sudo] password for lp61test: '),
             'account_password_prompt_count': text.count('Existing account password: '),
-            'messages': {key: message in text for key, message in FIXED_MESSAGES.items()},
+            'messages': fixed_messages(data),
             'selinux': 'Enforcing', 'raw_transcript_guest_root_only': True}
 
 

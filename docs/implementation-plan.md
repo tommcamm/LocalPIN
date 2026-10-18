@@ -523,6 +523,30 @@ checks, installed candidate evidence and remaining release gates separately.
   Fedora KDE/SELinux package, legacy-upgrade, password-overlap and recovery cases.
   Prior M8 evidence does not validate this feature or complete M9/hardware gates.
 
+### Command-first terminal presentation
+
+[ADR 0022](adr/0022-command-first-terminal-presentation.md) updates the current
+interface while retaining the historical M8.2 evidence above. Bare `localpin`
+prints concise help; `menu` explicitly opts into interaction. Keep existing
+command spellings and schema-2 status/doctor JSON. Add command help, `-h`/`-V`,
+global color policy, `--no-input`, packaged manual pages and static completions.
+
+- Use one dependency-free presentation layer for headings, status rows, wrapped
+  guidance, warnings and next actions. Keep setup concise at each current stage
+  without dropping sign-out/recovery consequences or confirmation requirements.
+- Preserve the closed parser's no-value-echo rule, protected `/dev/tty` input,
+  deadlines, foreground checks, secret masking, terminal restoration and worker
+  text sanitization. No new prompt framework or full-screen terminal mode.
+- Verify concise/full/command help, aliases, malformed arguments, all color modes,
+  redirected/closed pipes, JSON purity, narrow-terminal wrapping, no-input refusal
+  before side effects, and static completions for both executable names. Run
+  affected packaging checks; record local and hosted results separately.
+
+Source-level interface checks do not extend installed authentication evidence.
+New installed Fedora KDE acceptance for the presentation change, hosted CI and
+physical hardware observations must be reported separately when performed.
+M9 independent review, signed-release and hardware gates remain open.
+
 ### M9 — Review, hardware validation and versioned release
 
 In progress: the [requirement-to-evidence checklist](development/m9-release-readiness.md)
