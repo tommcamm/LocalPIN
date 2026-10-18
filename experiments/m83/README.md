@@ -1,5 +1,9 @@
 # Setup-managed accounting acceptance
 
+The [PR #13 targeted follow-up](../../docs/development/accounting-maintenance-abort.md)
+records installed mask-refusal, user/CUPS shutdown-order, kernel-barrier and
+setup-resume results, including failed candidates and guarded cleanup.
+
 These helpers run only in a newly independent disposable Fedora KDE 44 clone
 using the [M8 host and guest guards](../m8/README.md). Keep the original VM off,
 SELinux enforcing, one qcow2 volume with no backing store, a private managed TPM

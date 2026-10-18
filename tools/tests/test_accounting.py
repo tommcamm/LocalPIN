@@ -78,6 +78,26 @@ class RecordTests(unittest.TestCase):
 
 
 class CgroupLayoutTests(unittest.TestCase):
+    def test_init_scope_waits_for_transient_executor_to_leave(self):
+        with patch.object(Path, 'read_text', side_effect=['1\n42\n', '1\n']) as read, patch.object(a.time, 'monotonic', side_effect=[100, 100.01]), patch.object(a.time, 'sleep') as sleep:
+            a.wait_init_scope_idle()
+        self.assertEqual(read.call_count, 2)
+        sleep.assert_called_once_with(0.02)
+
+    def test_init_scope_wait_refuses_missing_inventory_without_retry(self):
+        with patch.object(Path, 'read_text', side_effect=FileNotFoundError) as read, patch.object(a.time, 'sleep') as sleep:
+            with self.assertRaises(FileNotFoundError):
+                a.wait_init_scope_idle()
+        read.assert_called_once_with()
+        sleep.assert_not_called()
+
+    def test_init_scope_wait_never_accepts_malformed_or_noninit_inventory(self):
+        for value in ('', 'invalid\n', '1\n1\n', '2\n', '1\n42\n'):
+            with self.subTest(value=value), patch.object(Path, 'read_text', return_value=value), patch.object(a.time, 'monotonic', side_effect=[100, 110]), patch.object(a.time, 'sleep') as sleep:
+                with self.assertRaisesRegex(RuntimeError, 'unexpected init scope processes'):
+                    a.wait_init_scope_idle()
+                sleep.assert_not_called()
+
     def test_root_cgroup_accepts_only_proven_kernel_threads_and_disappearing_tasks(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -120,6 +140,11 @@ class CgroupLayoutTests(unittest.TestCase):
                 return original_read(path, *args, **kwargs)
             with patch.object(a, 'CGROUP', root), patch.object(Path, 'read_text', read):
                 self.assertEqual({p.name for p in a.cgroup_layout()}, {'system.slice', *a.STOCK_MOUNT_GROUPS})
+                init_procs = root / 'init.scope/cgroup.procs'
+                init_procs.write_text('1\n42\n')
+                with self.assertRaisesRegex(RuntimeError, 'unexpected init scope processes'):
+                    a.cgroup_layout()
+                init_procs.write_text('1\n')
                 first = root / a.STOCK_MOUNT_GROUPS[0] / 'cgroup.events'
                 first.write_text('populated 1\nfrozen 0\n')
                 with self.assertRaisesRegex(RuntimeError, 'unexpected task in stock mount'):
@@ -269,6 +294,9 @@ class TransactionTests(unittest.TestCase):
         self.assertEqual(self.state['phase'], 'complete')
         phases = [value for kind, value in self.events if kind == 'journal']
         self.assertEqual(phases, ['backed-up', 'copied', 'switched', 'complete'])
+        self.assertFalse(a.RESUME.exists())
+        with patch.object(a, 'login_restored', return_value=True):
+            a.finish_terminal(self.m, self.state)
         self.assertEqual(json.loads(a.RESUME.read_text())['uid'], self.state['uid'])
         self.assertEqual(stat.S_IMODE(a.BACKUP.stat().st_mode), 0o700)
         self.assertEqual(stat.S_IMODE((a.BACKUP / 'volatile').stat().st_mode), 0o700)
@@ -316,7 +344,7 @@ class TransactionTests(unittest.TestCase):
         a.SOURCE.joinpath('alice').write_bytes(bytes(64))
         a.migrate(self.m, self.state)
         self.state['phase'] = 'failed'
-        a.RESUME.unlink()
+        a.RESUME.unlink(missing_ok=True)
         checked_modes = []
         def directories(path, *, mode=None):
             if path == a.BACKUP / 'volatile':
@@ -374,7 +402,71 @@ class TransactionTests(unittest.TestCase):
             self.assertTrue(a.abort_untouched_request(self.m))
         self.assertEqual(self.state['phase'], 'aborted')
         restore.assert_not_called()
-        command.assert_not_called()
+        self.assertTrue(all(call.kwargs['operation'] == 'label-resume' for call in command.call_args_list))
+
+    def failure_fixture(self):
+        self.state.update(phase='requested', isolation_requested=False,
+                          owned_masks=['user@.service'], restore_units=['display-manager.service'])
+        self.m.load = lambda: None
+        self.m.setup_scope = lambda *args: {}
+        self.m.validate_policy = lambda **kwargs: None
+        patch.object(a, 'read_journal', return_value=self.state).start()
+        patch.object(a, 'refresh_owned_masks').start()
+
+    def test_mask_failure_unmasks_partial_result_without_stopping_or_isolating(self):
+        self.failure_fixture()
+        operations = []
+        def command(args, **kwargs):
+            operation = kwargs['operation']
+            operations.append(operation)
+            if operation == 'mask-authentication':
+                raise a.CommandRefusal(operation, 1, 'file-exists')
+            return SimpleNamespace(returncode=0, stdout=b'')
+        before = a.CONFIG.read_bytes()
+        with patch.object(a, 'command', side_effect=command), patch.object(a, 'recover_emergency') as emergency:
+            a.run_maintenance(self.m)
+        self.assertEqual(operations, ['mask-authentication', 'label-resume', 'unmask-owned'])
+        emergency.assert_not_called()
+        self.assertEqual(self.state['phase'], 'aborted')
+        self.assertEqual(self.state['restoration'], 'not-needed')
+        self.assertFalse(self.state['isolation_requested'])
+        self.assertEqual(json.loads(a.RESUME.read_text())['state'], 'aborted')
+        self.assertEqual(json.loads((a.WORK / 'failure.json').read_text())['command']['operation'], 'mask-authentication')
+        self.assertEqual(a.CONFIG.read_bytes(), before)
+        self.assertFalse(a.BACKUP.exists())
+
+    def test_isolation_failure_waits_for_restoration_and_preserves_original_failure(self):
+        self.failure_fixture()
+        operations = []
+        def command(args, **kwargs):
+            operation = kwargs['operation']
+            operations.append(operation)
+            if operation == 'isolate-maintenance':
+                raise a.CommandRefusal(operation, 1, 'job-failed')
+            return SimpleNamespace(returncode=0, stdout=b'')
+        with patch.object(a, 'command', side_effect=command), patch.object(a, 'login_restored', side_effect=[False, True]), patch.object(a.time, 'sleep'), patch.object(a, 'recover_emergency') as emergency:
+            a.run_maintenance(self.m)
+        self.assertEqual(operations[:3], ['mask-authentication', 'stop-sessions', 'isolate-maintenance'])
+        self.assertIn('restore-graphical', operations)
+        self.assertEqual(self.state['phase'], 'aborted')
+        self.assertEqual(self.state['restoration'], 'restored')
+        self.assertEqual(self.state['failure_operation'], 'isolate-maintenance')
+        emergency.assert_not_called()
+        self.assertFalse(a.BACKUP.exists())
+
+    def test_mask_cleanup_failure_stays_pending_without_losing_original_failure(self):
+        self.failure_fixture()
+        def command(args, **kwargs):
+            operation = kwargs['operation']
+            if operation in ('mask-authentication', 'unmask-owned'):
+                raise a.CommandRefusal(operation, 1, 'command-failed')
+            return SimpleNamespace(returncode=0, stdout=b'')
+        with patch.object(a, 'command', side_effect=command), patch.object(a, 'recover_emergency') as emergency:
+            a.run_maintenance(self.m)
+        self.assertEqual(self.state['restoration'], 'pending')
+        self.assertEqual(json.loads((a.WORK / 'failure.json').read_text())['command']['operation'], 'mask-authentication')
+        self.assertEqual(json.loads((a.WORK / 'recovery-failure.json').read_text())['command']['operation'], 'unmask-owned')
+        emergency.assert_not_called()
 
 
 class RecoveryAndBarrierTests(unittest.TestCase):
@@ -391,7 +483,7 @@ class RecoveryAndBarrierTests(unittest.TestCase):
         schedule.assert_not_called()
 
     def barrier_fixture(self):
-        state = {'schema': 1, 'uid': 21061, 'boot': 'same-boot', 'phase': 'requested'}
+        state = {'schema': 1, 'uid': 21061, 'boot': 'same-boot', 'phase': 'requested', 'owned_masks': []}
         events = []
         groups = [Path('/synthetic/system.slice'), Path('/synthetic/user.slice')]
         @contextlib.contextmanager
@@ -410,6 +502,7 @@ class RecoveryAndBarrierTests(unittest.TestCase):
                    patch.object(a, 'mask_authentication'),
                    patch.object(a, 'rpm_locked', rpm_lock),
                    patch.object(a, 'command', side_effect=lambda args, **kwargs: events.append(('command', tuple(args)))),
+                   patch.object(a, 'wait_init_scope_idle', side_effect=lambda: events.append(('init-idle',))),
                    patch.object(a, 'cgroup_layout', return_value=groups),
                    patch.object(a.os, 'pidfd_open', side_effect=lambda *args: (events.append(('pidfd-open',)), os.open('/dev/null', os.O_RDONLY | os.O_CLOEXEC))[1]),
                    patch.object(a.os, 'fork', return_value=12345),
@@ -422,7 +515,7 @@ class RecoveryAndBarrierTests(unittest.TestCase):
                    patch.object(a, 'migrate', side_effect=lambda *args: events.append(('migrate',))),
                    patch.object(a, 'thaw', side_effect=lambda: events.append(('thaw',))),
                    patch.object(a, 'recover_emergency', side_effect=lambda: events.append(('emergency',))),
-                   patch.object(a, 'restore_login', side_effect=lambda s: events.append(('restore',)))]
+                   patch.object(a, 'finish_terminal', side_effect=lambda m, s: events.append(('restore',)))]
         for p in patches:
             p.start()
             self.addCleanup(p.stop)
@@ -436,7 +529,7 @@ class RecoveryAndBarrierTests(unittest.TestCase):
             self.assertLess(events.index(('cgroup.kill', path.name, '1')), migration)
             self.assertLess(events.index(('wait', path.name, 'populated', '0')), migration)
         self.assertLess(events.index(('wait', 'init.scope', 'frozen', '1')), migration)
-        self.assertEqual(a.cgroup_layout.call_count, 2)
+        self.assertEqual(a.cgroup_layout.call_count, 3)
         self.assertEqual(events[-2:], [('thaw',), ('restore',)])
         self.assertTrue(state['barrier']['init_frozen'])
         self.assertLess(events.index(('pidfd-open',)), events.index(('phase', 'barrier-started')))
@@ -444,7 +537,86 @@ class RecoveryAndBarrierTests(unittest.TestCase):
         self.assertLess(events.index(('rpm-locked',)), events.index(('policy-validated', {'allow_volatile': True})))
         self.assertLess(events.index(('policy-validated', {'allow_volatile': True})), events.index(('phase', 'quiescing')))
         self.assertLess(events.index(('phase', 'quiescing')), events.index(('command', ('/usr/bin/systemctl', 'isolate', 'localpin-accounting.target'))))
+        drain = events.index(('command', ('/usr/bin/systemctl', 'stop', 'display-manager.service',
+                                          'user@*.service', 'user-runtime-dir@*.service', 'user.slice')))
+        self.assertLess(drain, events.index(('command', ('/usr/bin/systemctl', 'isolate', 'localpin-accounting.target'))))
+        self.assertLess(events.index(('command', ('/usr/bin/systemctl', 'isolate', 'localpin-accounting.target'))), events.index(('init-idle',)))
+        self.assertLess(events.index(('init-idle',)), events.index(('pidfd-open',)))
         self.assertTrue(state['isolation_requested'])
+
+    def test_init_scope_that_never_becomes_idle_refuses_before_barrier(self):
+        wait_idle = a.wait_init_scope_idle
+        m, state, groups, events = self.barrier_fixture()
+        with patch.object(a, 'wait_init_scope_idle', side_effect=wait_idle), patch.object(Path, 'read_text', return_value='1\n42\n'), patch.object(a.time, 'monotonic', side_effect=[100, 110]), patch.object(a.time, 'sleep') as sleep:
+            with self.assertRaisesRegex(RuntimeError, 'unexpected init scope processes'):
+                a.run_maintenance(m)
+        sleep.assert_not_called()
+        a.cgroup_layout.assert_not_called()
+        self.assertNotIn(('phase', 'barrier-started'), events)
+        self.assertNotIn(('pidfd-open',), events)
+        self.assertFalse(any(event[0] in ('cgroup.freeze', 'cgroup.kill', 'migrate', 'thaw') for event in events))
+
+    def test_init_scope_process_reappearing_after_freeze_refuses_and_thaws(self):
+        m, state, groups, events = self.barrier_fixture()
+        with patch.object(a, 'cgroup_layout', side_effect=[groups, a.MaintenanceRefusal('unexpected init scope processes')]):
+            with self.assertRaisesRegex(RuntimeError, 'unexpected init scope processes'):
+                a.run_maintenance(m)
+        self.assertIn(('wait', 'init.scope', 'frozen', '1'), events)
+        freezes = [event for event in events if event[0] == 'cgroup.freeze']
+        self.assertEqual(freezes, [('cgroup.freeze', 'init.scope', '1')])
+        self.assertFalse(any(event[0] in ('cgroup.kill', 'migrate') for event in events))
+        self.assertEqual(events[-2:], [('thaw',), ('emergency',)])
+
+    def test_empty_slice_disappearing_before_manager_freeze_is_not_used_afterward(self):
+        m, state, groups, events = self.barrier_fixture()
+        remaining = groups[:1]
+        with patch.object(a, 'cgroup_layout', side_effect=[groups, remaining, remaining]):
+            a.run_maintenance(m)
+        init_wait = events.index(('wait', 'init.scope', 'frozen', '1'))
+        slice_freeze = events.index(('cgroup.freeze', remaining[0].name, '1'))
+        self.assertLess(init_wait, slice_freeze)
+        self.assertNotIn(('cgroup.freeze', groups[1].name, '1'), events)
+        self.assertNotIn(('cgroup.kill', groups[1].name, '1'), events)
+        self.assertIn(('migrate',), events)
+
+    def test_new_allowed_slice_joins_fresh_inventory_after_manager_is_frozen(self):
+        m, state, groups, events = self.barrier_fixture()
+        added = Path('/synthetic/machine.slice')
+        refreshed = [*groups, added]
+        inventories = []
+        def layout():
+            inventories.append(len(inventories) + 1)
+            events.append(('inventory', inventories[-1]))
+            if len(inventories) == 1:
+                return groups
+            self.assertIn(('wait', 'init.scope', 'frozen', '1'), events)
+            return refreshed
+        with patch.object(a, 'cgroup_layout', side_effect=layout):
+            a.run_maintenance(m)
+        self.assertEqual(inventories, [1, 2, 3])
+        init_wait = events.index(('wait', 'init.scope', 'frozen', '1'))
+        fresh_inventory = events.index(('inventory', 2))
+        self.assertLess(init_wait, fresh_inventory)
+        for path in refreshed:
+            self.assertLess(fresh_inventory, events.index(('cgroup.freeze', path.name, '1')))
+        migration = events.index(('migrate',))
+        for event in (('wait', added.name, 'frozen', '1'),
+                      ('cgroup.kill', added.name, '1'),
+                      ('wait', added.name, 'populated', '0')):
+            self.assertLess(events.index(event), migration)
+        self.assertIn(added.name, state['barrier']['empty_frozen_slices'])
+
+    def test_manager_freeze_timeout_never_freezes_normal_groups_or_migrates(self):
+        m, state, groups, events = self.barrier_fixture()
+        with patch.object(a, 'wait_cgroup', side_effect=RuntimeError('synthetic PID1 freeze timeout')):
+            with self.assertRaisesRegex(RuntimeError, 'PID1 freeze timeout'):
+                a.run_maintenance(m)
+        freezes = [event for event in events if event[0] == 'cgroup.freeze']
+        self.assertEqual(freezes, [('cgroup.freeze', 'init.scope', '1')])
+        self.assertEqual(a.cgroup_layout.call_count, 1)
+        self.assertFalse(any(event[0] == 'cgroup.kill' for event in events))
+        self.assertNotIn(('migrate',), events)
+        self.assertEqual(events[-2:], [('thaw',), ('emergency',)])
 
     def test_pidfd_failure_refuses_before_barrier_and_never_falls_back_to_numeric_pid(self):
         m, state, groups, events = self.barrier_fixture()
@@ -505,7 +677,7 @@ class RecoveryAndBarrierTests(unittest.TestCase):
 
     def test_topology_change_while_freezing_refuses_before_migration(self):
         m, state, groups, events = self.barrier_fixture()
-        with patch.object(a, 'cgroup_layout', side_effect=[groups, groups + [Path('/synthetic/foreign.slice')]]):
+        with patch.object(a, 'cgroup_layout', side_effect=[groups, groups, groups + [Path('/synthetic/foreign.slice')]]):
             with self.assertRaisesRegex(RuntimeError, 'topology changed'):
                 a.run_maintenance(m)
         self.assertNotIn(('migrate',), events)
@@ -519,7 +691,7 @@ class RecoveryAndBarrierTests(unittest.TestCase):
         self.assertEqual(events[-2:], [('thaw',), ('emergency',)])
 
     def test_boot_guard_rejects_every_ambiguous_phase(self):
-        for phase in ('requested', 'quiescing', 'barrier-started', 'quiescent', 'backed-up', 'copied', 'switched', 'failed'):
+        for phase in ('requested', 'masking', 'quiescing', 'barrier-started', 'quiescent', 'backed-up', 'copied', 'switched', 'failed'):
             with self.subTest(phase=phase), patch.object(a, 'read_journal', return_value={'phase': phase}):
                 with self.assertRaisesRegex(RuntimeError, 'emergency.target'):
                     a.guard(None)
@@ -556,13 +728,14 @@ class RecoveryAndBarrierTests(unittest.TestCase):
                 a.inventory(Path(temporary) / 'missing-backup', private=True)
 
     def test_restoration_unmasks_only_owned_masks_and_restores_fixed_access_units(self):
-        state = {'owned_masks': ['user@.service'], 'restore_units': ['sshd.service']}
-        with patch.object(a, 'command') as cmd:
-            a.restore_login(state)
+        state = {'phase': 'aborted', 'owned_masks': ['user@.service'], 'restore_units': ['sshd.service']}
+        with patch.object(a, 'command') as cmd, patch.object(a, 'save'), patch.object(a, 'observe_restoration'):
+            a.restore_and_observe(None, state)
         self.assertEqual(cmd.call_args_list[0].args[0], ['/usr/bin/systemctl', 'unmask', '--runtime', 'user@.service'])
         self.assertEqual(cmd.call_args_list[-1].args[0], ['/usr/bin/systemctl', '--no-block', 'start', 'sshd.service'])
+        self.assertEqual(state['owned_masks'], [])
         with self.assertRaises(RuntimeError):
-            a.restore_login({'owned_masks': ['arbitrary.service'], 'restore_units': []})
+            a.unmask_owned({'owned_masks': ['arbitrary.service']})
 
     def test_failure_evidence_includes_only_fixed_refusals_and_numeric_os_errors(self):
         state = {'phase': 'quiescing'}

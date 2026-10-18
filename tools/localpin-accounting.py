@@ -51,7 +51,12 @@ RESTORE_UNITS = ('display-manager.service', 'sshd.service', 'sshd.socket')
 TERMINAL_PHASES = ('complete', 'aborted')
 JOURNAL_BOUND = 4 * 1024 * 1024
 ENV = {'PATH': '/usr/sbin:/usr/bin', 'LANG': 'C', 'LC_ALL': 'C'}
-_command_failure = None
+OPERATION_NAMES = ('rpm-lock-path', 'selinux-status', 'display-manager-status',
+                   'restore-unit-status', 'mask-status', 'label-work', 'schedule-maintenance',
+                   'persistent-filesystem', 'label-persistent', 'label-resume',
+                   'mask-authentication', 'stop-sessions', 'isolate-maintenance',
+                   'unmask-owned', 'restore-graphical', 'restore-listeners',
+                   'restoration-jobs', 'restoration-status', 'emergency', 'begin-maintenance')
 
 
 class MaintenanceRefusal(RuntimeError):
@@ -62,19 +67,39 @@ class RPMBusy(MaintenanceRefusal):
     """Native RPM transaction already owns its POSIX transaction lock."""
 
 
+class CommandRefusal(MaintenanceRefusal):
+    def __init__(self, operation, returncode, detail):
+        super().__init__('fixed accounting maintenance operation refused')
+        self.command = {'operation': operation, 'returncode': returncode, 'detail': detail}
+
+
 def require(value, message):
     if not value:
         raise MaintenanceRefusal(message)
 
 
-def command(args, *, check=True, timeout=30):
-    global _command_failure
-    result = subprocess.run(args, env=ENV, stdin=subprocess.DEVNULL,
-                            capture_output=True, timeout=timeout)
-    if check:
-        if result.returncode:
-            _command_failure = {'program': args[0], 'returncode': result.returncode}
-        require(result.returncode == 0, 'fixed accounting maintenance operation refused')
+def command(args, *, operation, check=True, timeout=30):
+    require(operation in OPERATION_NAMES, 'unknown fixed accounting operation')
+    try:
+        result = subprocess.run(args, env=ENV, stdin=subprocess.DEVNULL,
+                                capture_output=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise CommandRefusal(operation, None, 'timeout') from None
+    if check and result.returncode:
+        # Do not export command output, paths, unit instances or OS messages.
+        # These categories retain useful systemd rejection information only.
+        detail = 'command-failed'
+        for marker, category in ((b'File exists', 'file-exists'),
+                                 (b'already exists', 'file-exists'),
+                                 (b'is masked', 'unit-masked'),
+                                 (b'not found', 'unit-not-found'),
+                                 (b'Access denied', 'access-denied'),
+                                 (b'Permission denied', 'access-denied'),
+                                 (b'Job failed', 'job-failed')):
+            if marker in result.stderr:
+                detail = category
+                break
+        raise CommandRefusal(operation, result.returncode, detail)
     return result
 
 
@@ -187,21 +212,34 @@ def fsync_directory(path):
 
 
 
+def unique_fields(pairs):
+    result = {}
+    for key, value in pairs:
+        require(key not in result, 'duplicate accounting journal field')
+        result[key] = value
+    return result
+
+
 def read_journal(m):
     try:
-        value = json.loads(m.read(JOURNAL, JOURNAL_BOUND, mode=0o600))
+        value = json.loads(m.read(JOURNAL, JOURNAL_BOUND, mode=0o600), object_pairs_hook=unique_fields)
     except FileNotFoundError:
         return None
-    require(isinstance(value, dict) and value.get('schema') == 1
+    require(isinstance(value, dict) and type(value.get('schema')) is int and value['schema'] == 1
             and type(value.get('uid')) is int and 1000 <= value['uid'] <= 59999
             and isinstance(value.get('request_id'), str)
             and re.fullmatch('[0-9a-f]{64}', value['request_id'])
-            and value.get('phase') in ('requested', 'quiescing', 'barrier-started', 'quiescent', 'backed-up',
+            and value.get('phase') in ('requested', 'masking', 'quiescing', 'barrier-started', 'quiescent', 'backed-up',
                                        'copied', 'switched', 'complete', 'aborted', 'failed'),
             'invalid accounting maintenance journal; use emergency recovery')
-    require(str(uuid.UUID(value['boot'])) == value['boot'], 'invalid maintenance boot identity')
+    require(isinstance(value.get('boot'), str) and str(uuid.UUID(value['boot'])) == value['boot'],
+            'invalid maintenance boot identity')
     require(type(value.get('isolation_requested', True)) is bool,
             'invalid maintenance isolation marker')
+    require('restoration' not in value or value['restoration'] in ('not-needed', 'pending', 'restored'),
+            'invalid maintenance restoration state')
+    require('failure_operation' not in value or value['failure_operation'] in OPERATION_NAMES,
+            'invalid maintenance failure operation')
     return value
 
 
@@ -226,7 +264,7 @@ def validate_rpm_lock(m, fd):
 def rpm_locked(m):
     # RPM 6 uses process-owned POSIX fcntl whole-file locks, not flock. Never
     # create, replace or truncate the distribution's existing transaction lock.
-    require(command(['/usr/bin/rpm', '--eval', '%{_rpmlock_path}']).stdout.strip()
+    require(command(['/usr/bin/rpm', '--eval', '%{_rpmlock_path}'], operation='rpm-lock-path').stdout.strip()
             == str(RPM_LOCK).encode(), 'unsupported native RPM transaction lock path')
     m.safe_parents(RPM_LOCK)
     fd = os.open(RPM_LOCK, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
@@ -237,29 +275,33 @@ def rpm_locked(m):
         except BlockingIOError:
             raise RPMBusy('native RPM transaction is active; rerun setup after it finishes') from None
         validate_rpm_lock(m, fd)
-        require(command(['/usr/bin/rpm', '--eval', '%{_rpmlock_path}']).stdout.strip()
+        require(command(['/usr/bin/rpm', '--eval', '%{_rpmlock_path}'], operation='rpm-lock-path').stdout.strip()
                 == str(RPM_LOCK).encode(), 'unsupported native RPM transaction lock path')
         yield fd
     finally:
         os.close(fd)
 
 
-def record_failure(m, error):
+def record_failure(m, error, *, recovery=False):
     """Best-effort bounded root-only evidence; never persist raw OS text/logs."""
     try:
         state = read_journal(m)
         if state is None:
+            return
+        path = WORK / ('recovery-failure.json' if recovery else 'failure.json')
+        # The first failure is the cause; a later cleanup failure is separate.
+        if path.exists() or path.is_symlink():
             return
         value = {'schema': 1, 'phase': state.get('failure_phase', state['phase']),
                  'exception': type(error).__name__,
                  'errno': error.errno if isinstance(error, OSError) else None}
         if isinstance(error, (MaintenanceRefusal, m.Refusal)):
             value['reason'] = str(error)
-        if _command_failure is not None:
-            value['command'] = _command_failure
+        if isinstance(error, CommandRefusal):
+            value['command'] = error.command
         data = json.dumps(value, sort_keys=True).encode() + b'\n'
         if len(data) <= 4096:
-            m.atomic_write(WORK / 'failure.json', data)
+            m.atomic_write(path, data)
     except (OSError, RuntimeError, ValueError, KeyError, TypeError):
         pass
 
@@ -280,28 +322,29 @@ def schedule_locked(m, uid):
         previous = read_journal(m)
         require(previous is not None and previous['phase'] == 'aborted',
                 'prior accounting maintenance requires administrator review')
+        require(previous.get('restoration') != 'pending', 'login restoration is still pending; use administrator recovery')
         safe_directory(WORK, mode=0o700)
         archive = CONTROL / ('accounting-aborted-' + previous['request_id'])
         require(not archive.exists() and not archive.is_symlink(), 'accounting archive already exists')
         os.rename(WORK, archive)
         fsync_directory(CONTROL)
-    require(command(['/usr/sbin/getenforce']).stdout.strip() == b'Enforcing', 'SELinux enforcing required')
-    require(command(['/usr/bin/systemctl', 'is-active', '--quiet', 'display-manager.service'], check=False).returncode == 0,
+    require(command(['/usr/sbin/getenforce'], operation='selinux-status').stdout.strip() == b'Enforcing', 'SELinux enforcing required')
+    require(command(['/usr/bin/systemctl', 'is-active', '--quiet', 'display-manager.service'], operation='display-manager-status', check=False).returncode == 0,
             'active supported display manager required')
     WORK.mkdir(mode=0o700)
     fsync_directory(CONTROL)
     state = {'schema': 1, 'uid': uid, 'boot': boot(), 'request_id': os.urandom(32).hex(),
              'isolation_requested': False}
     state['restore_units'] = [unit for unit in RESTORE_UNITS if command(
-        ['/usr/bin/systemctl', 'is-active', '--quiet', unit], check=False).returncode == 0]
+        ['/usr/bin/systemctl', 'is-active', '--quiet', unit], operation='restore-unit-status', check=False).returncode == 0]
     state['owned_masks'] = [unit for unit in AUTH_UNITS if command(
         ['/usr/bin/systemctl', 'show', '--property=UnitFileState', '--value', unit],
-        check=False).stdout.strip() not in (b'masked', b'masked-runtime')]
+        operation='mask-status', check=False).stdout.strip() not in (b'masked', b'masked-runtime')]
     save(m, state, 'requested')
-    command(['/usr/sbin/restorecon', '-R', str(WORK)])
+    command(['/usr/sbin/restorecon', '-R', str(WORK)], operation='label-work')
     # The fixed system service sleeps briefly before isolating, allowing sudo and
     # the wizard to return. It is not a descendant of the user's session cgroup.
-    command(['/usr/bin/systemctl', 'start', '--no-block', 'localpin-accounting-delay.service'])
+    command(['/usr/bin/systemctl', 'start', '--no-block', 'localpin-accounting-delay.service'], operation='schedule-maintenance')
     return {'scheduled': True}
 
 
@@ -335,7 +378,7 @@ def migrate(m, state):
         TARGET.mkdir(mode=0o755)
         fsync_directory(TARGET.parent)
     safe_directory(TARGET, mode=0o755)
-    require(command(['/usr/bin/stat', '-f', '-c', '%T', str(TARGET)]).stdout.strip()
+    require(command(['/usr/bin/stat', '-f', '-c', '%T', str(TARGET)], operation='persistent-filesystem').stdout.strip()
             in (b'btrfs', b'ext2/ext3', b'xfs'), 'supported persistent accounting filesystem required')
     source = inventory(SOURCE, native_source=True)
     targets = inventory(TARGET)
@@ -371,16 +414,21 @@ def migrate(m, state):
     os.replace(temporary, CONFIG)
     fsync_directory(CONFIG.parent)
     save(m, state, 'switched')
-    command(['/usr/sbin/restorecon', '-R', str(TARGET), str(CONFIG)])
+    command(['/usr/sbin/restorecon', '-R', str(TARGET), str(CONFIG)], operation='label-persistent')
     fsync_directory(TARGET)
     fsync_directory(CONFIG.parent)
     require(capture(CONFIG)[1] == PERSISTENT, 'persistent configuration verification failed')
     verify_inventory(SOURCE, source, native_source=True)
     verify_inventory(TARGET, {**targets, **desired})
+    state['restoration'] = 'pending'
     save(m, state, 'complete')
-    hint = {'schema_version': 1, 'uid': state['uid'], 'request_id': state['request_id'], 'state': 'ready'}
+
+
+def publish_hint(m, state, outcome):
+    require(outcome in ('ready', 'aborted'), 'invalid setup outcome hint')
+    hint = {'schema_version': 1, 'uid': state['uid'], 'request_id': state['request_id'], 'state': outcome}
     m.atomic_write(RESUME, json.dumps(hint, sort_keys=True).encode() + b'\n', 0o644)
-    command(['/usr/sbin/restorecon', str(RESUME)])
+    command(['/usr/sbin/restorecon', str(RESUME)], operation='label-resume')
 
 
 def cgroup_events(path):
@@ -396,6 +444,15 @@ def wait_cgroup(path, field, value):
     deadline = time.monotonic() + 10
     while cgroup_events(path).get(field) != value:
         require(time.monotonic() < deadline, 'kernel cgroup barrier timed out')
+        time.sleep(0.02)
+
+
+def wait_init_scope_idle():
+    # Short-lived systemd executors can outlast the target's isolation job.
+    # Wait before the barrier; the frozen inventory still requires PID1 alone.
+    deadline = time.monotonic() + 10
+    while (CGROUP / 'init.scope/cgroup.procs').read_text().split() != ['1']:
+        require(time.monotonic() < deadline, 'unexpected init scope processes')
         time.sleep(0.02)
 
 
@@ -460,27 +517,125 @@ def mask_authentication(state):
     units = state.get('owned_masks')
     require(isinstance(units, list) and all(unit in AUTH_UNITS for unit in units), 'invalid owned maintenance masks')
     if units:
-        command(['/usr/bin/systemctl', 'mask', '--runtime', *units])
+        command(['/usr/bin/systemctl', 'mask', '--runtime', *units], operation='mask-authentication')
+
+
+def refresh_owned_masks(state):
+    units = state.get('owned_masks')
+    require(isinstance(units, list) and all(unit in AUTH_UNITS for unit in units), 'invalid owned maintenance masks')
+    # Preserve masks another administrator installed during the delayed handoff.
+    state['owned_masks'] = [unit for unit in units if command(
+        ['/usr/bin/systemctl', 'show', '--property=UnitFileState', '--value', unit],
+        operation='mask-status', check=False).stdout.strip() not in (b'masked', b'masked-runtime')]
+
+
+def unmask_owned(state):
+    units = state.get('owned_masks')
+    require(isinstance(units, list) and all(unit in AUTH_UNITS for unit in units), 'invalid owned maintenance masks')
+    # Runtime masks disappear at reboot. The old transaction owns no mask in
+    # the new boot, even if an administrator now masks the same unit name.
+    if 'boot' in state and state['boot'] != boot():
+        return
+    if units:
+        command(['/usr/bin/systemctl', 'unmask', '--runtime', *units], operation='unmask-owned')
 
 
 def restore_login(state):
-    units = state.get('owned_masks')
-    require(isinstance(units, list) and all(unit in AUTH_UNITS for unit in units), 'invalid owned maintenance masks')
-    if units:
-        command(['/usr/bin/systemctl', 'unmask', '--runtime', *units])
     restored = state.get('restore_units')
     require(isinstance(restored, list) and all(unit in RESTORE_UNITS for unit in restored), 'invalid login restoration units')
-    command(['/usr/bin/systemctl', '--no-block', 'isolate', 'graphical.target'])
+    command(['/usr/bin/systemctl', '--no-block', 'isolate', 'graphical.target'], operation='restore-graphical')
     if restored:
-        command(['/usr/bin/systemctl', '--no-block', 'start', *restored])
+        command(['/usr/bin/systemctl', '--no-block', 'start', *restored], operation='restore-listeners')
+
+
+def release_owned_masks(m, state):
+    unmask_owned(state)
+    units = state['owned_masks']
+    state['owned_masks'] = []
+    try:
+        # Consume ownership before submitting restoration: a later retry must
+        # preserve any new administrator masks, including in this same boot.
+        save(m, state, state['phase'])
+    except BaseException:
+        state['owned_masks'] = units
+        raise
+
+
+def login_restored(state):
+    result = command(['/usr/bin/systemctl', 'list-jobs', '--no-legend', '--no-pager', '--plain'],
+                     operation='restoration-jobs', timeout=2)
+    require(len(result.stdout) <= 1024 * 1024, 'oversized restoration job inventory')
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        require(len(fields) == 4 and fields[0].isdigit(), 'invalid restoration job inventory')
+        # The helper's own oneshot start job cannot finish until we return.
+        if fields[1:3] not in ([b'localpin-accounting.service', b'start'],
+                               [b'localpin-accounting-delay.service', b'start']):
+            return False
+    units = ('graphical.target', 'systemd-logind.service', 'systemd-user-sessions.service',
+             *state['restore_units'])
+    return all(command(['/usr/bin/systemctl', 'is-active', '--quiet', unit],
+                       operation='restoration-status', check=False, timeout=2).returncode == 0
+               for unit in units)
+
+
+def observe_restoration(m, state):
+    deadline = time.monotonic() + 30
+    while not login_restored(state):
+        if time.monotonic() >= deadline:
+            return  # A queued restoration is explicitly still pending.
+        time.sleep(0.25)
+    state['restoration'] = 'restored'
+    try:
+        save(m, state, state['phase'])
+    except BaseException:
+        state['restoration'] = 'pending'
+        raise
+
+
+def restore_and_observe(m, state):
+    state['restoration'] = 'pending'
+    save(m, state, state['phase'])
+    release_owned_masks(m, state)
+    restore_login(state)
+    observe_restoration(m, state)
+
+
+def finish_terminal(m, state):
+    """A proven terminal accounting result survives UI/restoration failures."""
+    # Publish before reopening login: a fast next-login autostart must not race
+    # a still-absent hint while the helper observes restoration jobs.
+    publish_terminal_hint(m, state)
+    try:
+        restore_and_observe(m, state)
+    except (OSError, RuntimeError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
+        record_failure(m, error, recovery=True)
+    report_outcome(state)
+
+
+def publish_terminal_hint(m, state):
+    try:
+        publish_hint(m, state, 'ready' if state['phase'] == 'complete' else 'aborted')
+    except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as error:
+        record_failure(m, error, recovery=True)
+
+
+def report_outcome(state):
+    # Safe abort exits normally to avoid OnFailure=emergency.target. The journal
+    # carries the actual migration result, independently of the service exit.
+    try:
+        print(json.dumps({'result': state['phase'], 'restoration': state.get('restoration', 'pending'),
+                          'failed_operation': state.get('failure_operation')}, sort_keys=True), flush=True)
+    except OSError:
+        pass  # Losing a journal stream cannot invalidate proven accounting.
 
 
 def recover_emergency():
     thaw()
-    command(['/usr/bin/systemctl', '--no-block', 'isolate', 'emergency.target'], check=False)
+    command(['/usr/bin/systemctl', '--no-block', 'isolate', 'emergency.target'], operation='emergency', check=False)
 
 
-def abort_untouched_request(m):
+def abort_untouched_request(m, error=None):
     """Restore stock login after a verified refusal before the kernel barrier.
 
     This narrow path has made no accounting snapshot, copy or policy switch.
@@ -490,7 +645,7 @@ def abort_untouched_request(m):
     try:
         with m.locked():
             state = read_journal(m)
-            require(state is not None and state['phase'] in ('requested', 'quiescing')
+            require(state is not None and state['phase'] in ('requested', 'masking', 'quiescing')
                     and state['boot'] == boot() and 'source' not in state
                     and not BACKUP.exists() and not BACKUP.is_symlink()
                     and not REGISTRY.exists() and m.load() is None,
@@ -498,22 +653,36 @@ def abort_untouched_request(m):
             require(capture(CONFIG)[0]['sha256'] == VOLATILE_SHA,
                     'automatic abort requires original volatile policy')
             inventory(SOURCE, native_source=True)
+            masks_requested = state['phase'] != 'requested'
+            if isinstance(error, CommandRefusal):
+                state['failure_operation'] = error.command['operation']
+            state['restoration'] = 'pending' if masks_requested or state.get('isolation_requested', True) else 'not-needed'
             save(m, state, 'aborted')
         validated = True
+        publish_terminal_hint(m, state)
         if state.get('isolation_requested', True):
-            restore_login(state)
-        return True
-    except (OSError, RuntimeError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
+            restore_and_observe(m, state)
+        elif masks_requested:
+            # A batched mask can partly succeed. Undo only our masks, without
+            # submitting either isolation transaction against a live desktop.
+            release_owned_masks(m, state)
+            state['restoration'] = 'not-needed'
+            save(m, state, 'aborted')
+    except (OSError, RuntimeError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as recovery_error:
         if validated:
-            record_failure(m, error)
-        return False
+            record_failure(m, recovery_error, recovery=True)
+        else:
+            return False
+    report_outcome(state)
+    return True
 
 
 def desktop_untouched(m):
-    """A durable false marker means no mask or isolation command was issued."""
+    """Only a still-requested false marker proves no service command ran."""
     try:
         state = read_journal(m)
-        return state is not None and state.get('isolation_requested') is False
+        return (state is not None and state['phase'] == 'requested'
+                and state.get('isolation_requested') is False)
     except (OSError, RuntimeError, ValueError, KeyError, TypeError):
         return False
 
@@ -540,7 +709,7 @@ def run_maintenance(m):
             # Retain the native transaction lock through verified abort or
             # emergency selection, including failures before the barrier.
             record_failure(m, error)
-            if abort_untouched_request(m) or desktop_untouched(m):
+            if abort_untouched_request(m, error) or desktop_untouched(m):
                 return
             recover_emergency()
             raise
@@ -554,13 +723,25 @@ def run_maintenance_locked(m):
         require(m.load() is None and not REGISTRY.exists(), 'installation changed before maintenance')
         m.setup_scope(None, state['uid'])
         m.validate_policy(allow_volatile=True)
+        refresh_owned_masks(state)
+        # Keep mask failure distinct from any request that can stop sessions.
+        save(m, state, 'masking')
+        mask_authentication(state)
         state['isolation_requested'] = True
         save(m, state, 'quiescing')
-        mask_authentication(state)
+        # Let desktop workers finish while their normal services (including
+        # CUPS) are available. Isolation would otherwise stop both concurrently.
+        # A slice stop alone does not wait for every delegated manager's stop
+        # job. Include loaded manager/runtime instances explicitly, so their
+        # shutdown workers finish before isolation stops CUPS and other peers.
+        command(['/usr/bin/systemctl', 'stop', 'display-manager.service',
+                 'user@*.service', 'user-runtime-dir@*.service', 'user.slice'],
+                operation='stop-sessions', timeout=45)
         # This target deliberately has no service dependency: the already
         # running IgnoreOnIsolate worker can wait for its isolation job while
         # retaining both locks, before the independent kernel exclusion proof.
-        command(['/usr/bin/systemctl', 'isolate', 'localpin-accounting.target'], timeout=45)
+        command(['/usr/bin/systemctl', 'isolate', 'localpin-accounting.target'], operation='isolate-maintenance', timeout=45)
+        wait_init_scope_idle()
         groups = cgroup_layout()
         # The target isolation stopped ordinary services and sessions. The final
         # kernel barrier freezes survivors and PID1 (which can create slices),
@@ -593,7 +774,13 @@ def run_maintenance_locked(m):
             # Persist exclusion from the pre-barrier automatic abort *before*
             # the first freezer write, even if saving a later failure fails.
             save(m, state, 'barrier-started')
-            for path in [*groups, CGROUP / 'init.scope']:
+            # Fully drained slices can disappear while PID1 finishes their
+            # cleanup. Freeze the manager before taking the authoritative
+            # inventory; the earlier inventory only validated prerequisites.
+            cgroup_write(CGROUP / 'init.scope', 'cgroup.freeze', '1')
+            wait_cgroup(CGROUP / 'init.scope', 'frozen', '1')
+            groups = cgroup_layout()
+            for path in groups:
                 cgroup_write(path, 'cgroup.freeze', '1')
                 wait_cgroup(path, 'frozen', '1')
             # Recheck top-level identity after PID1 is frozen.
@@ -618,7 +805,7 @@ def run_maintenance_locked(m):
             os.write(write_fd, b'1')
             os.close(write_fd)
             os.waitpid(child, 0)
-        restore_login(state)
+        finish_terminal(m, state)
 
 
 def guard(m):
@@ -636,9 +823,25 @@ def recover(m):
 def recover_locked(m):
     with m.locked():
         state = read_journal(m)
-        require(state is not None and state['phase'] != 'complete', 'no interrupted accounting transaction')
+        require(state is not None and (state['phase'] != 'complete' or state.get('restoration') == 'pending'),
+                'no interrupted accounting transaction')
         data = capture(CONFIG)[1]
-        if data == PERSISTENT:
+        if state['phase'] in TERMINAL_PHASES:
+            # The completed migration is already durable. Native failures may
+            # legitimately change tallies after login; never restore or compare
+            # them against a historical snapshot to retry service restoration.
+            require(data == PERSISTENT if state['phase'] == 'complete' else
+                    hashlib.sha256(data).hexdigest() == VOLATILE_SHA,
+                    'terminal accounting policy changed; manual review required')
+            if state['phase'] == 'complete':
+                safe_directory(TARGET, mode=0o755)
+                current = inventory(TARGET)
+                expected = state.get('persistent')
+                require(isinstance(expected, dict) and set(expected) <= set(current),
+                        'completed accounting history is missing; manual review required')
+            else:
+                inventory(SOURCE, native_source=True)
+        elif data == PERSISTENT:
             expected = state.get('persistent')
             require(isinstance(expected, dict) and isinstance(state.get('source'), dict),
                     'durable accounting snapshot unavailable; manual review required')
@@ -651,10 +854,8 @@ def recover_locked(m):
             require(set(original) == set(state['source']), 'private source backup missing')
             for name, snapshot in state['source'].items():
                 require(equivalent(snapshot, original[name][0]), 'private source backup differs')
+            state['restoration'] = 'pending'
             save(m, state, 'complete')
-            hint = {'schema_version': 1, 'uid': state['uid'], 'request_id': state['request_id'], 'state': 'ready'}
-            m.atomic_write(RESUME, json.dumps(hint, sort_keys=True).encode() + b'\n', 0o644)
-            command(['/usr/sbin/restorecon', str(RESUME)])
         else:
             require(hashlib.sha256(data).hexdigest() == VOLATILE_SHA and state['boot'] == boot(),
                     'volatile authority cannot be recovered after reboot; preserve backups for manual review')
@@ -663,10 +864,17 @@ def recover_locked(m):
                 require(set(current) == set(state['source']), 'volatile source inventory changed')
                 require(all(equivalent(snapshot, current[name][0]) for name, snapshot in state['source'].items()),
                         'volatile source differs; preserve for manual review')
+            state['restoration'] = 'pending'
             save(m, state, 'aborted')
     if state.get('isolation_requested', True):
         thaw()
-        restore_login(state)
+        finish_terminal(m, state)
+    else:
+        release_owned_masks(m, state)
+        state['restoration'] = 'not-needed'
+        save(m, state, state['phase'])
+        publish_hint(m, state, 'aborted')
+        report_outcome(state)
 
 
 def main():
@@ -684,7 +892,7 @@ def main():
         require(state is not None and state['phase'] == 'requested' and state['boot'] == boot(),
                 'same-boot accounting request required')
         time.sleep(3)
-        command(['/usr/bin/systemctl', '--no-block', 'start', 'localpin-accounting.service'])
+        command(['/usr/bin/systemctl', '--no-block', 'start', 'localpin-accounting.service'], operation='begin-maintenance')
     else:
         require(Path('/proc/self/cgroup').read_text().strip() ==
                 '0::/localpinmaintenance.slice/localpin-accounting.service',
