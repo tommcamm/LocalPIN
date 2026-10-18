@@ -48,6 +48,13 @@ experimental builds.
 
 ### Fixed
 
+- Accounting-maintenance masking failures remove only owned temporary masks
+  without initiating desktop isolation. Sessions drain before normal services
+  stop, failure diagnostics identify closed operations, and login restoration
+  remains pending until observed. Verified aborts reopen setup with an
+  explanation and require explicit approval before retrying; unsafe interrupted
+  migrations retain administrator recovery. Fresh installed KDE validation of
+  this correction remains required.
 - Guided setup can enroll a new PIN after own-user disable while preserving
   active desktop integration. Native account administration now shares the
   integration transaction lock, preventing concurrent provisioning from

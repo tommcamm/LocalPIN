@@ -19,6 +19,7 @@ SPEC = importlib.util.spec_from_file_location(
     "localpin_integration_tested", Path(__file__).resolve().parents[1] / "localpin-integration.py"
 )
 integration = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = integration
 SPEC.loader.exec_module(integration)
 
 BOOT = "01234567-89ab-cdef-0123-456789abcdef"
@@ -933,6 +934,10 @@ class SetupStatusTests(unittest.TestCase):
             now_ms=mock.Mock(return_value=1000),
             snapshot=mock.Mock(return_value=self.state['protected']),
             binary_snapshot=mock.Mock(return_value=self.state['binaries'])))
+        exists = Path.exists
+        journal = integration.CONTROL / 'accounting/transaction.json'
+        self.stack.enter_context(mock.patch.object(
+            Path, 'exists', lambda path: path in self.values if path == journal else exists(path)))
         self.mutations = []
         for name in ('locked', 'ensure_dirs', 'atomic_write', 'close_gate', 'save', 'start', 'stop', 'run'):
             operation = self.stack.enter_context(mock.patch.object(
@@ -947,6 +952,73 @@ class SetupStatusTests(unittest.TestCase):
             'trial_ref': integration.setup_trial_reference(self.state), 'tests_recorded': False})
         self.assertEqual(self.state, before)
         self.validate.assert_called_once_with(integrated=True)
+        for operation in self.mutations:
+            operation.assert_not_called()
+
+    def maintenance_journal(self, **changes):
+        value = {'schema': 1, 'uid': 1000, 'boot': BOOT, 'request_id': 'a' * 64,
+                 'phase': 'aborted', 'isolation_requested': False,
+                 'restoration': 'not-needed', 'failure_operation': 'stop-sessions'}
+        value.update(changes)
+        self.values[integration.CONTROL / 'accounting/transaction.json'] = json.dumps(value).encode()
+        return value
+
+    def test_terminal_maintenance_outcome_is_optional_scoped_and_non_authoritative(self):
+        for phase, restoration in (('aborted', 'not-needed'), ('aborted', 'restored'),
+                                   ('complete', 'restored')):
+            with self.subTest(phase=phase, restoration=restoration):
+                self.maintenance_journal(phase=phase, restoration=restoration)
+                result = integration.setup_status(1000)
+                self.assertEqual(result['accounting_outcome'], {
+                    'result': phase, 'restoration': restoration,
+                    'failed_operation': 'stop-sessions'})
+                self.assertEqual(result['blocker'], 'none')
+                self.assertTrue(result['enrolled'])
+        self.maintenance_journal(uid=1001)
+        self.assertNotIn('accounting_outcome', integration.setup_status(1000))
+        for operation in self.mutations:
+            operation.assert_not_called()
+
+    def test_pending_login_restoration_blocks_even_a_terminal_maintenance_result(self):
+        for phase in ('aborted', 'complete'):
+            self.maintenance_journal(phase=phase, restoration='pending')
+            result = integration.setup_status(1000)
+            self.assertEqual(result['blocker'], 'accounting-maintenance')
+            self.assertEqual(result['accounting_outcome']['restoration'], 'pending')
+            self.assertFalse(result['enrolled'])
+            self.assertFalse(result['trial_valid'])
+        self.maintenance_journal(phase='quiescing', restoration='pending')
+        result = integration.setup_status(1000)
+        self.assertNotIn('accounting_outcome', result)
+        self.assertEqual(result['blocker'], 'accounting-maintenance')
+
+    def test_legacy_terminal_journal_defaults_do_not_assume_aborted_services_were_restored(self):
+        for phase, isolated, restoration in (('complete', True, 'restored'),
+                                            ('aborted', False, 'not-needed'),
+                                            ('aborted', True, 'pending')):
+            value = self.maintenance_journal(phase=phase, isolation_requested=isolated)
+            del value['restoration']
+            del value['failure_operation']
+            self.values[integration.CONTROL / 'accounting/transaction.json'] = json.dumps(value).encode()
+            result = integration.setup_status(1000)
+            self.assertEqual(result['accounting_outcome'], {
+                'result': phase, 'restoration': restoration, 'failed_operation': None})
+            self.assertEqual(result['blocker'], 'accounting-maintenance' if restoration == 'pending' else 'none')
+
+    def test_corrupt_terminal_journal_cannot_supply_outcome_or_readiness(self):
+        for changes in ({'schema': 2}, {'schema': True}, {'uid': True}, {'request_id': 'unsafe'},
+                        {'boot': 'not-a-boot'}, {'phase': 'unexpected'},
+                        {'restoration': 'anything'}, {'failure_operation': 'raw command output'}):
+            self.maintenance_journal(**changes)
+            with self.subTest(changes=changes), self.assertRaises(integration.Refusal):
+                integration.setup_status(1000)
+        value = json.dumps(self.maintenance_journal())
+        for duplicate in ('"phase":"complete",', '"uid":1001,',
+                          '"restoration":"pending",', '"failure_operation":"unsafe",'):
+            self.values[integration.CONTROL / 'accounting/transaction.json'] = (
+                '{' + duplicate + value[1:]).encode()
+            with self.subTest(duplicate=duplicate), self.assertRaises(integration.Refusal):
+                integration.setup_status(1000)
         for operation in self.mutations:
             operation.assert_not_called()
 

@@ -269,6 +269,9 @@ class TransactionTests(unittest.TestCase):
         self.assertEqual(self.state['phase'], 'complete')
         phases = [value for kind, value in self.events if kind == 'journal']
         self.assertEqual(phases, ['backed-up', 'copied', 'switched', 'complete'])
+        self.assertFalse(a.RESUME.exists())
+        with patch.object(a, 'login_restored', return_value=True):
+            a.finish_terminal(self.m, self.state)
         self.assertEqual(json.loads(a.RESUME.read_text())['uid'], self.state['uid'])
         self.assertEqual(stat.S_IMODE(a.BACKUP.stat().st_mode), 0o700)
         self.assertEqual(stat.S_IMODE((a.BACKUP / 'volatile').stat().st_mode), 0o700)
@@ -316,7 +319,7 @@ class TransactionTests(unittest.TestCase):
         a.SOURCE.joinpath('alice').write_bytes(bytes(64))
         a.migrate(self.m, self.state)
         self.state['phase'] = 'failed'
-        a.RESUME.unlink()
+        a.RESUME.unlink(missing_ok=True)
         checked_modes = []
         def directories(path, *, mode=None):
             if path == a.BACKUP / 'volatile':
@@ -374,7 +377,71 @@ class TransactionTests(unittest.TestCase):
             self.assertTrue(a.abort_untouched_request(self.m))
         self.assertEqual(self.state['phase'], 'aborted')
         restore.assert_not_called()
-        command.assert_not_called()
+        self.assertTrue(all(call.kwargs['operation'] == 'label-resume' for call in command.call_args_list))
+
+    def failure_fixture(self):
+        self.state.update(phase='requested', isolation_requested=False,
+                          owned_masks=['user@.service'], restore_units=['display-manager.service'])
+        self.m.load = lambda: None
+        self.m.setup_scope = lambda *args: {}
+        self.m.validate_policy = lambda **kwargs: None
+        patch.object(a, 'read_journal', return_value=self.state).start()
+        patch.object(a, 'refresh_owned_masks').start()
+
+    def test_mask_failure_unmasks_partial_result_without_stopping_or_isolating(self):
+        self.failure_fixture()
+        operations = []
+        def command(args, **kwargs):
+            operation = kwargs['operation']
+            operations.append(operation)
+            if operation == 'mask-authentication':
+                raise a.CommandRefusal(operation, 1, 'file-exists')
+            return SimpleNamespace(returncode=0, stdout=b'')
+        before = a.CONFIG.read_bytes()
+        with patch.object(a, 'command', side_effect=command), patch.object(a, 'recover_emergency') as emergency:
+            a.run_maintenance(self.m)
+        self.assertEqual(operations, ['mask-authentication', 'label-resume', 'unmask-owned'])
+        emergency.assert_not_called()
+        self.assertEqual(self.state['phase'], 'aborted')
+        self.assertEqual(self.state['restoration'], 'not-needed')
+        self.assertFalse(self.state['isolation_requested'])
+        self.assertEqual(json.loads(a.RESUME.read_text())['state'], 'aborted')
+        self.assertEqual(json.loads((a.WORK / 'failure.json').read_text())['command']['operation'], 'mask-authentication')
+        self.assertEqual(a.CONFIG.read_bytes(), before)
+        self.assertFalse(a.BACKUP.exists())
+
+    def test_isolation_failure_waits_for_restoration_and_preserves_original_failure(self):
+        self.failure_fixture()
+        operations = []
+        def command(args, **kwargs):
+            operation = kwargs['operation']
+            operations.append(operation)
+            if operation == 'isolate-maintenance':
+                raise a.CommandRefusal(operation, 1, 'job-failed')
+            return SimpleNamespace(returncode=0, stdout=b'')
+        with patch.object(a, 'command', side_effect=command), patch.object(a, 'login_restored', side_effect=[False, True]), patch.object(a.time, 'sleep'), patch.object(a, 'recover_emergency') as emergency:
+            a.run_maintenance(self.m)
+        self.assertEqual(operations[:3], ['mask-authentication', 'stop-sessions', 'isolate-maintenance'])
+        self.assertIn('restore-graphical', operations)
+        self.assertEqual(self.state['phase'], 'aborted')
+        self.assertEqual(self.state['restoration'], 'restored')
+        self.assertEqual(self.state['failure_operation'], 'isolate-maintenance')
+        emergency.assert_not_called()
+        self.assertFalse(a.BACKUP.exists())
+
+    def test_mask_cleanup_failure_stays_pending_without_losing_original_failure(self):
+        self.failure_fixture()
+        def command(args, **kwargs):
+            operation = kwargs['operation']
+            if operation in ('mask-authentication', 'unmask-owned'):
+                raise a.CommandRefusal(operation, 1, 'command-failed')
+            return SimpleNamespace(returncode=0, stdout=b'')
+        with patch.object(a, 'command', side_effect=command), patch.object(a, 'recover_emergency') as emergency:
+            a.run_maintenance(self.m)
+        self.assertEqual(self.state['restoration'], 'pending')
+        self.assertEqual(json.loads((a.WORK / 'failure.json').read_text())['command']['operation'], 'mask-authentication')
+        self.assertEqual(json.loads((a.WORK / 'recovery-failure.json').read_text())['command']['operation'], 'unmask-owned')
+        emergency.assert_not_called()
 
 
 class RecoveryAndBarrierTests(unittest.TestCase):
@@ -391,7 +458,7 @@ class RecoveryAndBarrierTests(unittest.TestCase):
         schedule.assert_not_called()
 
     def barrier_fixture(self):
-        state = {'schema': 1, 'uid': 21061, 'boot': 'same-boot', 'phase': 'requested'}
+        state = {'schema': 1, 'uid': 21061, 'boot': 'same-boot', 'phase': 'requested', 'owned_masks': []}
         events = []
         groups = [Path('/synthetic/system.slice'), Path('/synthetic/user.slice')]
         @contextlib.contextmanager
@@ -422,7 +489,7 @@ class RecoveryAndBarrierTests(unittest.TestCase):
                    patch.object(a, 'migrate', side_effect=lambda *args: events.append(('migrate',))),
                    patch.object(a, 'thaw', side_effect=lambda: events.append(('thaw',))),
                    patch.object(a, 'recover_emergency', side_effect=lambda: events.append(('emergency',))),
-                   patch.object(a, 'restore_login', side_effect=lambda s: events.append(('restore',)))]
+                   patch.object(a, 'finish_terminal', side_effect=lambda m, s: events.append(('restore',)))]
         for p in patches:
             p.start()
             self.addCleanup(p.stop)
@@ -519,7 +586,7 @@ class RecoveryAndBarrierTests(unittest.TestCase):
         self.assertEqual(events[-2:], [('thaw',), ('emergency',)])
 
     def test_boot_guard_rejects_every_ambiguous_phase(self):
-        for phase in ('requested', 'quiescing', 'barrier-started', 'quiescent', 'backed-up', 'copied', 'switched', 'failed'):
+        for phase in ('requested', 'masking', 'quiescing', 'barrier-started', 'quiescent', 'backed-up', 'copied', 'switched', 'failed'):
             with self.subTest(phase=phase), patch.object(a, 'read_journal', return_value={'phase': phase}):
                 with self.assertRaisesRegex(RuntimeError, 'emergency.target'):
                     a.guard(None)
@@ -556,13 +623,14 @@ class RecoveryAndBarrierTests(unittest.TestCase):
                 a.inventory(Path(temporary) / 'missing-backup', private=True)
 
     def test_restoration_unmasks_only_owned_masks_and_restores_fixed_access_units(self):
-        state = {'owned_masks': ['user@.service'], 'restore_units': ['sshd.service']}
-        with patch.object(a, 'command') as cmd:
-            a.restore_login(state)
+        state = {'phase': 'aborted', 'owned_masks': ['user@.service'], 'restore_units': ['sshd.service']}
+        with patch.object(a, 'command') as cmd, patch.object(a, 'save'), patch.object(a, 'observe_restoration'):
+            a.restore_and_observe(None, state)
         self.assertEqual(cmd.call_args_list[0].args[0], ['/usr/bin/systemctl', 'unmask', '--runtime', 'user@.service'])
         self.assertEqual(cmd.call_args_list[-1].args[0], ['/usr/bin/systemctl', '--no-block', 'start', 'sshd.service'])
+        self.assertEqual(state['owned_masks'], [])
         with self.assertRaises(RuntimeError):
-            a.restore_login({'owned_masks': ['arbitrary.service'], 'restore_units': []})
+            a.unmask_owned({'owned_masks': ['arbitrary.service']})
 
     def test_failure_evidence_includes_only_fixed_refusals_and_numeric_os_errors(self):
         state = {'phase': 'quiescing'}
