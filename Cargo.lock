@@ -283,7 +283,7 @@ dependencies = [
 
 [[package]]
 name = "localpin-auth"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.4"
 dependencies = [
  "getrandom",
  "libc",
@@ -296,14 +296,14 @@ dependencies = [
 
 [[package]]
 name = "localpin-core"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.4"
 dependencies = [
  "zeroize",
 ]
 
 [[package]]
 name = "localpin-credentials"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.4"
 dependencies = [
  "argon2",
  "base64ct",
@@ -315,7 +315,7 @@ dependencies = [
 
 [[package]]
 name = "localpin-pam"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.4"
 dependencies = [
  "libc",
  "localpin-auth",
@@ -326,7 +326,7 @@ dependencies = [
 
 [[package]]
 name = "localpin-protocol"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.4"
 dependencies = [
  "listenfd",
  "localpin-core",
@@ -336,7 +336,7 @@ dependencies = [
 
 [[package]]
 name = "localpin-storage"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.4"
 dependencies = [
  "localpin-core",
  "localpin-credentials",
@@ -347,7 +347,7 @@ dependencies = [
 
 [[package]]
 name = "localpin-tpm"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.4"
 dependencies = [
  "localpin-core",
  "localpin-credentials",
@@ -359,7 +359,7 @@ dependencies = [
 
 [[package]]
 name = "localpinctl"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.4"
 dependencies = [
  "libc",
  "localpin-core",
@@ -372,7 +372,7 @@ dependencies = [
 
 [[package]]
 name = "localpind"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.4"
 dependencies = [
  "dbus",
  "getrandom",

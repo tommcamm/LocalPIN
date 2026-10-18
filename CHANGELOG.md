@@ -6,6 +6,8 @@ experimental builds.
 
 ## Unreleased
 
+## [0.1.0-alpha.4] - 2026-10-18
+
 ### Added
 
 - Command-first terminal interface: bare `localpin` prints concise help, with an

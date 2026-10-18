@@ -13,9 +13,9 @@ members = ["."]
 
 [dependencies]
 libfuzzer-sys = "=0.4.13"
-localpin-core = { path = "../crates/localpin-core", version = "=0.1.0-alpha.1" }
-localpin-protocol = { path = "../crates/localpin-protocol", version = "=0.1.0-alpha.1" }
-localpin-credentials = { path = "../crates/localpin-credentials", version = "=0.1.0-alpha.1" }
+localpin-core = { path = "../crates/localpin-core", version = "=0.1.0-alpha.4" }
+localpin-protocol = { path = "../crates/localpin-protocol", version = "=0.1.0-alpha.4" }
+localpin-credentials = { path = "../crates/localpin-credentials", version = "=0.1.0-alpha.4" }
 
 [[bin]]
 name = "records"
