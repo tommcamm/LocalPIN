@@ -1,0 +1,167 @@
+.TH LOCALPIN 1 "2026-10-18" "LocalPIN" "User Commands"
+.SH NAME
+localpin, localpinctl \- manage local desktop PIN credentials
+.SH SYNOPSIS
+.B localpin
+.RI [ global-options ] " command " [ arguments ]
+.br
+.B localpin
+.RI [ global-options ]
+.SH DESCRIPTION
+LocalPIN adds opt-in PIN or passcode unlocking to an existing local Fedora KDE
+session. The account password remains available for unlocking and recovery.
+Initial login, text consoles, sudo, SSH, polkit and disk encryption retain their
+existing authentication requirements.
+.PP
+With no command, LocalPIN prints concise help and exits without interaction or
+broker contact. Use
+.B menu
+for the optional interactive menu or
+.B setup
+for guided onboarding. The compatibility name
+.B localpinctl
+has the same behavior.
+.PP
+LocalPIN is experimental authentication software without a supported production
+release. Start in a disposable Fedora KDE 44 x86_64 VM with SELinux enforcing.
+Independent security review and physical hardware validation remain open.
+.SH GLOBAL OPTIONS
+.TP
+.BR \-h ", " \-\-help
+Show help. A command followed by this option shows focused command help.
+.TP
+.BR \-V ", " \-\-version
+Print the installed version.
+.TP
+.BR \-\-color " " auto|always|never
+Choose color policy for human output; also accepts
+.BR \-\-color=VALUE .
+Auto honors the output destination,
+.B NO_COLOR
+and
+.BR TERM=dumb .
+JSON and completion source are always undecorated.
+.TP
+.B \-\-no\-input
+Refuse commands that need interaction before terminal access, account inspection
+or broker contact. This does not supply confirmation or allow secret input from
+a pipe. Status, diagnostics, help, version, completions and integration guidance
+remain available.
+.SH COMMANDS
+.TP
+.B menu
+Open the optional inline numbered menu in a foreground terminal.
+.TP
+.B setup
+Set up or resume onboarding as the normal desktop owner. Explain preparation,
+choose protection, enroll privately, guide real trial and recovery checks, and
+request explicit activation. Supported accounting maintenance requires explicit
+approval to save work and sign out. Resume decisions use protected system state.
+Preparation offers the full policy diff on request before a separate apply
+confirmation; pausing the review applies nothing.
+.TP
+.BR status " [\-\-json]"
+Show own-account enrollment, backend, availability, cooldown and desktop gate.
+.TP
+.BR doctor " [\-\-json]"
+Show readiness and actionable diagnostics. Passive checks do not perform desktop
+unlock tests, password recovery tests or TPM enrollment.
+.TP
+.B enroll \-\-backend auto|tpm2-required|software
+Create a PIN or passcode after confirmation and fresh account-password
+verification. Both auto and tpm2-required attempt TPM creation and verification;
+software protection must be selected explicitly.
+.TP
+.B change
+Replace your credential on the existing backend, with fresh password verification.
+.TP
+.B disable
+Disable your own credential after fresh password verification. This does not
+restore the system's desktop authentication configuration.
+.TP
+.B migrate \-\-backend tpm2-required|software
+Explicitly replace the protection backend and credential. The target must differ
+from the current backend.
+.TP
+.B integration status
+Inspect the desktop integration gate without contacting the broker.
+.TP
+.B integration enable
+Show the separate administrator activation command and its preparation, trial,
+desktop/password-test and recovery prerequisites. This command does not activate.
+.TP
+.B integration disable
+Show the separate administrator command to disable system integration.
+.TP
+.B recover \-\-user ACCOUNT
+As an already-root caller, disable the named existing non-root local account's
+credential through the broker. Never reveal a PIN or repair account authority.
+.TP
+.B help "[COMMAND [SUBCOMMAND]]"
+Show full help or focused command help. Also accepts COMMAND followed by
+.BR \-\-help " or " \-h .
+.TP
+.B completions bash|zsh|fish
+Print static completion source. The RPM installs completions for both command
+names. Scripts suggest public commands, flags and closed choices without
+querying accounts, the broker or credential state.
+.SH CREDENTIAL INPUT
+Numeric PINs permit 4-16 digits with TPM protection and 8-16 digits with software
+protection. Both permit an explicitly selected printable-ASCII passcode of 8-64
+characters, preserving spaces and case. Recommendations are 6 TPM digits,
+10 software digits and 12 or more passcode characters. Legacy six-digit software
+credentials remain usable with replacement advice.
+.PP
+Secrets require terminal stdin and a real foreground controlling terminal.
+New credentials show asterisks; account passwords remain hidden. Never supply
+secrets through command arguments, environment variables, stdin or pipes.
+Cancellation restores terminal settings. A failed or uncertain commit requires
+checking status before retrying.
+.SH OUTPUT
+Status and doctor accept
+.B \-\-json
+for nonsecret schema-version-2 output. This includes own-user credential type,
+length and policy metadata, never the credential value. Installed, enrolled,
+trial, tested and active states are distinct. Installation and enrollment alone
+do not activate PIN unlocking. Operator attestations are not independent proof
+that a real unlock or recovery test was performed.
+.SH EXIT STATUS
+.TP
+.B 0
+Success, including help and a quietly closed output pipe.
+.TP
+.B 1
+Operational failure, including unavailable state or refused interaction.
+.TP
+.B 2
+Invalid command or arguments. Rejected argument values are not repeated.
+.TP
+.B 130
+Cancelled operation.
+.SH ENVIRONMENT
+.TP
+.B NO_COLOR
+Disable automatic color output. An explicit color option selects its own policy.
+.TP
+.B TERM
+A value of dumb disables automatic color output.
+.PP
+LocalPIN-specific secret and simulator environment channels are rejected;
+there is no environment mechanism for passing credentials.
+.SH EXAMPLES
+.nf
+localpin
+localpin help setup
+localpin setup
+localpin --no-input status --json
+localpin --color=never doctor
+localpin completions bash
+.fi
+.SH SEE ALSO
+.BR sudo (8),
+.BR pam (8),
+.BR authselect (8)
+.PP
+The packaged integration and account administration runbooks describe guarded
+activation, actual password/console recovery tests and removal. The project
+usage guide is available at https://github.com/tommcamm/LocalPIN/blob/main/docs/usage.md.

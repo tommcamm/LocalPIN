@@ -8,6 +8,15 @@ experimental builds.
 
 ### Added
 
+- Command-first terminal interface: bare `localpin` prints concise help, with an
+  explicit `menu`, focused command help, `-h`/`-V`, global `--color` and
+  `--no-input`. A shared dependency-free renderer presents readable status,
+  wrapped guidance, setup stages, warnings and next actions while preserving
+  private credential entry, required confirmations and schema-2 JSON. The RPM
+  includes manual pages and static Bash/Zsh/Fish completions for both command
+  names; `completions SHELL` prints their source. See
+  [ADR 0022](docs/adr/0022-command-first-terminal-presentation.md).
+
 - Flexible credential selection: TPM numeric PINs of 4–16 digits, software PINs
   of 8–16 digits, and optional 8–64 character printable-ASCII passcodes. Shared
   setup/change/migration forms show protection, length guidance, masked new input

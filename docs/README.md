@@ -20,8 +20,10 @@ software with no supported production release. Begin in a disposable Fedora KDE
 
 - [Everyday use](usage.md): choose a backend, enroll, unlock, change or disable
   a credential, interpret status, and troubleshoot.
-- [CLI reference](../crates/localpinctl/README.md): the `localpin` menu and guided
-  setup, compatible `localpinctl` commands, private input and diagnostic fields.
+- [CLI reference](../crates/localpinctl/README.md): command-first `localpin` help,
+  optional menu and guided setup, colors, completions, private input and diagnostics.
+- [Terminal presentation contract](adr/0022-command-first-terminal-presentation.md):
+  command/help behavior, noninteractive use and output boundaries.
 
 ## Administer and recover
 

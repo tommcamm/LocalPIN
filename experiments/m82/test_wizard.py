@@ -1,11 +1,20 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
 """Pure transcript-classifier tests; no VM, account, sudo, PAM or TPM use."""
+import textwrap
 import unittest
 
 import wizard
 
 
 class PromptTests(unittest.TestCase):
+    @staticmethod
+    def wrapped_block(heading, options):
+        question = '\x1b[1;36m' + textwrap.fill(heading, width=34) + '\x1b[0m\n'
+        choices = ''.join(textwrap.fill(option, width=34, initial_indent=f'  {index}. ',
+                                        subsequent_indent='     ') + '\n'
+                          for index, option in enumerate(options, 1))
+        return (question + choices + wizard.CHOICE).replace('\n', '\r\n').encode()
+
     def test_every_confirmation_requires_current_unanswered_prompt(self):
         for heading, identifier in wizard.CONFIRMATIONS.items():
             transcript = (heading + '\r\n  1. Yes\r\n  2. No / pause\r\n' + wizard.CHOICE).encode()
@@ -48,9 +57,80 @@ class PromptTests(unittest.TestCase):
         self.assertIsNone(wizard.exit_code(b'Script started on a date [COMMAND="/usr/bin/localpin setup"]'))
         self.assertEqual(wizard.exit_code(b'\nScript done on a date [COMMAND_EXIT_CODE="1"]\n'), 1)
 
+    def test_wrapped_styled_confirmations_and_options_keep_their_exact_meaning(self):
+        for heading, identifier in wizard.CONFIRMATIONS.items():
+            transcript = self.wrapped_block(heading, ('Yes', 'No / pause'))
+            self.assertEqual(wizard.prompt(transcript)['id'], identifier)
+            self.assertIsNone(wizard.prompt(transcript + b'1\r\n')['id'])
+        for heading, identifier, options, answers in wizard.CHOICE_PROMPTS:
+            result = wizard.prompt(self.wrapped_block(heading, options))
+            self.assertEqual(result['id'], identifier)
+            self.assertEqual(result['answers'], answers)
+        self.assertEqual(wizard.MODES['menu'], 'menu')
 
-if __name__ == '__main__':
-    unittest.main()
+    def test_changed_or_unknown_last_question_never_reuses_known_confirmation(self):
+        heading = 'Check system readiness with administrator access?'
+        known = wizard.choice_block(heading, ('Yes', 'No / pause'))
+        previous = known + '1\n'
+        for current in (
+                wizard.choice_block('Unknown new operation?', ('Yes', 'No / pause')),
+                wizard.choice_block('Do not ' + heading, ('Yes', 'No / pause')),
+                wizard.choice_block(heading, ('Yes, change everything', 'No / pause')),
+                wizard.choice_block(heading, ('Yes', 'Continue')),
+                known + '1\nUnknown password prompt: '):
+            self.assertIsNone(wizard.prompt((previous + current).encode())['id'])
+        self.assertIsNone(wizard.prompt(b'Changed New PIN      ')['id'])
+
+    def test_pending_restoration_observes_only_the_fixed_readiness_choices(self):
+        heading = 'Recheck readiness or exit setup?'
+        options = ('Recheck readiness', 'Exit setup')
+        transcript = self.wrapped_block(heading, options)
+        result = wizard.prompt(transcript)
+        self.assertEqual(result['id'], 'restoration-readiness')
+        self.assertEqual(result['answers'], {'1': 'recheck', '2': 'exit', 'q': 'cancel'})
+        self.assertIsNone(wizard.prompt(transcript + b'1\r\n')['id'])
+        previous = transcript + b'1\r\n'
+        for current in (
+                wizard.choice_block('Retry maintenance or exit setup?', options),
+                wizard.choice_block(heading, ('Restart maintenance', 'Exit setup')),
+                wizard.choice_block(heading, ('Recheck readiness', 'Continue setup'))):
+            self.assertIsNone(wizard.prompt(previous + current.encode())['id'])
+
+    def test_maintenance_abort_or_pending_restoration_does_not_claim_activation(self):
+        transcript = (
+            'Warning\nThe previous password-accounting maintenance was aborted.\n'
+            'Native accounting was preserved; the prior preparation remains incomplete.\n'
+            'Login service restoration has not yet been verified.\n'
+            + wizard.choice_block('Recheck readiness or exit setup?',
+                                  ('Recheck readiness', 'Exit setup'))).encode()
+        self.assertEqual(wizard.prompt(transcript)['id'], 'restoration-readiness')
+        messages = wizard.fixed_messages(transcript)
+        self.assertFalse(messages['activated'])
+        self.assertFalse(messages['active_noop'])
+        self.assertIsNone(wizard.exit_code(transcript))
+
+    def test_new_outcome_layout_is_observed_across_ansi_and_line_wraps(self):
+        transcript = (
+            '\x1b[32mDone\x1b[0m\n  LocalPIN is active.\n'
+            'Lock your KDE session, enter your credential and press Enter.\n'
+            'Your committed credential\nenrollment is retained.\n'
+            '\x1b[1;36mSetup paused\x1b[0m\nCompleted preparation and enrollment\n'
+            'are retained. A live trial expires automatically.\n'
+            'Warning\n  Use an administrator TEXT CONSOLE.\n').encode()
+        messages = wizard.fixed_messages(transcript)
+        for identifier in ('activated', 'enrollment_retained', 'paused',
+                           'console_recovery_handoff'):
+            self.assertTrue(messages[identifier], identifier)
+        self.assertFalse(messages['active_noop'])
+        self.assertFalse(messages['active_new_pin_ready'])
+
+    def test_transcript_bound_and_explicit_exit_evidence_remain_required(self):
+        with self.assertRaises(RuntimeError):
+            wizard.prompt(b'x' * (wizard.MAX_LOG + 1))
+        with self.assertRaises(RuntimeError):
+            wizard.fixed_messages(b'x' * (wizard.MAX_LOG + 1))
+        self.assertIsNone(wizard.exit_code(b'Done\n  LocalPIN is active.\n'))
+        self.assertIsNone(wizard.exit_code(b'Script done [COMMAND_EXIT_CODE="unknown"]'))
 
 
 class CredentialPromptTests(unittest.TestCase):
@@ -62,3 +142,7 @@ class CredentialPromptTests(unittest.TestCase):
         result = wizard.prompt(b'Choice [1] (q to cancel): ')
         self.assertEqual(result['id'], 'predictability-warning')
         self.assertEqual(result['answers']['2'], 'use-anyway')
+
+
+if __name__ == '__main__':
+    unittest.main()

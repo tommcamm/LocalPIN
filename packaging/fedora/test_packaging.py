@@ -74,6 +74,73 @@ class PackagingTests(unittest.TestCase):
         scriptlets = spec.split("%pre\n", 1)[1].split("%files\n", 1)[0]
         self.assertNotRegex(scriptlets, r"localpin(?:ctl)?\s+setup")
 
+    def test_manual_and_shell_completions_ship_for_both_names(self):
+        spec = (FEDORA / "localpin.spec").read_text()
+        install = spec.split("%install\n", 1)[1].split("%check\n", 1)[0]
+        files = spec.split("%files\n", 1)[1].split("%changelog\n", 1)[0]
+        for name in ("localpin", "localpinctl"):
+            self.assertIn(f"%{{_mandir}}/man1/{name}.1*", files)
+            self.assertIn(f"%{{_datadir}}/bash-completion/completions/{name}", files)
+            self.assertIn(f"%{{_datadir}}/zsh/site-functions/_{name}", files)
+            self.assertIn(f"%{{_datadir}}/fish/vendor_completions.d/{name}.fish", files)
+        for shell in ("bash", "zsh", "fish"):
+            self.assertIn(f"packaging/completions/localpin.{shell}", install)
+            script = ROOT / "packaging/completions" / f"localpin.{shell}"
+            self.assertTrue(script.is_file())
+            self.assertIn("localpinctl", script.read_text())
+        self.assertIn("packaging/localpin.1", install)
+        self.assertTrue((ROOT / "packaging/localpin.1").is_file())
+        # The native source bundle already includes this complete directory.
+        self.assertIn('("crates", "packaging", "docs")', (FEDORA / "build-rpm.py").read_text())
+
+    @unittest.skipUnless(shutil.which("bash"), "Bash unavailable")
+    def test_bash_completions_follow_closed_choices_without_account_queries(self):
+        script = ROOT / "packaging/completions/localpin.bash"
+        subprocess.run(["bash", "-n", str(script)], check=True, capture_output=True)
+
+        def complete(*words):
+            completed = subprocess.run([
+                "bash", "--noprofile", "--norc", "-c",
+                'source "$1"; shift; COMP_WORDS=("$@"); '
+                'COMP_CWORD=$((${#COMP_WORDS[@]} - 1)); '
+                '_localpin; printf "%s\\n" "${COMPREPLY[@]}"',
+                "bash", str(script), *words,
+            ], check=True, capture_output=True, text=True)
+            return set(completed.stdout.split())
+
+        commands = complete("localpin", "")
+        self.assertIn("menu", commands)
+        self.assertIn("setup", commands)
+        self.assertIn("--no-input", commands)
+        self.assertEqual(complete("localpin", "enroll", "--backend", ""),
+                         {"auto", "tpm2-required", "software"})
+        self.assertEqual(complete("localpinctl", "migrate", "--backend", ""),
+                         {"tpm2-required", "software"})
+        self.assertEqual(complete("localpin", "--color", "never", "completions", ""),
+                         {"bash", "zsh", "fish", "--help", "-h", "--version", "-V", "--color", "--no-input"})
+        self.assertEqual(complete("localpin", "--color=a"), {"--color=auto", "--color=always"})
+        self.assertIn("status", complete("localpin", "help", "integration", ""))
+        self.assertIn("--json", complete("localpin", "--no-input", "doctor", "--"))
+        self.assertEqual(complete("localpin", "recover", "--user", ""), set())
+        self.assertNotIn("--pin", commands)
+        self.assertNotIn("--password", commands)
+
+    @unittest.skipUnless(shutil.which("zsh"), "Zsh unavailable")
+    def test_zsh_completion_syntax(self):
+        subprocess.run(["zsh", "-n", str(ROOT / "packaging/completions/localpin.zsh")],
+                       check=True, capture_output=True)
+
+    @unittest.skipUnless(shutil.which("fish"), "Fish unavailable")
+    def test_fish_completion_syntax(self):
+        subprocess.run(["fish", "-n", str(ROOT / "packaging/completions/localpin.fish")],
+                       check=True, capture_output=True)
+
+    @unittest.skipUnless(shutil.which("groff"), "groff unavailable")
+    def test_manual_renders_without_roff_diagnostics(self):
+        result = subprocess.run(["groff", "-Tutf8", "-man", "-z", str(ROOT / "packaging/localpin.1")],
+                                check=True, capture_output=True, text=True)
+        self.assertEqual(result.stderr, "")
+
     def test_native_and_policy_builder_are_host_read_only(self):
         source = (FEDORA / "build-rpm.py").read_text()
         self.assertIn('"--release", "--workspace", "--locked", "--offline"', source)

@@ -19,8 +19,10 @@ secret handling and the non-setuid boundary remain unchanged.
 ## Decision
 
 The RPM installs `/usr/bin/localpin` as a symlink to `localpinctl`; both names
-share commands and implementation. `localpin` opens an inline terminal menu
-when run interactively and prints help otherwise. `localpin setup` runs as the
+share commands and implementation. The original no-argument menu behavior is
+superseded by [ADR 0022](0022-command-first-terminal-presentation.md): `localpin`
+prints concise help, and `localpin menu` explicitly opens the inline menu.
+`localpin setup` runs as the
 current local non-root owner in a foreground controlling terminal. It uses
 bounded visible input for choices and the existing private input for secrets.
 Plain output works with `NO_COLOR`, `TERM=dumb` and redirected output.
