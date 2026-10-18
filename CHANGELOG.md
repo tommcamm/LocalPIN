@@ -53,8 +53,12 @@ experimental builds.
   stop, failure diagnostics identify closed operations, and login restoration
   remains pending until observed. Verified aborts reopen setup with an
   explanation and require explicit approval before retrying; unsafe interrupted
-  migrations retain administrator recovery. Fresh installed KDE validation of
-  this correction remains required.
+  migrations retain administrator recovery. Explicit user-manager stop jobs
+  keep CUPS available during desktop teardown; PID1 freezes before a fresh
+  barrier inventory. [Targeted enforcing KDE VM checks](docs/development/accounting-maintenance-abort.md)
+  passed for partial-mask refusal, shutdown ordering, migration preservation,
+  password-login setup resumption and package removal. Physical-machine
+  causation and broader release gates remain separate.
 - Guided setup can enroll a new PIN after own-user disable while preserving
   active desktop integration. Native account administration now shares the
   integration transaction lock, preventing concurrent provisioning from

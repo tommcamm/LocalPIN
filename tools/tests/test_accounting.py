@@ -78,6 +78,26 @@ class RecordTests(unittest.TestCase):
 
 
 class CgroupLayoutTests(unittest.TestCase):
+    def test_init_scope_waits_for_transient_executor_to_leave(self):
+        with patch.object(Path, 'read_text', side_effect=['1\n42\n', '1\n']) as read, patch.object(a.time, 'monotonic', side_effect=[100, 100.01]), patch.object(a.time, 'sleep') as sleep:
+            a.wait_init_scope_idle()
+        self.assertEqual(read.call_count, 2)
+        sleep.assert_called_once_with(0.02)
+
+    def test_init_scope_wait_refuses_missing_inventory_without_retry(self):
+        with patch.object(Path, 'read_text', side_effect=FileNotFoundError) as read, patch.object(a.time, 'sleep') as sleep:
+            with self.assertRaises(FileNotFoundError):
+                a.wait_init_scope_idle()
+        read.assert_called_once_with()
+        sleep.assert_not_called()
+
+    def test_init_scope_wait_never_accepts_malformed_or_noninit_inventory(self):
+        for value in ('', 'invalid\n', '1\n1\n', '2\n', '1\n42\n'):
+            with self.subTest(value=value), patch.object(Path, 'read_text', return_value=value), patch.object(a.time, 'monotonic', side_effect=[100, 110]), patch.object(a.time, 'sleep') as sleep:
+                with self.assertRaisesRegex(RuntimeError, 'unexpected init scope processes'):
+                    a.wait_init_scope_idle()
+                sleep.assert_not_called()
+
     def test_root_cgroup_accepts_only_proven_kernel_threads_and_disappearing_tasks(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -120,6 +140,11 @@ class CgroupLayoutTests(unittest.TestCase):
                 return original_read(path, *args, **kwargs)
             with patch.object(a, 'CGROUP', root), patch.object(Path, 'read_text', read):
                 self.assertEqual({p.name for p in a.cgroup_layout()}, {'system.slice', *a.STOCK_MOUNT_GROUPS})
+                init_procs = root / 'init.scope/cgroup.procs'
+                init_procs.write_text('1\n42\n')
+                with self.assertRaisesRegex(RuntimeError, 'unexpected init scope processes'):
+                    a.cgroup_layout()
+                init_procs.write_text('1\n')
                 first = root / a.STOCK_MOUNT_GROUPS[0] / 'cgroup.events'
                 first.write_text('populated 1\nfrozen 0\n')
                 with self.assertRaisesRegex(RuntimeError, 'unexpected task in stock mount'):
@@ -477,6 +502,7 @@ class RecoveryAndBarrierTests(unittest.TestCase):
                    patch.object(a, 'mask_authentication'),
                    patch.object(a, 'rpm_locked', rpm_lock),
                    patch.object(a, 'command', side_effect=lambda args, **kwargs: events.append(('command', tuple(args)))),
+                   patch.object(a, 'wait_init_scope_idle', side_effect=lambda: events.append(('init-idle',))),
                    patch.object(a, 'cgroup_layout', return_value=groups),
                    patch.object(a.os, 'pidfd_open', side_effect=lambda *args: (events.append(('pidfd-open',)), os.open('/dev/null', os.O_RDONLY | os.O_CLOEXEC))[1]),
                    patch.object(a.os, 'fork', return_value=12345),
@@ -503,7 +529,7 @@ class RecoveryAndBarrierTests(unittest.TestCase):
             self.assertLess(events.index(('cgroup.kill', path.name, '1')), migration)
             self.assertLess(events.index(('wait', path.name, 'populated', '0')), migration)
         self.assertLess(events.index(('wait', 'init.scope', 'frozen', '1')), migration)
-        self.assertEqual(a.cgroup_layout.call_count, 2)
+        self.assertEqual(a.cgroup_layout.call_count, 3)
         self.assertEqual(events[-2:], [('thaw',), ('restore',)])
         self.assertTrue(state['barrier']['init_frozen'])
         self.assertLess(events.index(('pidfd-open',)), events.index(('phase', 'barrier-started')))
@@ -511,7 +537,86 @@ class RecoveryAndBarrierTests(unittest.TestCase):
         self.assertLess(events.index(('rpm-locked',)), events.index(('policy-validated', {'allow_volatile': True})))
         self.assertLess(events.index(('policy-validated', {'allow_volatile': True})), events.index(('phase', 'quiescing')))
         self.assertLess(events.index(('phase', 'quiescing')), events.index(('command', ('/usr/bin/systemctl', 'isolate', 'localpin-accounting.target'))))
+        drain = events.index(('command', ('/usr/bin/systemctl', 'stop', 'display-manager.service',
+                                          'user@*.service', 'user-runtime-dir@*.service', 'user.slice')))
+        self.assertLess(drain, events.index(('command', ('/usr/bin/systemctl', 'isolate', 'localpin-accounting.target'))))
+        self.assertLess(events.index(('command', ('/usr/bin/systemctl', 'isolate', 'localpin-accounting.target'))), events.index(('init-idle',)))
+        self.assertLess(events.index(('init-idle',)), events.index(('pidfd-open',)))
         self.assertTrue(state['isolation_requested'])
+
+    def test_init_scope_that_never_becomes_idle_refuses_before_barrier(self):
+        wait_idle = a.wait_init_scope_idle
+        m, state, groups, events = self.barrier_fixture()
+        with patch.object(a, 'wait_init_scope_idle', side_effect=wait_idle), patch.object(Path, 'read_text', return_value='1\n42\n'), patch.object(a.time, 'monotonic', side_effect=[100, 110]), patch.object(a.time, 'sleep') as sleep:
+            with self.assertRaisesRegex(RuntimeError, 'unexpected init scope processes'):
+                a.run_maintenance(m)
+        sleep.assert_not_called()
+        a.cgroup_layout.assert_not_called()
+        self.assertNotIn(('phase', 'barrier-started'), events)
+        self.assertNotIn(('pidfd-open',), events)
+        self.assertFalse(any(event[0] in ('cgroup.freeze', 'cgroup.kill', 'migrate', 'thaw') for event in events))
+
+    def test_init_scope_process_reappearing_after_freeze_refuses_and_thaws(self):
+        m, state, groups, events = self.barrier_fixture()
+        with patch.object(a, 'cgroup_layout', side_effect=[groups, a.MaintenanceRefusal('unexpected init scope processes')]):
+            with self.assertRaisesRegex(RuntimeError, 'unexpected init scope processes'):
+                a.run_maintenance(m)
+        self.assertIn(('wait', 'init.scope', 'frozen', '1'), events)
+        freezes = [event for event in events if event[0] == 'cgroup.freeze']
+        self.assertEqual(freezes, [('cgroup.freeze', 'init.scope', '1')])
+        self.assertFalse(any(event[0] in ('cgroup.kill', 'migrate') for event in events))
+        self.assertEqual(events[-2:], [('thaw',), ('emergency',)])
+
+    def test_empty_slice_disappearing_before_manager_freeze_is_not_used_afterward(self):
+        m, state, groups, events = self.barrier_fixture()
+        remaining = groups[:1]
+        with patch.object(a, 'cgroup_layout', side_effect=[groups, remaining, remaining]):
+            a.run_maintenance(m)
+        init_wait = events.index(('wait', 'init.scope', 'frozen', '1'))
+        slice_freeze = events.index(('cgroup.freeze', remaining[0].name, '1'))
+        self.assertLess(init_wait, slice_freeze)
+        self.assertNotIn(('cgroup.freeze', groups[1].name, '1'), events)
+        self.assertNotIn(('cgroup.kill', groups[1].name, '1'), events)
+        self.assertIn(('migrate',), events)
+
+    def test_new_allowed_slice_joins_fresh_inventory_after_manager_is_frozen(self):
+        m, state, groups, events = self.barrier_fixture()
+        added = Path('/synthetic/machine.slice')
+        refreshed = [*groups, added]
+        inventories = []
+        def layout():
+            inventories.append(len(inventories) + 1)
+            events.append(('inventory', inventories[-1]))
+            if len(inventories) == 1:
+                return groups
+            self.assertIn(('wait', 'init.scope', 'frozen', '1'), events)
+            return refreshed
+        with patch.object(a, 'cgroup_layout', side_effect=layout):
+            a.run_maintenance(m)
+        self.assertEqual(inventories, [1, 2, 3])
+        init_wait = events.index(('wait', 'init.scope', 'frozen', '1'))
+        fresh_inventory = events.index(('inventory', 2))
+        self.assertLess(init_wait, fresh_inventory)
+        for path in refreshed:
+            self.assertLess(fresh_inventory, events.index(('cgroup.freeze', path.name, '1')))
+        migration = events.index(('migrate',))
+        for event in (('wait', added.name, 'frozen', '1'),
+                      ('cgroup.kill', added.name, '1'),
+                      ('wait', added.name, 'populated', '0')):
+            self.assertLess(events.index(event), migration)
+        self.assertIn(added.name, state['barrier']['empty_frozen_slices'])
+
+    def test_manager_freeze_timeout_never_freezes_normal_groups_or_migrates(self):
+        m, state, groups, events = self.barrier_fixture()
+        with patch.object(a, 'wait_cgroup', side_effect=RuntimeError('synthetic PID1 freeze timeout')):
+            with self.assertRaisesRegex(RuntimeError, 'PID1 freeze timeout'):
+                a.run_maintenance(m)
+        freezes = [event for event in events if event[0] == 'cgroup.freeze']
+        self.assertEqual(freezes, [('cgroup.freeze', 'init.scope', '1')])
+        self.assertEqual(a.cgroup_layout.call_count, 1)
+        self.assertFalse(any(event[0] == 'cgroup.kill' for event in events))
+        self.assertNotIn(('migrate',), events)
+        self.assertEqual(events[-2:], [('thaw',), ('emergency',)])
 
     def test_pidfd_failure_refuses_before_barrier_and_never_falls_back_to_numeric_pid(self):
         m, state, groups, events = self.barrier_fixture()
@@ -572,7 +677,7 @@ class RecoveryAndBarrierTests(unittest.TestCase):
 
     def test_topology_change_while_freezing_refuses_before_migration(self):
         m, state, groups, events = self.barrier_fixture()
-        with patch.object(a, 'cgroup_layout', side_effect=[groups, groups + [Path('/synthetic/foreign.slice')]]):
+        with patch.object(a, 'cgroup_layout', side_effect=[groups, groups, groups + [Path('/synthetic/foreign.slice')]]):
             with self.assertRaisesRegex(RuntimeError, 'topology changed'):
                 a.run_maintenance(m)
         self.assertNotIn(('migrate',), events)

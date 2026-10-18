@@ -447,6 +447,15 @@ def wait_cgroup(path, field, value):
         time.sleep(0.02)
 
 
+def wait_init_scope_idle():
+    # Short-lived systemd executors can outlast the target's isolation job.
+    # Wait before the barrier; the frozen inventory still requires PID1 alone.
+    deadline = time.monotonic() + 10
+    while (CGROUP / 'init.scope/cgroup.procs').read_text().split() != ['1']:
+        require(time.monotonic() < deadline, 'unexpected init scope processes')
+        time.sleep(0.02)
+
+
 def cgroup_layout():
     # Cgroup v2 is a kernel-enforced barrier, unlike a process-name scan.
     require((CGROUP / 'cgroup.controllers').exists(), 'unified cgroup v2 required')
@@ -722,12 +731,17 @@ def run_maintenance_locked(m):
         save(m, state, 'quiescing')
         # Let desktop workers finish while their normal services (including
         # CUPS) are available. Isolation would otherwise stop both concurrently.
-        command(['/usr/bin/systemctl', 'stop', 'display-manager.service', 'user.slice'],
+        # A slice stop alone does not wait for every delegated manager's stop
+        # job. Include loaded manager/runtime instances explicitly, so their
+        # shutdown workers finish before isolation stops CUPS and other peers.
+        command(['/usr/bin/systemctl', 'stop', 'display-manager.service',
+                 'user@*.service', 'user-runtime-dir@*.service', 'user.slice'],
                 operation='stop-sessions', timeout=45)
         # This target deliberately has no service dependency: the already
         # running IgnoreOnIsolate worker can wait for its isolation job while
         # retaining both locks, before the independent kernel exclusion proof.
         command(['/usr/bin/systemctl', 'isolate', 'localpin-accounting.target'], operation='isolate-maintenance', timeout=45)
+        wait_init_scope_idle()
         groups = cgroup_layout()
         # The target isolation stopped ordinary services and sessions. The final
         # kernel barrier freezes survivors and PID1 (which can create slices),
@@ -760,7 +774,13 @@ def run_maintenance_locked(m):
             # Persist exclusion from the pre-barrier automatic abort *before*
             # the first freezer write, even if saving a later failure fails.
             save(m, state, 'barrier-started')
-            for path in [*groups, CGROUP / 'init.scope']:
+            # Fully drained slices can disappear while PID1 finishes their
+            # cleanup. Freeze the manager before taking the authoritative
+            # inventory; the earlier inventory only validated prerequisites.
+            cgroup_write(CGROUP / 'init.scope', 'cgroup.freeze', '1')
+            wait_cgroup(CGROUP / 'init.scope', 'frozen', '1')
+            groups = cgroup_layout()
+            for path in groups:
                 cgroup_write(path, 'cgroup.freeze', '1')
                 wait_cgroup(path, 'frozen', '1')
             # Recheck top-level identity after PID1 is frozen.

@@ -52,24 +52,39 @@ as aborted when the integration lock permits, otherwise pending evidence remains
 for explicit recovery. Administrators must not race maintenance with unrelated
 service configuration changes; the integration lock coordinates LocalPIN tools.
 
-Before isolation, the worker synchronously stops the display manager and
-`user.slice` while ordinary services remain available to desktop shutdown
+Before isolation, the worker synchronously stops the display manager, loaded
+`user@*.service` and `user-runtime-dir@*.service` instances, and `user.slice`.
+A slice stop alone does not wait for every delegated manager's shutdown job.
+Ordinary services remain available to desktop shutdown
 workers. This avoids deliberately stopping CUPS concurrently with Plasma's
 printing-worker teardown. This ordering addresses the observed dependency
 hazard; it does not establish the destination or cause of the reported blocked
-CUPS request, and needs fresh installed KDE acceptance.
+CUPS request. [Targeted installed KDE acceptance](../development/accounting-maintenance-abort.md)
+passed for the recorded candidate; the physical-machine failure remains unproven.
 
 The maintenance target conflicts with `user.slice` and orders itself after that
 slice, the display manager, logind and user-session service. During isolation,
 their stop jobs therefore finish before the target's start job completes. The
-explicit slice stop also drains delegated user managers and runtime-directory
-services that otherwise ignore isolation, so their lifecycle cleanup finishes
-before the final freezer/kill boundary. This lets the desktop restore its virtual
-terminal and avoids carrying stale user-manager state into the next login; an
+explicit manager/runtime stop jobs before isolation drain delegated user managers
+and runtime-directory services that otherwise ignore isolation, so their
+lifecycle cleanup finishes before the final freezer/kill boundary. Merely
+stopping the slice does not establish that drain. This lets the desktop restore
+its virtual terminal and avoids carrying stale user-manager state into the next login; an
 otherwise empty target can complete while unrelated service stops are still
 running. These ordering edges do not start those services or depend on the
 maintenance worker. The bounded isolation command and subsequent kernel
 exclusion proof remain mandatory.
+
+After isolation, the worker waits at most ten seconds for short-lived systemd
+executors to leave `init.scope`. Only PID 1 alone satisfies the wait, and both
+the preflight and frozen inventories still require that exact membership.
+With the watchdog running and barrier-entry journal durable, the worker freezes
+and observes `init.scope` first, then takes a fresh inventory of allowed
+cgroups. A drained slice removed by the manager before its freeze therefore
+does not remain in a stale barrier inventory. The worker freezes the remaining
+groups, rechecks topology, and kills and observes all old non-init tasks before
+copying. A missing inventory, timeout, or extra process in the frozen init scope
+refuses maintenance; the wait does not replace the kernel exclusion proof.
 
 The migration inventories every native tally because the configuration change
 is global. It retains exact source backups, rejects unsafe metadata or
