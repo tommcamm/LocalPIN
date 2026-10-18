@@ -55,6 +55,24 @@ def emulated_tpm_guard():
     require(marker.read_text() == dmi_uuid + '\nemulator2.0\n', 'emulator marker mismatch')
 
 
+def validate_secrets(secrets):
+    """Validate fresh software fixtures without printing private input values."""
+    require(isinstance(secrets, dict), 'invalid dedicated secret schema')
+    for name, uid in ((NAME, UID), ('lp61other', OTHER)):
+        account = secrets.get(name)
+        require(isinstance(account, dict) and account.get('uid') == uid,
+                'invalid dedicated account schema')
+        password = account.get('password')
+        require(isinstance(password, str) and 0 < len(password.encode()) <= 512,
+                'invalid private fixture password')
+        for key in ('pin', 'new_pin'):
+            value = account.get(key)
+            require(isinstance(value, str) and re.fullmatch('[0-9]{8,16}', value) is not None,
+                    'fresh software fixture PINs require 8–16 ASCII digits; use new guest-only inputs')
+        require(account['pin'] != account['new_pin'], 'rotation requires distinct fixture PINs')
+    return secrets
+
+
 def guard(*, allow_emulated_tpm=False):
     require(os.getuid() == os.geteuid() == 0, 'guest root required')
     marker = Path('/run/localpin-m61-guard')
@@ -73,7 +91,7 @@ def guard(*, allow_emulated_tpm=False):
     secret = WORK / 'secrets.json'
     info = secret.stat()
     require(info.st_uid == 0 and stat.S_IMODE(info.st_mode) == 0o600, 'private dedicated secrets required')
-    return json.loads(secret.read_text())
+    return validate_secrets(json.loads(secret.read_text()))
 
 
 def frame(value):

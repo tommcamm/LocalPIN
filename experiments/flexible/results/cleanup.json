@@ -1,0 +1,17 @@
+{
+  "phase": "normal-clone-cleanup",
+  "passed": true,
+  "candidate": "0.1.0-0.1.alpha1.vm84.1.fc44",
+  "stock_policy_restored": true,
+  "no_live_account_authority_present": true,
+  "package_absent": true,
+  "temporary_guest_ssh_key_removed": true,
+  "guarded_task_clone_domain_volume_and_private_emulator_removed": true,
+  "temporary_host_access_and_recovery_secret_removed": true,
+  "original_vm_remains_defined_and_off": true,
+  "private_host_diagnostics_screenshots_and_task_archives_removed": true,
+  "raw_authentication_material_exported": false,
+  "original_and_other_preexisting_domains_only": true,
+  "both_preexisting_domains_off": true,
+  "exact_task_disk_volume_absent": true
+}

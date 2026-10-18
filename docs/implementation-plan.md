@@ -506,8 +506,8 @@ TPM numeric 4–16, software numeric 8–16 and optional printable-ASCII passcod
 8–64. Recommend 6/10 numeric digits by backend and 12+ passcode characters;
 users enter any permitted length. Existing six-digit software credentials
 continue working with upgrade advice. New changes/migrations enforce the target
-policy. [Feature validation](development/flexible-credentials.md) records the
-current source checks and outstanding installed evidence separately.
+policy. [Feature validation](development/flexible-credentials.md) records source
+checks, installed candidate evidence and remaining release gates separately.
 
 - Share type selection, protection/range guidance, masked new-credential entry,
   confirmation and advisory predictable-choice warnings across management and

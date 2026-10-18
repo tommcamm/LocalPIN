@@ -1,0 +1,265 @@
+{
+  "candidate": "0.1.0-0.1.alpha1.vm84.1.fc44",
+  "rpm_sha256": "4f3294de165d516661a2b9e5ac61ebf17757be1468f6fb3273893f3755214268",
+  "raw_private_material_exported": false,
+  "observations": [
+    {
+      "phase": "pin",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "native_password_tally_unchanged": true
+      },
+      "case": "legacy-pin",
+      "candidate": "0.1.0-0.1.alpha1.vm83.11.fc44"
+    },
+    {
+      "phase": "password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false
+      },
+      "case": "legacy-password",
+      "candidate": "0.1.0-0.1.alpha1.vm83.11.fc44"
+    },
+    {
+      "phase": "pin",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "native_password_tally_unchanged": true
+      },
+      "case": "software10-pin",
+      "candidate": "0.1.0-0.1.alpha1.vm84.1.fc44"
+    },
+    {
+      "phase": "password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false
+      },
+      "case": "software10-password",
+      "candidate": "0.1.0-0.1.alpha1.vm84.1.fc44"
+    },
+    {
+      "phase": "pin",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "native_password_tally_unchanged": true
+      },
+      "case": "spaced-software-pin",
+      "candidate": "0.1.0-0.1.alpha1.vm84.1.fc44"
+    },
+    {
+      "phase": "pin",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "native_password_tally_unchanged": true
+      },
+      "case": "digit-passcode-pin",
+      "candidate": "0.1.0-0.1.alpha1.vm84.1.fc44"
+    },
+    {
+      "phase": "pin",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "native_password_tally_unchanged": true
+      },
+      "case": "long-software-pin",
+      "candidate": "0.1.0-0.1.alpha1.vm84.1.fc44"
+    },
+    {
+      "phase": "password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false
+      },
+      "case": "overlapping-password",
+      "candidate": "0.1.0-0.1.alpha1.vm84.1.fc44"
+    },
+    {
+      "phase": "password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false
+      },
+      "case": "cooldown-password",
+      "candidate": "0.1.0-0.1.alpha1.vm84.1.fc44"
+    },
+    {
+      "phase": "unlock-existing",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false
+      },
+      "case": "post-cooldown-idle-unlock",
+      "candidate": "0.1.0-0.1.alpha1.vm84.1.fc44"
+    },
+    {
+      "phase": "pin",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "native_password_tally_unchanged": true
+      },
+      "case": "tpm4-pin",
+      "candidate": "0.1.0-0.1.alpha1.vm84.1.fc44"
+    },
+    {
+      "phase": "pin",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "native_password_tally_unchanged": true
+      },
+      "case": "tpm16-pin",
+      "candidate": "0.1.0-0.1.alpha1.vm84.1.fc44"
+    },
+    {
+      "phase": "pin",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "native_password_tally_unchanged": true
+      },
+      "case": "spaced-tpm-pin",
+      "candidate": "0.1.0-0.1.alpha1.vm84.1.fc44"
+    },
+    {
+      "phase": "password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false
+      },
+      "case": "spaced-tpm-password",
+      "candidate": "0.1.0-0.1.alpha1.vm84.1.fc44"
+    },
+    {
+      "phase": "pin",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "native_password_tally_unchanged": true
+      },
+      "case": "post-reboot-spaced-tpm-pin",
+      "candidate": "0.1.0-0.1.alpha1.vm84.1.fc44"
+    },
+    {
+      "phase": "password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false
+      },
+      "case": "post-reboot-password",
+      "candidate": "0.1.0-0.1.alpha1.vm84.1.fc44"
+    },
+    {
+      "phase": "password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false
+      },
+      "case": "disabled-password",
+      "candidate": "0.1.0-0.1.alpha1.vm84.1.fc44"
+    },
+    {
+      "phase": "pin",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": true,
+        "locked_before_enter": true,
+        "native_password_tally_unchanged": true
+      },
+      "case": "fresh-software8-pin",
+      "candidate": "0.1.0-0.1.alpha1.vm84.1.fc44"
+    },
+    {
+      "phase": "recovery",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false,
+        "wrong_candidate_denied": true,
+        "same_greeter_after_denial": true,
+        "gui_submissions": 2,
+        "native_auth_failure_events_before": 0,
+        "native_auth_failure_events_after_denial": 1,
+        "native_failure_journal_greeter_verified": true,
+        "stock_password_stack": false
+      },
+      "case": "missing-module-password-fallback",
+      "candidate": "0.1.0-0.1.alpha1.vm84.1.fc44"
+    },
+    {
+      "phase": "unlock-existing",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false
+      },
+      "candidate": "0.1.0-0.1.alpha1.vm84.1.fc44",
+      "case": "after-console-recovery-password"
+    },
+    {
+      "phase": "restored-password",
+      "passed": true,
+      "selinux": "Enforcing",
+      "observations": {
+        "unlocked": true,
+        "enter_required_observed": false
+      },
+      "candidate": "0.1.0-0.1.alpha1.vm84.1.fc44",
+      "case": "ui-erased-password"
+    }
+  ]
+}

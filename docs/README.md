@@ -50,7 +50,7 @@ and threat model. [Architecture decision records](adr/) explain design contracts
 The retained [implementation plan](implementation-plan.md) tracks development
 work and remaining milestones. [Flexible credentials](adr/0021-flexible-credentials.md)
 defines current numeric/passcode policy; its [validation record](development/flexible-credentials.md)
-separates source checks from outstanding installed acceptance.
+separates source checks, installed evidence and remaining release gates.
 
 | Component | Responsibility |
 | --- | --- |

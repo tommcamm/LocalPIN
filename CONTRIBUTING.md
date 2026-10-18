@@ -130,6 +130,7 @@ python3 -m unittest discover -s tools/tests -p 'test_*.py' -v
 python3 -m unittest discover -s experiments/m8 -p 'test_*.py' -v
 python3 -m unittest discover -s experiments/m82 -p 'test_*.py' -v
 python3 -m unittest discover -s experiments/m83 -p 'test_*.py' -v
+python3 -m unittest discover -s experiments/flexible -p 'test_*.py' -v
 cargo build --workspace --all-features --release --locked
 ```
 

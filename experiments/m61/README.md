@@ -43,8 +43,17 @@ set them through private `chpasswd` stdin, and store only in guest-root-private
 ```
 
 The placeholders are a schema, not usable fixture secrets. PIN values must be
-six ASCII digits. Keep this file and all real account/credential records out of
-the repository and exports. Establish a genuine KDE/Wayland desktop for
+distinct strings of 8–16 ASCII digits for fresh software enrollment; generate
+10 digits by default. Choose values that do not trigger the predictable-choice
+advisory, since this fixture's fixed PTY script does not select its override.
+The guard rejects old six-digit fixture inputs before changing guest state.
+Historical results under `results/` describe the original six-digit build and
+are not evidence for the current credential policy. Generate fresh private
+inputs for a new run; do not edit those records or reuse a legacy credential as
+a fresh enrollment fixture.
+
+Keep this file and all real account/credential records out of the repository
+and exports. Establish a genuine KDE/Wayland desktop for
 `lp61test` through the guest's stock login manager. The recorded run used
 clone-only autologin; a declared logind fixture was not substituted for a desktop.
 Confirm `Desktop=KDE`, class `user`, a seat, a live user manager and actual
