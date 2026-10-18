@@ -23,7 +23,7 @@ trait Pam {
     /// Require the fixed service and an existing non-root own-user target.
     fn supported(&self) -> bool;
     /// Clear any old token, capture a fresh echo-off response and copy it to PAM.
-    /// Only an exact six-digit candidate is returned to the broker boundary.
+    /// Only a bounded printable ASCII candidate reaches the profile-routing boundary.
     fn capture(&mut self) -> Option<Pin>;
 }
 
@@ -81,7 +81,7 @@ mod tests {
         };
         assert_eq!(authenticate(&mut pam, |_| true), SUCCESS);
         assert_eq!(authenticate(&mut pam, |_| false), IGNORE);
-        pam.candidate = b"ordinary password";
+        pam.candidate = b"bad\xffpassword";
         assert_eq!(
             authenticate(&mut pam, |_| panic!("password reached broker")),
             IGNORE

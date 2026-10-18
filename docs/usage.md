@@ -2,8 +2,8 @@
 
 [Documentation](README.md) · [Installation and recovery](integration-administration.md)
 
-LocalPIN adds a six-digit PIN to the lock screen of an already running local
-Fedora KDE 44 x86_64 session. Your account password remains the recovery route.
+LocalPIN adds a numeric PIN or optional passcode to the lock screen of an
+already running local Fedora KDE 44 x86_64 session. Your account password remains the recovery route.
 Initial login, text consoles, SSH, sudo, polkit and disk encryption keep their
 existing authentication requirements.
 
@@ -77,7 +77,7 @@ valid. An expired or changed trial requires fresh testing. The final prompts
 record your explicit attestation of real tests; setup cannot observe or perform
 the console rehearsal and does not treat your answers as automated evidence.
 
-## Enroll your PIN
+## Enroll your credential
 
 For manual enrollment, open a foreground terminal in your own eligible local KDE
 session. Run own-user commands as yourself, without `sudo`:
@@ -99,9 +99,32 @@ does **not** fall back to software if the TPM is unsuitable. Software enrollment
 always requires your explicit choice and confirmation. A detected TPM device
 alone does not establish that enrollment will work.
 
-At the prompts, confirm the operation by typing `yes`, enter your existing
-account password, then enter and confirm a PIN containing exactly six ASCII
-digits (`0`–`9`). Leading zeroes are valid. Input is private and is not echoed.
+Choose the credential type, then enter and confirm it at the length you prefer:
+
+| Type | TPM protection | Software protection | Recommendation |
+| --- | --- | --- | --- |
+| Numeric PIN | 4–16 digits | 8–16 digits | 6 with TPM; 10 with software |
+| Optional passcode | 8–64 characters | 8–64 characters | 12+ characters |
+
+Numeric PINs accept ASCII `0`–`9` and preserve leading zeroes. Passcodes accept
+printable ASCII, including spaces; leading/trailing spaces and case are kept
+exactly. Unicode and control characters are unsupported. Explicitly selected
+passcodes may contain only digits. There are no mandatory uppercase/symbol
+rules, generated values or separate length picker.
+
+The same form serves setup, enrollment, changes and protection migration. It
+shows your protection, allowed range and recommendation, then one `*` for each
+new-credential character. Backspace edits and Ctrl-U clears the entry. Account
+passwords remain fully hidden. A predictable-choice warning defaults to choosing
+again; **Use anyway** explicitly accepts it. Warnings never print the secret.
+Preparation, including retries, expires after five minutes.
+
+After preparing and confirming your credential, confirm the operation by typing
+`yes`, then verify your existing account password. The CLI opens a fresh broker
+connection for verification and saves promptly within its short authorization
+grant. Cancellation or a failed password attempt erases the prepared secret;
+retry the full preparation. The prepared credential is sent only after password
+verification succeeds.
 
 Enter secrets only at the interactive prompts. Arguments, environment variables,
 pipes and redirected input are unsupported; the CLI requires a real foreground
@@ -123,21 +146,24 @@ runbook's [trial and activation procedure](integration-administration.md#test-an
 Once trial or active integration permits PIN use:
 
 1. Lock your existing KDE session normally.
-2. Type the PIN into the existing lock-screen field, which may still say
+2. Type the PIN or passcode into the existing lock-screen field, which may still say
    **Password**.
-3. Press **Enter**. LocalPIN does not submit automatically after the sixth digit.
+3. Press **Enter**. LocalPIN never submits automatically at an expected length.
 
 There is no separate PIN selector. You can enter your full account password in
-the same field. A non-PIN input goes through the password route; an unsuccessful
-PIN route also continues to password authentication with the submitted input.
+the same field. Only input matching your enrolled credential's exact length and
+format is tried as LocalPIN. Other input goes through the password route; an
+unsuccessful LocalPIN route continues to password authentication with the exact
+submitted bytes, preserving spaces and case.
 After a wrong PIN, clear the field and enter your full password on the next
 attempt. Password fallback remains subject to normal account restrictions and
 native lockout policy.
 
 ## Cooldowns and account policy
 
-For eligible PIN verification, LocalPIN permits up to five submitted six-digit
-attempts within a rolling minute. The fifth submission is allowed and starts a
+For eligible credential verification, LocalPIN permits up to five submitted
+attempts matching the enrolled exact length/format within a rolling minute.
+The fifth submission is allowed and starts a
 five-minute PIN cooldown. A successful PIN verification durably resets
 LocalPIN's attempt history and cooldown. Once an attempt is durably reserved,
 cancellation or a backend error does not refund it. Restarting the service or
@@ -145,7 +171,9 @@ rebooting does not reset the recorded budget. Use your full password during
 cooldown and check `localpin doctor` for its remaining duration.
 
 Because the field is shared, a wrong PIN can count as a native password failure,
-and a six-digit account password can consume a PIN attempt. PIN success never
+and an account password matching your enrolled type and exact length can consume
+a LocalPIN attempt before password fallback. With TPM protection that can also
+consume shared TPM dictionary-attack allowance. PIN success never
 clears native password or biometric failures. Successful password or biometric
 authentication clears them through the reviewed native accounting path; an
 unavailable fingerprint sensor or service does not add a false failure. PIN use
@@ -160,10 +188,10 @@ not sufficient.
 
 | Task | Command | Result |
 | --- | --- | --- |
-| Change the PIN | `localpin change` | Prompts for a new PIN on the currently enrolled backend. |
+| Change the PIN or passcode | `localpin change` | Select either type on the currently enrolled backend. |
 | Stop using your PIN | `localpin disable` | Disables your credential; use your account password. |
-| Move to TPM protection | `localpin migrate --backend tpm2-required` | Replaces the existing credential with a new TPM-backed PIN. |
-| Move to software protection | `localpin migrate --backend software` | Replaces the existing credential with a new software PIN after explicit acceptance. |
+| Move to TPM protection | `localpin migrate --backend tpm2-required` | Replaces the existing credential with a new TPM-backed PIN or passcode. |
+| Move to software protection | `localpin migrate --backend software` | Replaces the existing credential with a new software PIN or passcode after explicit acceptance. |
 
 `change`, `disable` and `migrate` require an existing enrollment. Use `enroll`
 only when no PIN is enrolled. Migration accepts only `tpm2-required` or
@@ -172,6 +200,12 @@ use `change` to replace a PIN on the same backend. If an enrolled TPM is missing
 reset or replaced, use your password and arrange an explicit migration or
 recovery. LocalPIN does not maintain a software PIN fallback alongside a TPM
 credential.
+
+Changes and migration default to your existing type; you can select the other
+type in the form. Every new credential follows its target backend's current
+limits. Existing six-digit software PINs remain usable; status and management
+recommend `localpin change` to choose 8–16 digits (suggest 10), or a passcode.
+Package updates do not silently change or discard that credential.
 
 Own-user disable affects your credential, not the system's desktop integration.
 To enroll again after disabling it, use the enrollment procedure while the
@@ -188,8 +222,9 @@ localpin integration status
 
 `status` summarizes your enrollment, availability, backend, cooldown and
 integration. `doctor` adds suggested next steps. Both accept `--json` for
-nonsecret, versioned output. `integration status` inspects the desktop gate even
-when the broker cannot be reached.
+nonsecret schema-2 output, including your credential type, exact length and
+policy version, plus legacy software replacement advice. `integration status`
+inspects the desktop gate even when the broker cannot be reached.
 
 Read these fields separately:
 
@@ -210,7 +245,7 @@ Read these fields separately:
 | Broker unavailable | Use your password and ask the administrator to check the LocalPIN service. Enrollment cannot start it or repair its state. |
 | `session` or an operation is forbidden | Use your own eligible local KDE session and run own-user commands without `sudo`. |
 | Foreground terminal required | Run interactively in a terminal, without a pipe, redirected stdin or a background job. |
-| PIN format or confirmation error | Restart the operation and enter the same six ASCII digits at both PIN prompts. |
+| Credential format or confirmation error | Follow the displayed range and character rules and re-enter the same value at both prompts. Spaces and case are significant. |
 | Password rejected | The credential was not changed. Use the correct account password and respect native lockout; ask the administrator about account restrictions if necessary. |
 | `backend` | Ask the administrator to inspect TPM usability, or explicitly select software protection if you accept its tradeoff. |
 | `account-unsupported` | Ask the administrator to check local account compatibility and provisioning. Enrollment cannot create the privileged baseline. |

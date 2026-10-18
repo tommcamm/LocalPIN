@@ -36,7 +36,7 @@ CONFIRMATIONS = {
     'Check system readiness with administrator access?': 'readiness',
     'Have you successfully rehearsed administrator-console recovery for this installed package BEFORE the final/current preparation and enrollment?': 'prior-console-recovery',
     'Apply these system changes for your account?': 'apply-preparation',
-    'Create a new PIN for this account?': 'active-new-pin',
+    'Create a new credential for this account?': 'active-new-pin',
     'Start a new ten-minute desktop trial?': 'start-trial',
     'Have you performed a real PIN unlock successfully during THIS trial?': 'pin-unlock-confirmation',
     'Have full-password unlock and the applicable desktop failure checks passed during THIS trial?': 'password-failure-confirmation',
@@ -45,10 +45,12 @@ CONFIRMATIONS = {
 PRIVATE_PROMPTS = {
     '[sudo] password for lp61test: ': ('sudo-password', 'password'),
     'Existing account password: ': ('account-password', 'password'),
-    'New six-digit PIN: ': ('new-pin', 'pin'),
-    'Confirm new PIN: ': ('confirm-pin', 'pin'),
-    "Create or replace this account's TPM PIN credential? Type yes: ": ('confirm-tpm-enrollment', None),
-    "Create or replace this account's software PIN credential? Type yes: ": ('confirm-software-enrollment', None),
+    'New PIN      ': ('new-pin', 'pin'),
+    'New passcode      ': ('new-passcode', 'pin'),
+    'Confirm passcode  ': ('confirm-passcode', 'pin'),
+    'Confirm PIN  ': ('confirm-pin', 'pin'),
+    "Create or replace this account's TPM credential? Type yes: ": ('confirm-tpm-enrollment', None),
+    "Create or replace this account's software credential? Type yes: ": ('confirm-software-enrollment', None),
     "Disable this account's LocalPIN credential? Type yes: ": ('confirm-disable', None),
 }
 FIXED_MESSAGES = {
@@ -56,9 +58,9 @@ FIXED_MESSAGES = {
     'accounting_handoff': 'One-time maintenance needed: preserve native password-failure counters',
     'console_recovery_handoff': 'Next: rehearse recovery from an administrator TEXT CONSOLE',
     'active_noop': 'Desktop integration is already active. Setup will preserve it;',
-    'active_new_pin_ready': 'Your new PIN is ready. Desktop integration remains active.',
+    'active_new_pin_ready': 'Your new credential is ready. Desktop integration remains active.',
     'activated': 'LocalPIN is active. Lock your KDE session,',
-    'enrollment_retained': '[3/5] Your committed PIN enrollment is retained.',
+    'enrollment_retained': '[3/5] Your committed credential enrollment is retained.',
     'account_unavailable': 'The broker cannot currently establish an available PIN',
     'trial_changed': 'The trial expired or enrollment changed.',
     'administrator_recovery_required': 'Existing setup, package, account, or activation state needs administrator recovery.',
@@ -78,6 +80,13 @@ def prompt(data):
     """Pure bounded classifier; never return transcript excerpts or credentials."""
     require(len(data) <= MAX_LOG, 'oversized private terminal transcript')
     text = normalize(data)
+    for default in ('1', '2'):
+        if text.endswith('Type [' + default + '] (q to cancel): '):
+            return {'id': 'credential-type', 'kind': 'choice',
+                    'answers': {'': 'default', '1': 'numeric-pin', '2': 'passcode', 'q': 'cancel'}}
+    if text.endswith('Choice [1] (q to cancel): '):
+        return {'id': 'predictability-warning', 'kind': 'choice',
+                'answers': {'': 're-enter', '1': 're-enter', '2': 'use-anyway', 'q': 'cancel'}}
     for suffix, (identifier, secret) in PRIVATE_PROMPTS.items():
         if text.endswith(suffix):
             return {'id': identifier, 'kind': 'private', 'secret_selector': secret,
@@ -94,14 +103,14 @@ def prompt(data):
         identifier = CONFIRMATIONS.get(heading)
         if identifier is not None and options != ['  1. Yes', '  2. No / pause']:
             identifier = None
-        if heading == 'PIN protection' and options == [
+        if heading == 'Credential protection' and options == [
                 '  1. TPM 2.0 — hardware bound; requires a separately validated TPM deployment',
                 '  2. Software — no TPM binding; copied verifier data can be guessed offline']:
             identifier = 'backend'
         elif heading == 'What would you like to do?' and options == [
                 '  1. Set up or resume setup', '  2. Check status',
-                '  3. Diagnose a problem', '  4. Change my PIN',
-                '  5. Switch PIN protection', '  6. Disable my PIN', '  7. Exit']:
+                '  3. Diagnose a problem', '  4. Change my credential',
+                '  5. Switch protection', '  6. Disable my credential', '  7. Exit']:
             identifier = 'menu'
         if identifier is not None:
             answers = ({'1': 'tpm2-required', '2': 'software', 'q': 'cancel'}

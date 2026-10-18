@@ -1,7 +1,10 @@
 //! Real controlling-terminal regression; no broker, PAM or account is used.
 
 use localpin_protocol::transport::Deadline;
-use localpinctl::{terminal::Terminal, workflow::confirm_recovery};
+use localpinctl::{
+    terminal::{Conversation, Terminal},
+    workflow::confirm_recovery,
+};
 use std::process::Command;
 
 // The installed CLI is single-threaded. A libtest main thread would receive
@@ -9,12 +12,33 @@ use std::process::Command;
 fn main() {
     if let Some(kind) = std::env::var_os("LOCALPIN_CLI_JOB_CONTROL_CHILD") {
         let mut terminal = Terminal::open().unwrap();
-        if kind == "choice" {
+        if kind == "form" {
+            assert!(
+                localpinctl::workflow::prepare_mutation(
+                    &mut terminal,
+                    localpin_protocol::EnrollmentAction::Rotate,
+                    Some(localpin_protocol::Backend::Software),
+                    None,
+                )
+                .unwrap()
+                .is_some()
+            );
+        } else if kind == "choice" {
             assert!(
                 terminal
                     .choice(
                         "Choose [1]: ",
                         1,
+                        Deadline::after(std::time::Duration::from_secs(10))
+                    )
+                    .is_err()
+            );
+        } else if kind == "masked" {
+            assert!(
+                terminal
+                    .masked(
+                        "New credential: ",
+                        64,
                         Deadline::after(std::time::Duration::from_secs(10))
                     )
                     .is_err()

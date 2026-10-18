@@ -162,7 +162,12 @@ fn actual(connection: &mut Connection, event: Event, now: u64) -> Outcome {
         } else {
             Eligibility::Eligible
         },
-        matches!(event, Begin | DeniedBegin).then_some(Issued::Verify(id(2))),
+        matches!(event, Begin | DeniedBegin).then_some(Issued::Verify {
+            challenge: id(2),
+            generation: 1,
+            backend: Backend::Tpm,
+            profile: CredentialProfile::legacy(),
+        }),
     );
     match result {
         Ok(ConnectionAction::ReadStatus { uid: 1000 }) => Outcome::Status,

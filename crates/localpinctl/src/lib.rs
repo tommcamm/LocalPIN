@@ -23,7 +23,7 @@ pub enum CliError {
     Process,
     /// User declined confirmation, interrupted input, or closed the terminal.
     Cancelled,
-    /// Entered PIN did not satisfy the six-ASCII-digit format.
+    /// Entered credential did not satisfy its selected policy.
     PinFormat,
     /// PIN confirmation mismatched.
     Confirmation,
@@ -65,8 +65,8 @@ impl fmt::Display for CliError {
             Self::Terminal => "a real foreground terminal is required; secrets cannot be read from stdin or a pipe",
             Self::Process => "process secret-protection setup failed; no interactive input was accepted",
             Self::Cancelled => "operation cancelled; no success was confirmed",
-            Self::PinFormat => "the new PIN must contain exactly six ASCII digits",
-            Self::Confirmation => "PIN confirmation did not match; retry the operation",
+            Self::PinFormat => "the credential does not meet the selected type and protection policy",
+            Self::Confirmation => "credential confirmation did not match; retry the operation",
             Self::InputTooLong => "interactive input exceeded the supported length",
             Self::Expired => "operation expired; start again for fresh password authorization",
             Self::Service => "the protected LocalPIN service is unavailable; ask the administrator to inspect it",

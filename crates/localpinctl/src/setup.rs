@@ -116,7 +116,7 @@ fn ready(report: &SetupReport, ui: &mut impl Ui) -> Result<(), CliError> {
             "One-time maintenance needed: preserve native password-failure counters while moving them to persistent storage. This existing installation requires the administrator procedure; setup cannot safely schedule it in the reported state.",
         ),
         Blocker::AccountingMaintenance => Some(
-            "Password-accounting maintenance is pending, failed, or interrupted. Setup will not schedule another migration or enroll a PIN. Use the administrator recovery procedure to inspect the protected maintenance state.",
+            "Password-accounting maintenance is pending, failed, or interrupted. Setup will not schedule another migration or enroll a credential. Use the administrator recovery procedure to inspect the protected maintenance state.",
         ),
         Blocker::Multiuser => Some(
             "This installation manages other accounts. The desktop-owner wizard cannot replace that configuration. Use the administrator runbook with the complete account list.",
@@ -169,7 +169,8 @@ fn pause(ui: &mut impl Ui) -> Result<(), CliError> {
 
 fn drive(host: &mut impl Host, ui: &mut impl Ui) -> Result<(), CliError> {
     ui.say("LocalPIN is experimental. Start in a disposable Fedora KDE VM; keep your full password and an administrator console available.")?;
-    ui.say("Setup uses sudo for fixed administrator steps. Creating a PIN separately requires fresh account-password verification; sudo approval does not replace it.")?;
+    ui.say("Setup uses sudo for fixed administrator steps. Creating a credential separately requires fresh account-password verification; sudo approval does not replace it.")?;
+    ui.say("An account password matching your LocalPIN credential’s exact length and format can consume a LocalPIN attempt, and potentially TPM allowance, before password fallback. Keep the full-password recovery route available.")?;
     if !ui.confirm("Check system readiness with administrator access?")? {
         return pause(ui);
     }
@@ -181,7 +182,7 @@ fn drive(host: &mut impl Host, ui: &mut impl Ui) -> Result<(), CliError> {
         && !report.trial_valid
     {
         ui.say("Your system needs one-time maintenance to preserve every account's password-failure counters in persistent storage before PIN setup.")?;
-        ui.say("Save your work now. After approval, the maintenance service will log out all users, stop running services and background jobs, and briefly stop authentication in this boot. Normal desktop services will restart afterward; background jobs may need restarting. Log back into KDE with your full account password; setup will reopen automatically. No PIN has been created yet.")?;
+        ui.say("Save your work now. After approval, the maintenance service will log out all users, stop running services and background jobs, and briefly stop authentication in this boot. Normal desktop services will restart afterward; background jobs may need restarting. Log back into KDE with your full account password; setup will reopen automatically. No credential has been created yet.")?;
         if !ui.confirm(
             "Have you saved your work, and approve logging out all users and stopping services and background jobs for this maintenance?",
         )? {
@@ -193,11 +194,11 @@ fn drive(host: &mut impl Host, ui: &mut impl Ui) -> Result<(), CliError> {
     ready(&report, ui)?;
     if report.phase == Phase::Active {
         if report.enrolled {
-            ui.say("Desktop integration is already active. Setup will preserve it; use the menu to change or disable your PIN.")?;
+            ui.say("Desktop integration is already active. Setup will preserve it; use the menu to change or disable your credential.")?;
             return Ok(());
         }
-        ui.say("Desktop integration is already active, but this account has no PIN. Creating a new PIN preserves the active integration.")?;
-        if !ui.confirm("Create a new PIN for this account?")? {
+        ui.say("Desktop integration is already active, but this account has no credential. Creating a new credential preserves the active integration.")?;
+        if !ui.confirm("Create a new credential for this account?")? {
             return pause(ui);
         }
         let backend = menu::backend(ui)?;
@@ -207,7 +208,7 @@ fn drive(host: &mut impl Host, ui: &mut impl Ui) -> Result<(), CliError> {
             return Err(CliError::SetupReport);
         }
         check_account(host, ui)?;
-        return ui.say("Your new PIN is ready. Desktop integration remains active. Lock your KDE session, enter your PIN and press Enter. Your full account password remains available under normal account policy.");
+        return ui.say("Your new credential is ready. Desktop integration remains active. Lock your KDE session, enter your credential and press Enter. Your full account password remains available under normal account policy.");
     }
     // This is explicitly an operator statement about earlier real testing,
     // never inferred from a disabled gate or a user-writable checkpoint.
@@ -233,7 +234,7 @@ fn drive(host: &mut impl Host, ui: &mut impl Ui) -> Result<(), CliError> {
         }
     }
     if !report.enrolled {
-        ui.say("[3/5] Create your PIN")?;
+        ui.say("[3/5] Create your credential")?;
         let backend = menu::backend(ui)?;
         host.enroll(backend)?;
         report = inspect(host, ui)?;
@@ -241,7 +242,7 @@ fn drive(host: &mut impl Host, ui: &mut impl Ui) -> Result<(), CliError> {
             return Err(CliError::SetupReport);
         }
     } else {
-        ui.say("[3/5] Your committed PIN enrollment is retained.")?;
+        ui.say("[3/5] Your committed credential enrollment is retained.")?;
     }
     check_account(host, ui)?;
     ui.say("[4/5] Test unlocking and recovery")?;
@@ -294,7 +295,7 @@ fn drive(host: &mut impl Host, ui: &mut impl Ui) -> Result<(), CliError> {
     if report.phase != Phase::Active {
         return Err(CliError::SetupReport);
     }
-    ui.say("LocalPIN is active. Lock your KDE session, enter your PIN and press Enter. Your full account password remains available under normal account policy.\nNext time: localpin opens the menu; localpin status checks availability.")
+    ui.say("LocalPIN is active. Lock your KDE session, enter your credential and press Enter. Your full account password remains available under normal account policy.\nNext time: localpin opens the menu; localpin status checks availability.")
 }
 
 pub(crate) fn run() -> Result<(), CliError> {

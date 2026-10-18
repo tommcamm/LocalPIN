@@ -535,6 +535,75 @@ fn dynamic_da_properties_bypass_context_cache() {
 
 #[test]
 #[ignore = "opt-in: starts owned disposable localhost swtpm instances; never opens host TPM"]
+fn flexible_credentials_authorize_exact_bytes_with_version_two_metadata() {
+    use localpin_core::secret::{CredentialKind, CredentialProfile};
+
+    let sim = Simulator::new();
+    sim.command(
+        "tpm2_dictionarylockout",
+        &[
+            "--setup-parameters",
+            "--max-tries",
+            "8",
+            "--recovery-time",
+            "86400",
+            "--lockout-recovery-time",
+            "86400",
+        ],
+    );
+    let budget = localpin_core::limits::ResourceBudget::default();
+    let long = [b'Z'; 64];
+    for (kind, bytes) in [
+        (CredentialKind::NumericPin, b"0001".as_slice()),
+        (CredentialKind::NumericPin, b"0000000000000001"),
+        (CredentialKind::Passcode, b"  Mixed passcode  "),
+        (CredentialKind::Passcode, long.as_slice()),
+    ] {
+        let secret = Pin::parse(bytes).unwrap();
+        let profile = CredentialProfile::for_enrollment(Backend::Tpm2, kind, &secret).unwrap();
+        let credential = sim
+            .operation()
+            .enroll(
+                account(),
+                generation(),
+                &secret,
+                &mut permit(&budget),
+                &mut FixedRandom(0x11),
+            )
+            .unwrap()
+            .with_profile(profile)
+            .unwrap();
+        let encoded = credential.encode().unwrap();
+        let reopened = CredentialRecord::decode(encoded.expose()).unwrap();
+        assert_eq!(reopened.profile(), profile);
+        assert_eq!(
+            invoke(
+                &mut sim.operation().verifier(&reopened, 2),
+                bytes,
+                KdfParameters::ENROLLMENT
+            )
+            .0,
+            AttemptResponse::Success,
+        );
+        if kind == CredentialKind::Passcode {
+            let mut changed = bytes.to_vec();
+            *changed.last_mut().unwrap() = b'0';
+            assert_eq!(
+                invoke(
+                    &mut sim.operation().verifier(&reopened, 2),
+                    &changed,
+                    KdfParameters::ENROLLMENT
+                )
+                .0,
+                AttemptResponse::Mismatch,
+            );
+        }
+    }
+    assert_eq!(sim.budget().counter(), 2);
+}
+
+#[test]
+#[ignore = "opt-in: starts owned disposable localhost swtpm instances; never opens host TPM"]
 fn native_simulator_authorization_identity_budget_and_lifetime() {
     let mut sim = Simulator::new();
     let mut foreign = Simulator::new();

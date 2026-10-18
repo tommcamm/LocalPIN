@@ -11,7 +11,7 @@ use localpin_core::{
     eligibility::{EligibilityAuthority, EligibilityError, EligibilitySnapshot},
     enrollment::{Administrator, EnrollmentMachine, LifecycleAuthority, LifecycleError},
     limits::{ResourceBudget, WorkKind},
-    secret::Pin,
+    secret::{CredentialProfile, Pin},
     throttle::{AttemptResponse, ReserveError},
     types::{AccountId, Backend, Clock, ConnectionId, Incarnation, Randomness, TransactionId, Uid},
 };
@@ -49,6 +49,17 @@ pub struct VerificationDeadlines {
     pub unavailable: Instant,
     /// Extended deadline allowed only for a protected TPM credential.
     pub tpm: Instant,
+}
+
+/// Authoritative protected credential snapshot bound to one short-lived challenge.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct VerificationContext {
+    /// Committed generation at challenge creation.
+    pub generation: u64,
+    /// Pinned backend at challenge creation.
+    pub backend: localpin_protocol::Backend,
+    /// Nonsecret credential format and exact length.
+    pub profile: CredentialProfile,
 }
 
 impl VerificationDeadlines {
@@ -216,6 +227,13 @@ pub trait Engine: Send + Sync {
     fn check(&self, peer: Arc<Peer>, deadline: Instant) -> Result<EligibilitySnapshot, Reason>;
     /// Read sanitized own-account status only.
     fn status(&self, peer: Arc<Peer>, deadline: Instant) -> Status;
+    /// Read a protected credential snapshot without holding a lock over client input.
+    fn challenge(
+        &self,
+        peer: Arc<Peer>,
+        expected: EligibilitySnapshot,
+        deadline: Instant,
+    ) -> Result<VerificationContext, Reason>;
     /// Own one connection-bound fresh-password enrollment conversation.
     fn enroll(
         &self,
@@ -227,10 +245,12 @@ pub trait Engine: Send + Sync {
         channel.fail(ErrorCode::Unavailable)
     }
     /// Reserve, supervise, persist and revalidate before delivering one result.
+    #[allow(clippy::too_many_arguments)]
     fn verify(
         &self,
         peer: Arc<Peer>,
         expected: EligibilitySnapshot,
+        context: VerificationContext,
         pin: Pin,
         deadlines: VerificationDeadlines,
         cancelled: &mut dyn FnMut() -> bool,
@@ -292,6 +312,7 @@ fn unavailable_status(reason: Reason) -> Status {
     Status {
         configured: BackendPreference::Auto,
         enrolled: None,
+        profile: None,
         availability: Availability::Unavailable,
         cooldown_ms: 0,
         integration: Integration::Inactive,
@@ -328,6 +349,31 @@ fn eligibility_reason(error: EligibilityError) -> Reason {
 }
 
 impl Engine for ProtectedEngine {
+    fn challenge(
+        &self,
+        peer: Arc<Peer>,
+        expected: EligibilitySnapshot,
+        deadline: Instant,
+    ) -> Result<VerificationContext, Reason> {
+        peer.ensure_live().map_err(|_| Reason::Session)?;
+        let mut lifecycle = self.authorities.lifecycle();
+        let mut store = self
+            .storage
+            .user(expected.account().uid, lifecycle.as_mut())
+            .map_err(|_| Reason::Storage)?;
+        let credential = store.credential().map_err(|_| Reason::Storage)?;
+        if credential.account() != expected.account() || Instant::now() >= deadline {
+            return Err(Reason::Account);
+        }
+        Ok(VerificationContext {
+            generation: credential.generation().get(),
+            backend: match credential.backend() {
+                Backend::Software => localpin_protocol::Backend::Software,
+                Backend::Tpm2 => localpin_protocol::Backend::Tpm,
+            },
+            profile: credential.profile(),
+        })
+    }
     fn enroll(
         &self,
         peer: Arc<Peer>,
@@ -392,6 +438,7 @@ impl Engine for ProtectedEngine {
         status.availability = Availability::Disabled;
         if state.backend().is_some() {
             let result = (|| {
+                status.profile = Some(store.credential()?.profile());
                 let now = BootClock::new()
                     .map_err(|_| localpin_storage::Error::Time)?
                     .now()
@@ -426,6 +473,7 @@ impl Engine for ProtectedEngine {
         &self,
         peer: Arc<Peer>,
         expected: EligibilitySnapshot,
+        context: VerificationContext,
         pin: Pin,
         deadlines: VerificationDeadlines,
         cancelled: &mut dyn FnMut() -> bool,
@@ -456,6 +504,17 @@ impl Engine for ProtectedEngine {
                 return Err(Reason::Account);
             }
             let credential = store.credential().map_err(|_| Reason::Storage)?;
+            let backend = match credential.backend() {
+                Backend::Software => localpin_protocol::Backend::Software,
+                Backend::Tpm2 => localpin_protocol::Backend::Tpm,
+            };
+            if credential.generation().get() != context.generation
+                || backend != context.backend
+                || credential.profile() != context.profile
+                || !context.profile.matches(&pin)
+            {
+                return Err(Reason::Policy);
+            }
             let parameters = match credential.backend() {
                 Backend::Software => SoftwareVerifier::new(&credential)
                     .map_err(|_| Reason::Backend)?
@@ -751,7 +810,7 @@ fn serve_connection_with_clock(
             socket.write_response(&response, Deadline::at(deadline))?;
             return Ok(());
         }
-        let eligible = if matches!(
+        let mut eligible = if matches!(
             request.request,
             Request::BeginVerify | Request::Verify { .. }
         ) {
@@ -762,17 +821,28 @@ fn serve_connection_with_clock(
         } else {
             None
         };
+        let issued = if matches!(request.request, Request::BeginVerify) {
+            match eligible
+                .and_then(|expected| engine.challenge(peer.clone(), expected, deadline).ok())
+            {
+                Some(context) => Some(Issued::Verify {
+                    challenge: fresh_id().map_err(|_| TransportError::UntrustedPeer)?,
+                    generation: context.generation,
+                    backend: context.backend,
+                    profile: context.profile,
+                }),
+                None => {
+                    eligible = None;
+                    None
+                }
+            }
+        } else {
+            None
+        };
         if matches!(request.request, Request::BeginVerify) {
             challenged = eligible;
         }
         let allowed = eligible.is_some() && (!verifying || eligible == challenged);
-        let issued = if matches!(request.request, Request::BeginVerify) {
-            Some(Issued::Verify(
-                fresh_id().map_err(|_| TransportError::UntrustedPeer)?,
-            ))
-        } else {
-            None
-        };
         let action = match session.accept(
             request,
             clock
@@ -819,12 +889,23 @@ fn serve_connection_with_clock(
                 )?;
                 return Ok(());
             }
-            ConnectionAction::Verify { pin, .. } => {
+            ConnectionAction::Verify {
+                pin,
+                generation,
+                backend,
+                profile,
+                ..
+            } => {
                 let deadlines = VerificationDeadlines::for_request(deadline, lifetime);
                 let mut write_result = Ok(());
                 engine.verify(
                     peer.clone(),
                     eligible.ok_or(TransportError::UntrustedPeer)?,
+                    VerificationContext {
+                        generation,
+                        backend,
+                        profile,
+                    },
                     pin,
                     deadlines,
                     &mut || pending(&monitor),

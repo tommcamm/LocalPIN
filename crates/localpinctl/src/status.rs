@@ -1,10 +1,11 @@
 //! Stable nonsecret presentation separate from the binary wire format.
 
+use localpin_core::secret::{CredentialKind, CredentialProfile};
 use localpin_protocol::integration::Gate;
 use localpin_protocol::{Availability, Backend, BackendPreference, Integration, Reason, Status};
 
 /// JSON status schema version, independent of the IPC version.
-pub const STATUS_SCHEMA_VERSION: u32 = 1;
+pub const STATUS_SCHEMA_VERSION: u32 = 2;
 
 /// Render status without serializing any secret-bearing protocol object.
 pub fn json(status: Option<Status>, doctor: bool) -> String {
@@ -72,9 +73,25 @@ fn json_with_gate(status: Option<Status>, doctor: bool, gate: Gate) -> String {
         "not-established"
     };
     let tested = tested(status, gate);
+    let profile = status.and_then(|s| s.profile).map_or_else(
+        || "null".to_owned(),
+        |profile| {
+            format!(
+                "{{\"kind\":\"{}\",\"length\":{},\"policy_version\":{}}}",
+                kind(profile.kind),
+                profile.length,
+                profile.policy
+            )
+        },
+    );
+    let upgrade = if enrollment_unknown {
+        "null".to_owned()
+    } else {
+        status.is_some_and(upgrade_recommended).to_string()
+    };
     // All interpolated strings are closed enum mappings, not external input.
     format!(
-        "{{\"schema_version\":{STATUS_SCHEMA_VERSION},\"command\":\"{command}\",\"installed\":\"client-present\",\"broker_available\":{},\"enrolled\":{enrolled_state},\"tested\":\"{tested}\",\"active\":{active},\"configured_backend\":\"{configured}\",\"enrolled_backend\":{enrolled_backend},\"availability\":\"{availability}\",\"cooldown_ms\":{cooldown},\"integration\":\"{integration}\",\"tpm_detected\":{detected},\"tpm_usable\":{usable},\"tpm_usability\":\"{usability}\",\"reason\":\"{reason}\"}}",
+        "{{\"schema_version\":{STATUS_SCHEMA_VERSION},\"command\":\"{command}\",\"installed\":\"client-present\",\"broker_available\":{},\"enrolled\":{enrolled_state},\"tested\":\"{tested}\",\"active\":{active},\"configured_backend\":\"{configured}\",\"enrolled_backend\":{enrolled_backend},\"credential_profile\":{profile},\"credential_upgrade_recommended\":{upgrade},\"availability\":\"{availability}\",\"cooldown_ms\":{cooldown},\"integration\":\"{integration}\",\"tpm_detected\":{detected},\"tpm_usable\":{usable},\"tpm_usability\":\"{usability}\",\"reason\":\"{reason}\"}}",
         status.is_some()
     )
 }
@@ -111,6 +128,24 @@ fn text_with_gate(status: Option<Status>, doctor: bool, gate: Gate) -> String {
             "no"
         }
     );
+    if let Some(profile) = status.profile {
+        output.push_str(&format!(
+            "\nCredential: {} · {} {}",
+            match profile.kind {
+                CredentialKind::NumericPin => "Numeric PIN",
+                CredentialKind::Passcode => "Passcode",
+            },
+            profile.length,
+            if profile.kind == CredentialKind::NumericPin {
+                "digits"
+            } else {
+                "characters"
+            }
+        ));
+    }
+    if upgrade_recommended(status) {
+        output.push_str("\nRecommended: replace your legacy six-digit software PIN with 8–16 digits (suggest 10), or an 8–64 character passcode (suggest 12+). Run localpin change.");
+    }
     if doctor {
         output.push_str(&format!(
             "\n\nConfigured backend: {}\nAvailability: {}\nCooldown: {}\nIntegration: {}\nTPM detected: {}; usable: {}\nReason: {}",
@@ -171,7 +206,7 @@ fn next_action(status: Status, gate: Gate) -> &'static str {
             } else if status.enrolled.is_none() {
                 "run localpin setup to prepare your account and create a PIN."
             } else if status.integration == Integration::Active && gate == Gate::Active {
-                "Your PIN is active. Use localpin change to choose a new PIN, or localpin doctor for details."
+                "Your credential is active. Use localpin change to choose a new PIN or passcode, or localpin doctor for details."
             } else if status.integration == Integration::Active && gate == Gate::Trial {
                 "A bounded test window is open. Run localpin setup to finish desktop and password recovery tests before activation."
             } else {
@@ -204,6 +239,18 @@ fn tested(status: Option<Status>, gate: Gate) -> &'static str {
 
 fn enrollment_uninspected(status: Status) -> bool {
     status.availability == Availability::Unavailable && status.enrolled.is_none()
+}
+
+fn kind(value: CredentialKind) -> &'static str {
+    match value {
+        CredentialKind::NumericPin => "numeric-pin",
+        CredentialKind::Passcode => "passcode",
+    }
+}
+
+fn upgrade_recommended(status: Status) -> bool {
+    status.enrolled == Some(Backend::Software)
+        && status.profile == Some(CredentialProfile::legacy())
 }
 
 fn backend(value: Backend) -> &'static str {
@@ -271,6 +318,7 @@ mod tests {
         Status {
             configured: BackendPreference::Tpm,
             enrolled: Some(Backend::Tpm),
+            profile: Some(CredentialProfile::legacy()),
             availability: Availability::Available,
             cooldown_ms: 0,
             integration: Integration::Inactive,
@@ -280,10 +328,27 @@ mod tests {
         }
     }
     #[test]
+    fn legacy_software_credential_is_usable_with_upgrade_advice() {
+        let mut status = enrolled();
+        status.enrolled = Some(Backend::Software);
+        let report = json(Some(status), false);
+        assert!(report.contains("\"credential_upgrade_recommended\":true"));
+        assert!(text(Some(status), false).contains("legacy six-digit software PIN"));
+        status.profile = Some(CredentialProfile {
+            kind: CredentialKind::Passcode,
+            length: 14,
+            policy: 1,
+        });
+        let report = json(Some(status), false);
+        assert!(report.contains("\"kind\":\"passcode\",\"length\":14"));
+        assert!(report.contains("\"credential_upgrade_recommended\":false"));
+    }
+
+    #[test]
     fn enrolled_is_not_tested_or_active() {
         let report = json(Some(enrolled()), false);
         for field in [
-            "\"schema_version\":1",
+            "\"schema_version\":2",
             "\"installed\":\"client-present\"",
             "\"enrolled\":true",
             "\"tested\":\"not-recorded\"",
@@ -294,8 +359,8 @@ mod tests {
         }
     }
     #[test]
-    fn schema_one_output_remains_byte_compatible() {
-        let expected = "{\"schema_version\":1,\"command\":\"status\",\"installed\":\"client-present\",\"broker_available\":true,\"enrolled\":true,\"tested\":\"not-recorded\",\"active\":false,\"configured_backend\":\"tpm2-required\",\"enrolled_backend\":\"tpm2\",\"availability\":\"available\",\"cooldown_ms\":0,\"integration\":\"inactive\",\"tpm_detected\":true,\"tpm_usable\":true,\"tpm_usability\":\"established\",\"reason\":\"none\"}";
+    fn schema_two_reports_the_public_credential_profile() {
+        let expected = "{\"schema_version\":2,\"command\":\"status\",\"installed\":\"client-present\",\"broker_available\":true,\"enrolled\":true,\"tested\":\"not-recorded\",\"active\":false,\"configured_backend\":\"tpm2-required\",\"enrolled_backend\":\"tpm2\",\"credential_profile\":{\"kind\":\"numeric-pin\",\"length\":6,\"policy_version\":0},\"credential_upgrade_recommended\":false,\"availability\":\"available\",\"cooldown_ms\":0,\"integration\":\"inactive\",\"tpm_detected\":true,\"tpm_usable\":true,\"tpm_usability\":\"established\",\"reason\":\"none\"}";
         assert_eq!(json(Some(enrolled()), false), expected);
         assert_eq!(
             json(Some(enrolled()), true),
@@ -315,7 +380,7 @@ mod tests {
         assert!(trial.contains("A bounded test window is open"));
         let active = text_with_gate(Some(status), false, Gate::Active);
         assert!(active.contains("Active: yes"));
-        assert!(active.contains("Your PIN is active"));
+        assert!(active.contains("Your credential is active"));
     }
     #[test]
     fn trial_is_distinct_from_administrator_attested_activation() {
@@ -355,6 +420,7 @@ mod tests {
     fn unavailable_broker_result_does_not_invent_enrollment_or_activation() {
         let mut status = enrolled();
         status.enrolled = None;
+        status.profile = None;
         status.availability = Availability::Unavailable;
         status.reason = Reason::Account;
         status.tpm_usable = false;
@@ -409,6 +475,7 @@ mod tests {
         ] {
             let mut status = enrolled();
             status.enrolled = None;
+            status.profile = None;
             status.availability = Availability::Unavailable;
             status.reason = reason;
             assert!(json(Some(status), true).contains(code));
@@ -422,7 +489,7 @@ mod tests {
     fn status_reports_only_closed_nonsecret_fields() {
         let report = json(Some(enrolled()), true);
         for forbidden in [
-            "pin",
+            "\"pin\":",
             "password",
             "uid",
             "generation",

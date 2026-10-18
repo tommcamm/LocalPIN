@@ -187,7 +187,12 @@ fn transact(
     channel: &mut EnrollmentIo<'_>,
 ) -> Result<(), ErrorCode> {
     let passwords = engine.passwords.as_ref().ok_or(ErrorCode::Unavailable)?;
-    let Request::BeginEnroll { action, backend } = request.request else {
+    let Request::BeginEnroll {
+        action,
+        backend,
+        kind: credential_kind,
+    } = request.request
+    else {
         return Err(ErrorCode::State);
     };
     if request.connection != channel.session.id() || peer.uid() != expected.account().uid.get() {
@@ -229,7 +234,11 @@ fn transact(
         .accept(
             RequestEnvelope {
                 connection: request.connection,
-                request: Request::BeginEnroll { action, backend },
+                request: Request::BeginEnroll {
+                    action,
+                    backend,
+                    kind: credential_kind,
+                },
             },
             started_at,
             Eligibility::Eligible,
@@ -293,8 +302,9 @@ fn transact(
         ConnectionAction::CommitEnrollment {
             context: checked,
             backend,
+            kind: selected_kind,
             pin,
-        } if checked == context => {
+        } if checked == context && Some(selected_kind) == credential_kind => {
             machine
                 .staged_created(binding, connection, channel.now()?, &mut store.lifecycle())
                 .map_err(|_| ErrorCode::Expired)?;
@@ -302,6 +312,12 @@ fn transact(
                 localpin_protocol::Backend::Software => Backend::Software,
                 localpin_protocol::Backend::Tpm => Backend::Tpm2,
             };
+            let profile = localpin_core::secret::CredentialProfile::for_enrollment(
+                selected,
+                selected_kind,
+                &pin,
+            )
+            .map_err(|_| ErrorCode::Protocol)?;
             let kind = if selected == Backend::Software {
                 WorkKind::Enrollment
             } else {
@@ -322,6 +338,7 @@ fn transact(
                     expected.account(),
                     binding.proposed_generation(),
                     selected,
+                    selected_kind,
                     pin,
                     permit,
                     work_deadline,
@@ -330,6 +347,9 @@ fn transact(
                 .map_err(|_| ErrorCode::Unavailable)?;
             let verified = store
                 .stage_credential(credential, |persisted| {
+                    if persisted.profile() != profile {
+                        return Err(localpin_storage::Error::Corrupt);
+                    }
                     let permit = engine
                         .budget
                         .try_work(expected.account().uid, KdfParameters::ENROLLMENT, kind)

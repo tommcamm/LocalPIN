@@ -1,4 +1,4 @@
-use crate::codec::validate_enroll;
+use crate::codec::{validate_enroll, validate_enrollment_kind, validate_profile};
 use crate::wire::*;
 use localpin_core::secret::{Pin, SecretBytes};
 
@@ -54,7 +54,16 @@ pub fn resolve_enrollment_action(
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Issued {
     /// Newly generated verification challenge.
-    Verify(Id),
+    Verify {
+        /// Fresh verification challenge identifier.
+        challenge: Id,
+        /// Protected committed credential generation.
+        generation: u64,
+        /// Actual committed backend.
+        backend: Backend,
+        /// Exact committed credential format.
+        profile: CredentialProfile,
+    },
     /// New enrollment transaction and broker-selected proposed generation.
     Enrollment {
         /// Fresh random transaction identifier.
@@ -116,6 +125,12 @@ pub enum ConnectionAction {
         uid: u32,
         /// Challenge bound to this connection.
         challenge: Id,
+        /// Protected generation bound at challenge issuance.
+        generation: u64,
+        /// Protection backend bound at challenge issuance.
+        backend: Backend,
+        /// Credential profile bound at challenge issuance.
+        profile: CredentialProfile,
         /// Secret candidate, dropped/erased on cancellation.
         pin: Pin,
     },
@@ -125,6 +140,8 @@ pub enum ConnectionAction {
         context: PasswordContext,
         /// Proposed explicit backend.
         backend: Option<Backend>,
+        /// Explicit format bound to this enrollment.
+        kind: Option<CredentialKind>,
         /// Initial enrollment response.
         reply: ResponseEnvelope,
     },
@@ -141,6 +158,8 @@ pub enum ConnectionAction {
         context: PasswordContext,
         /// Explicit selected backend.
         backend: Backend,
+        /// Format bound to the password-authorized enrollment.
+        kind: CredentialKind,
         /// New secret PIN.
         pin: Pin,
     },
@@ -162,6 +181,7 @@ pub enum ConnectionAction {
 struct Enrollment {
     context: PasswordContext,
     backend: Option<Backend>,
+    kind: Option<CredentialKind>,
     expires: u64,
 }
 
@@ -170,6 +190,9 @@ enum State {
     Idle,
     Challenge {
         id: Id,
+        generation: u64,
+        backend: Backend,
+        profile: CredentialProfile,
         expires: u64,
     },
     Verifying {
@@ -322,27 +345,55 @@ impl Connection {
             }
             (State::Idle, Request::BeginVerify) => {
                 require_eligible(eligibility)?;
-                let Some(Issued::Verify(challenge)) = issued else {
+                let Some(Issued::Verify {
+                    challenge,
+                    generation,
+                    backend,
+                    profile,
+                }) = issued
+                else {
                     return Err(ProtocolError::InvalidField);
                 };
                 if challenge == self.id {
                     return Err(ProtocolError::Binding);
                 }
+                if generation == 0 {
+                    return Err(ProtocolError::InvalidField);
+                }
+                validate_profile(profile, backend)?;
                 self.state = State::Challenge {
                     id: challenge,
+                    generation,
+                    backend,
+                    profile,
                     expires: deadline(now, VERIFY_LIFETIME_MS)?,
                 };
                 Ok(ConnectionAction::Reply(self.reply(
                     Response::VerifyChallenge {
                         challenge,
+                        generation,
+                        backend,
+                        profile,
                         valid_for_ms: VERIFY_LIFETIME_MS as u32,
                     },
                 )))
             }
-            (State::Challenge { id, .. }, Request::Verify { challenge, pin }) => {
+            (
+                State::Challenge {
+                    id,
+                    generation,
+                    backend,
+                    profile,
+                    ..
+                },
+                Request::Verify { challenge, pin },
+            ) => {
                 require_eligible(eligibility)?;
                 if id != challenge {
                     return Err(ProtocolError::Binding);
+                }
+                if !profile.matches(&pin) {
+                    return Err(ProtocolError::InvalidField);
                 }
                 self.state = State::Verifying {
                     expires: deadline(now, VERIFY_LIFETIME_MS)?,
@@ -350,12 +401,22 @@ impl Connection {
                 Ok(ConnectionAction::Verify {
                     uid: self.peer_uid,
                     challenge,
+                    generation,
+                    backend,
+                    profile,
                     pin,
                 })
             }
-            (State::Idle, Request::BeginEnroll { action, backend }) => {
+            (
+                State::Idle,
+                Request::BeginEnroll {
+                    action,
+                    backend,
+                    kind,
+                },
+            ) => {
                 require_eligible(eligibility)?;
-                validate_enroll(action, backend)?;
+                validate_enrollment_kind(action, backend, kind)?;
                 let Some(Issued::Enrollment {
                     transaction,
                     generation,
@@ -379,11 +440,13 @@ impl Connection {
                 self.state = State::Password(Enrollment {
                     context,
                     backend,
+                    kind,
                     expires: deadline(now, ENROLLMENT_LIFETIME_MS)?,
                 });
                 Ok(ConnectionAction::StartPassword {
                     context,
                     backend,
+                    kind,
                     reply: self.reply(Response::EnrollmentStarted {
                         transaction,
                         generation,
@@ -429,10 +492,14 @@ impl Connection {
                     return Err(ProtocolError::OutOfOrder);
                 }
                 let backend = enrollment.backend.ok_or(ProtocolError::InvalidField)?;
+                let kind = enrollment.kind.ok_or(ProtocolError::InvalidField)?;
+                CredentialProfile::for_enrollment(core_backend(backend), kind, &pin)
+                    .map_err(|_| ProtocolError::InvalidField)?;
                 self.state = State::Mutating(enrollment);
                 Ok(ConnectionAction::CommitEnrollment {
                     context: enrollment.context,
                     backend,
+                    kind,
                     pin,
                 })
             }
@@ -653,4 +720,11 @@ fn require_eligible(eligibility: Eligibility) -> Result<(), ProtocolError> {
 
 fn deadline(now: u64, interval: u64) -> Result<u64, ProtocolError> {
     now.checked_add(interval).ok_or(ProtocolError::Clock)
+}
+
+fn core_backend(backend: Backend) -> localpin_core::types::Backend {
+    match backend {
+        Backend::Tpm => localpin_core::types::Backend::Tpm2,
+        Backend::Software => localpin_core::types::Backend::Software,
+    }
 }

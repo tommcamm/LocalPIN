@@ -9,6 +9,8 @@ with SELinux enforcing; see the [M8 report](../development/m8-packaging-recovery
 Its unsafe fingerprint/faillock composition remains activation-refused, and M9
 independent review and physical TPM validation remain open.
 
+Credential-format amendment: [ADR 0021](0021-flexible-credentials.md) introduces IPC 2 and exact-profile routing for flexible PINs/passcodes. Original fallback bytes, cumulative deadlines, explicit Enter and native accounting remain required; historical observations below keep their tested scope.
+
 ## Exact policy extension
 
 [ADR 0012](0012-immutable-appliance-account-authority.md) pins the entire measured

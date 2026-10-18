@@ -14,7 +14,7 @@
 use localpin_core::{
     limits::{KdfParameters, MAX_RECORD_BYTES, ResourceBudget, WorkKind, WorkPermit},
     records::CredentialRecord,
-    secret::Pin,
+    secret::{CredentialKind, CredentialProfile, MAX_CREDENTIAL_BYTES, Pin},
     throttle::{BackendFailure, BackendOutcome},
     types::{AccountId, Backend, Generation, Incarnation, Uid},
 };
@@ -37,7 +37,7 @@ use zeroize::Zeroizing;
 pub const MAX_WORKERS: usize = 4;
 const REQUEST_HEADER: usize = 16;
 const RESPONSE_BYTES: usize = 13;
-const ENROLLMENT_BINDING_BYTES: usize = 29;
+const ENROLLMENT_BINDING_BYTES: usize = 32;
 const ENROLLMENT_RESPONSE_HEADER: usize = 17;
 const MAX_ENROLLMENT_RESPONSE: usize = ENROLLMENT_RESPONSE_HEADER + MAX_RECORD_BYTES;
 const POLL_INTERVAL: Duration = Duration::from_millis(2);
@@ -259,11 +259,14 @@ impl WorkerSupervisor {
         account: AccountId,
         generation: Generation,
         backend: Backend,
+        credential_kind: CredentialKind,
         pin: Pin,
         permit: WorkPermit,
         deadline: Instant,
         mut cancelled: impl FnMut() -> bool,
     ) -> Result<CredentialRecord, BackendFailure> {
+        let profile = CredentialProfile::for_enrollment(backend, credential_kind, &pin)
+            .map_err(|_| BackendFailure::Unavailable)?;
         let kind = match backend {
             Backend::Software => WorkKind::Enrollment,
             Backend::Tpm2 => WorkKind::TpmPinDerivation,
@@ -275,7 +278,7 @@ impl WorkerSupervisor {
             return Err(BackendFailure::Unavailable);
         }
         let id = self.next_id().ok_or(BackendFailure::Unavailable)?;
-        let request = encode_enrollment_request(account, generation, backend, &pin, id);
+        let request = encode_enrollment_request(account, generation, backend, profile, &pin, id);
         drop(pin);
         let response = self
             .exchange(
@@ -286,7 +289,7 @@ impl WorkerSupervisor {
                 cancelled,
             )
             .ok_or(BackendFailure::Unavailable)?;
-        decode_enrollment_response(&response, id, account, generation, backend)
+        decode_enrollment_response(&response, id, account, generation, backend, profile)
             .ok_or(BackendFailure::Unavailable)
     }
 
@@ -301,6 +304,9 @@ impl WorkerSupervisor {
         deadline: Instant,
         mut cancelled: impl FnMut() -> bool,
     ) -> BackendOutcome {
+        if !credential.profile().matches(&pin) {
+            return unavailable();
+        }
         let parameters = match parameters(credential) {
             Ok(parameters) => parameters,
             Err(()) => return unavailable(),
@@ -567,12 +573,13 @@ fn encode_record_request(
 ) -> Result<Zeroizing<Vec<u8>>, ()> {
     let record = credential.encode().map_err(|_| ())?;
     let mut output = Zeroizing::new(Vec::with_capacity(
-        REQUEST_HEADER + record.expose().len() + 6,
+        REQUEST_HEADER + record.expose().len() + 2 + pin.expose().len(),
     ));
-    output.extend_from_slice(if trial { b"LPT1" } else { b"LPW1" });
+    output.extend_from_slice(if trial { b"LPT2" } else { b"LPW2" });
     output.extend_from_slice(&id.to_be_bytes());
     output.extend_from_slice(&(record.expose().len() as u32).to_be_bytes());
     output.extend_from_slice(record.expose());
+    output.extend_from_slice(&(pin.expose().len() as u16).to_be_bytes());
     output.extend_from_slice(pin.expose());
     Ok(output)
 }
@@ -593,13 +600,14 @@ fn encode_enrollment_request(
     account: AccountId,
     generation: Generation,
     backend: Backend,
+    profile: CredentialProfile,
     pin: &Pin,
     id: u64,
 ) -> Zeroizing<Vec<u8>> {
     let mut output = Zeroizing::new(Vec::with_capacity(
-        REQUEST_HEADER + ENROLLMENT_BINDING_BYTES + 6,
+        REQUEST_HEADER + ENROLLMENT_BINDING_BYTES + 2 + pin.expose().len(),
     ));
-    output.extend_from_slice(b"LPE1");
+    output.extend_from_slice(b"LPE2");
     output.extend_from_slice(&id.to_be_bytes());
     output.extend_from_slice(&(ENROLLMENT_BINDING_BYTES as u32).to_be_bytes());
     output.extend_from_slice(&account.uid.get().to_be_bytes());
@@ -609,6 +617,8 @@ fn encode_enrollment_request(
         Backend::Tpm2 => 1,
         Backend::Software => 2,
     });
+    output.extend_from_slice(&[profile.policy, profile.kind as u8, profile.length]);
+    output.extend_from_slice(&(pin.expose().len() as u16).to_be_bytes());
     output.extend_from_slice(pin.expose());
     output
 }
@@ -619,6 +629,7 @@ fn decode_enrollment_response(
     account: AccountId,
     generation: Generation,
     backend: Backend,
+    profile: CredentialProfile,
 ) -> Option<CredentialRecord> {
     if bytes.len() < ENROLLMENT_RESPONSE_HEADER
         || bytes.len() > MAX_ENROLLMENT_RESPONSE
@@ -636,6 +647,7 @@ fn decode_enrollment_response(
     if record.account() != account
         || record.generation() != generation
         || record.backend() != backend
+        || record.profile() != profile
         || parameters(&record).ok()? != KdfParameters::ENROLLMENT
     {
         return None;
@@ -652,6 +664,7 @@ enum WorkerRequest {
         account: AccountId,
         generation: Generation,
         backend: Backend,
+        profile: CredentialProfile,
         pin: Pin,
     },
 }
@@ -660,8 +673,8 @@ fn read_request(input: &mut impl Read) -> Result<(u64, WorkerRequest), ()> {
     let mut header = [0; REQUEST_HEADER];
     input.read_exact(&mut header).map_err(|_| ())?;
     let enrollment = match &header[..4] {
-        b"LPW1" | b"LPT1" => false,
-        b"LPE1" => true,
+        b"LPW2" | b"LPT2" => false,
+        b"LPE2" => true,
         _ => return Err(()),
     };
     let id = u64::from_be_bytes(header[4..12].try_into().map_err(|_| ())?);
@@ -673,13 +686,21 @@ fn read_request(input: &mut impl Read) -> Result<(u64, WorkerRequest), ()> {
     {
         return Err(());
     }
-    let mut bytes = Zeroizing::new(vec![0; length + 6]);
+    let mut bytes = Zeroizing::new(vec![0; length]);
     input.read_exact(&mut bytes).map_err(|_| ())?;
+    let mut secret_length = [0; 2];
+    input.read_exact(&mut secret_length).map_err(|_| ())?;
+    let secret_length = usize::from(u16::from_be_bytes(secret_length));
+    if secret_length == 0 || secret_length > MAX_CREDENTIAL_BYTES {
+        return Err(());
+    }
+    let mut secret = Zeroizing::new(vec![0; secret_length]);
+    input.read_exact(&mut secret).map_err(|_| ())?;
     let mut trailing = [0];
     if input.read(&mut trailing).map_err(|_| ())? != 0 {
         return Err(());
     }
-    let pin = Pin::parse(&bytes[length..]).map_err(|_| ())?;
+    let pin = Pin::parse(&secret).map_err(|_| ())?;
     let request = if enrollment {
         let account = AccountId {
             uid: Uid::new(u32::from_be_bytes(bytes[..4].try_into().map_err(|_| ())?))
@@ -696,14 +717,29 @@ fn read_request(input: &mut impl Read) -> Result<(u64, WorkerRequest), ()> {
             2 => Backend::Software,
             _ => return Err(()),
         };
+        let credential_kind = match bytes[30] {
+            1 => CredentialKind::NumericPin,
+            2 => CredentialKind::Passcode,
+            _ => return Err(()),
+        };
+        let profile =
+            CredentialProfile::for_enrollment(backend, credential_kind, &pin).map_err(|_| ())?;
+        if [bytes[29], bytes[30], bytes[31]] != [profile.policy, profile.kind as u8, profile.length]
+        {
+            return Err(());
+        }
         WorkerRequest::Enroll {
             account,
             generation,
             backend,
+            profile,
             pin,
         }
     } else {
         let credential = CredentialRecord::decode(&bytes[..length]).map_err(|_| ())?;
+        if !credential.profile().matches(&pin) {
+            return Err(());
+        }
         parameters(&credential)?;
         WorkerRequest::Record { credential, pin }
     };
@@ -750,10 +786,11 @@ fn dispatch_enrollment(
     account: AccountId,
     generation: Generation,
     backend: Backend,
+    profile: CredentialProfile,
     pin: &Pin,
 ) -> Result<CredentialRecord, ()> {
     let budget = ResourceBudget::default();
-    match backend {
+    let record = match backend {
         Backend::Software => {
             localpin_credentials::enroll(account, generation, pin, &budget).map_err(|_| ())
         }
@@ -776,7 +813,8 @@ fn dispatch_enrollment(
                 )
                 .map_err(|_| ())
         }
-    }
+    }?;
+    record.with_profile(profile).map_err(|_| ())
 }
 
 /// Execute the installed one-shot helper's bounded private stdin/stdout contract.
@@ -810,9 +848,10 @@ pub fn worker_main() -> i32 {
             account,
             generation,
             backend,
+            profile,
             pin,
         } => {
-            let record = dispatch_enrollment(account, generation, backend, &pin);
+            let record = dispatch_enrollment(account, generation, backend, profile, &pin);
             drop(pin);
             let record = record.and_then(|record| record.encode().map_err(|_| ()));
             let mut response = Zeroizing::new(vec![0; ENROLLMENT_RESPONSE_HEADER]);
@@ -927,7 +966,7 @@ mod tests {
         let mut trailing = request.to_vec();
         trailing.push(0);
         assert!(read_request(&mut trailing.as_slice()).is_err());
-        let mut excessive = *b"LPW1\0\0\0\0\0\0\0\x01\0\0\0\0";
+        let mut excessive = *b"LPW2\0\0\0\0\0\0\0\x01\0\0\0\0";
         excessive[12..].copy_from_slice(&((MAX_RECORD_BYTES + 1) as u32).to_be_bytes());
         assert!(read_request(&mut excessive.as_slice()).is_err());
     }
@@ -959,16 +998,26 @@ mod tests {
             credential.account(),
             credential.generation(),
             Backend::Software,
-            &Pin::parse(b"012345").unwrap(),
+            CredentialProfile::for_enrollment(
+                Backend::Software,
+                CredentialKind::NumericPin,
+                &Pin::parse(b"01234567").unwrap(),
+            )
+            .unwrap(),
+            &Pin::parse(b"01234567").unwrap(),
             17,
         );
-        assert_eq!(request.len(), REQUEST_HEADER + ENROLLMENT_BINDING_BYTES + 6);
+        assert_eq!(
+            request.len(),
+            REQUEST_HEADER + ENROLLMENT_BINDING_BYTES + 2 + 8
+        );
         let (
             id,
             WorkerRequest::Enroll {
                 account,
                 generation,
                 backend,
+                profile,
                 pin,
             },
         ) = read_request(&mut request.as_slice()).unwrap()
@@ -979,7 +1028,8 @@ mod tests {
         assert_eq!(account, credential.account());
         assert_eq!(generation, credential.generation());
         assert_eq!(backend, Backend::Software);
-        assert_eq!(pin.expose(), b"012345");
+        assert_eq!(pin.expose(), b"01234567");
+        assert_eq!(profile.length, 8);
         for length in 0..request.len() {
             assert!(read_request(&mut &request[..length]).is_err());
         }
@@ -998,7 +1048,14 @@ mod tests {
         let credential = record(1000);
         let valid = enrollment_response(&credential, 17);
         let decode = |bytes: &[u8], id, account, generation, backend| {
-            decode_enrollment_response(bytes, id, account, generation, backend)
+            decode_enrollment_response(
+                bytes,
+                id,
+                account,
+                generation,
+                backend,
+                credential.profile(),
+            )
         };
         assert!(
             decode(
@@ -1114,7 +1171,8 @@ mod tests {
                     credential.account(),
                     credential.generation(),
                     Backend::Software,
-                    Pin::parse(b"012345").unwrap(),
+                    CredentialKind::NumericPin,
+                    Pin::parse(b"01234567").unwrap(),
                     permit(&budget, 1000),
                     Instant::now() + Duration::from_secs(1),
                     || false,
@@ -1159,7 +1217,8 @@ mod tests {
                     credential.account(),
                     credential.generation(),
                     Backend::Software,
-                    Pin::parse(b"012345").unwrap(),
+                    CredentialKind::NumericPin,
+                    Pin::parse(b"01234567").unwrap(),
                     enrollment_permit(&budget, 1000),
                     start + Duration::from_secs(1),
                     || {
@@ -1214,7 +1273,8 @@ mod tests {
                         credential.account(),
                         credential.generation(),
                         Backend::Software,
-                        Pin::parse(b"012345").unwrap(),
+                        CredentialKind::NumericPin,
+                        Pin::parse(b"01234567").unwrap(),
                         enrollment_permit(&ResourceBudget::default(), 1000),
                         start + Duration::from_millis(deadline),
                         || false,

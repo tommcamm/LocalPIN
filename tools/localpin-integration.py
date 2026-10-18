@@ -53,7 +53,7 @@ BINARIES = [MODULE, *(Path('/usr/libexec/localpin') / n for n in (
 # authority/worker at each operation. They are not an installation fingerprint.
 PROTECTED = [KDE, FINGERPRINT, *(Path('/etc/pam.d') / n for n in PRIVATE),
              Path('/etc/security/faillock.conf')]
-ACCOUNT_MUTATIONS = frozenset(('begin-mutation', 'seal', 'recover', 'cache-window-begin', 'cache-window-finish'))
+ACCOUNT_MUTATIONS = frozenset(('begin-mutation', 'seal', 'recover', 'cache-window-begin', 'cache-window-finish', 'check-credentials'))
 _integration_lock_fd = None
 
 
@@ -837,6 +837,9 @@ def package_resume(state):
     current(state, binaries=False)
     require(upgrade_binding(state) == state.get('upgrade_binding'),
             'account, credential or throttle state changed during package transaction; recovery required')
+    # The new Rust parser validates every selected v1/v2 credential without
+    # cleanup, key derivation or TPM access before any service or gate resumes.
+    run([ACCOUNT, 'check-credentials'])
     state.update(binaries=binary_snapshot())
     save(state)
     units = [name for key, name in [('socket', 'localpin.socket'), ('service', 'localpin.service')]

@@ -91,7 +91,7 @@ fn ready() -> Response {
 }
 
 #[test]
-fn enrollment_change_and_migration_require_password_then_confirmed_new_pin() {
+fn enrollment_change_and_migration_prepare_first_and_send_only_after_password_success() {
     for action in [
         EnrollmentAction::Enroll,
         EnrollmentAction::Rotate,
@@ -103,21 +103,26 @@ fn enrollment_change_and_migration_require_password_then_confirmed_new_pin() {
             ready(),
             Response::Completed(Completion::Enrolled(Backend::Software)),
         ]);
-        let mut terminal =
-            ScriptTerminal::new(&[b"yes", b"synthetic\xffpassword", b"000001", b"000001"]);
+        let mut terminal = ScriptTerminal::new(&[
+            b"",
+            b"0019374820",
+            b"0019374820",
+            b"yes",
+            b"synthetic\xffpassword",
+        ]);
         assert_eq!(
             mutate(&mut client, &mut terminal, action, Some(Backend::Software)),
             Ok(Completion::Enrolled(Backend::Software))
         );
         assert_eq!(client.requests.len(), 3);
         assert!(
-            matches!(&client.requests[0], Request::BeginEnroll { action: actual, backend: Some(Backend::Software) } if *actual == action)
+            matches!(&client.requests[0], Request::BeginEnroll { action: actual, backend: Some(Backend::Software), kind: Some(CredentialKind::NumericPin) } if *actual == action)
         );
         assert!(
             matches!(&client.requests[1], Request::EnrollConversation { transaction, prompt, response } if *transaction == id(2) && *prompt == id(3) && response.expose() == b"synthetic\xffpassword")
         );
         assert!(
-            matches!(&client.requests[2], Request::CommitEnrollment { transaction, pin } if *transaction == id(2) && pin.expose() == b"000001")
+            matches!(&client.requests[2], Request::CommitEnrollment { transaction, pin } if *transaction == id(2) && pin.expose() == b"0019374820")
         );
         assert!(client.closed);
     }
@@ -144,13 +149,13 @@ fn own_user_disable_uses_fresh_password_and_never_requests_a_pin() {
 }
 
 #[test]
-fn rejected_password_never_requests_or_sends_a_pin() {
+fn rejected_password_erases_preparation_without_sending_credential() {
     let mut client = ScriptClient::new(vec![
         begin(),
         prompt(),
         Response::Error(ErrorCode::PasswordRejected),
     ]);
-    let mut terminal = ScriptTerminal::new(&[b"yes", b"wrong-password"]);
+    let mut terminal = ScriptTerminal::new(&[b"", b"019374", b"019374", b"yes", b"wrong-password"]);
     assert_eq!(
         mutate(
             &mut client,
@@ -160,7 +165,7 @@ fn rejected_password_never_requests_or_sends_a_pin() {
         ),
         Err(CliError::PasswordRejected)
     );
-    assert_eq!(terminal.reads, 2);
+    assert_eq!(terminal.reads, 5);
     assert!(client.requests.iter().all(|r| !matches!(
         r,
         Request::CommitEnrollment { .. } | Request::Disable { .. }
@@ -170,9 +175,9 @@ fn rejected_password_never_requests_or_sends_a_pin() {
 }
 
 #[test]
-fn bad_pin_confirmation_cancels_without_commit() {
+fn mismatch_retries_locally_and_cancellation_starts_no_enrollment() {
     let mut client = ScriptClient::new(vec![begin(), prompt(), ready()]);
-    let mut terminal = ScriptTerminal::new(&[b"yes", b"synthetic-password", b"000001", b"000002"]);
+    let mut terminal = ScriptTerminal::new(&[b"", b"019374", b"019375"]);
     assert_eq!(
         mutate(
             &mut client,
@@ -180,14 +185,9 @@ fn bad_pin_confirmation_cancels_without_commit() {
             EnrollmentAction::Enroll,
             Some(Backend::Tpm)
         ),
-        Err(CliError::Confirmation)
+        Err(CliError::Cancelled)
     );
-    assert!(
-        client
-            .requests
-            .iter()
-            .all(|r| !matches!(r, Request::CommitEnrollment { .. }))
-    );
+    assert!(client.requests.iter().all(|r| matches!(r, Request::Cancel)));
     assert!(matches!(client.requests.last(), Some(Request::Cancel)));
     assert!(client.closed);
 }
@@ -217,7 +217,8 @@ fn transaction_mismatch_replayed_prompt_and_expired_authorization_fail_closed() 
         Response::Error(ErrorCode::Expired),
     ] {
         let mut client = ScriptClient::new(vec![begin(), prompt(), invalid]);
-        let mut terminal = ScriptTerminal::new(&[b"yes", b"synthetic-password"]);
+        let mut terminal =
+            ScriptTerminal::new(&[b"", b"019374", b"019374", b"yes", b"synthetic-password"]);
         assert!(
             mutate(
                 &mut client,
@@ -227,7 +228,7 @@ fn transaction_mismatch_replayed_prompt_and_expired_authorization_fail_closed() 
             )
             .is_err()
         );
-        assert_eq!(terminal.reads, 2);
+        assert_eq!(terminal.reads, 5);
         assert!(
             client
                 .requests
@@ -241,7 +242,7 @@ fn transaction_mismatch_replayed_prompt_and_expired_authorization_fail_closed() 
 #[test]
 fn cancellation_before_password_starts_no_enrollment() {
     let mut client = ScriptClient::new(vec![]);
-    let mut terminal = ScriptTerminal::new(&[b"no"]);
+    let mut terminal = ScriptTerminal::new(&[b"q"]);
     assert_eq!(
         mutate(
             &mut client,
@@ -281,6 +282,7 @@ fn auto_and_required_tpm_never_silently_choose_software() {
     let mut status = Status {
         configured: BackendPreference::Auto,
         enrolled: None,
+        profile: None,
         availability: Availability::NotEnrolled,
         cooldown_ms: 0,
         integration: Integration::Inactive,
@@ -321,4 +323,144 @@ fn recovery_account_lookup_accepts_one_exact_non_root_local_account() {
         ),
         Err(CliError::Account)
     );
+}
+
+#[test]
+fn prepared_passcode_type_is_bound_to_begin_and_exact_bytes_reach_commit() {
+    let mut client = ScriptClient::new(vec![
+        begin(),
+        prompt(),
+        ready(),
+        Response::Completed(Completion::Enrolled(Backend::Tpm)),
+    ]);
+    let mut terminal = ScriptTerminal::new(&[
+        b"2",
+        b"  Example phrase!  ",
+        b"  Example phrase!  ",
+        b"yes",
+        b"account-password",
+    ]);
+    assert_eq!(
+        mutate(
+            &mut client,
+            &mut terminal,
+            EnrollmentAction::Rotate,
+            Some(Backend::Tpm)
+        ),
+        Ok(Completion::Enrolled(Backend::Tpm))
+    );
+    assert!(matches!(
+        client.requests[0],
+        Request::BeginEnroll {
+            kind: Some(CredentialKind::Passcode),
+            ..
+        }
+    ));
+    assert!(
+        matches!(&client.requests[2], Request::CommitEnrollment { pin, .. } if pin.expose() == b"  Example phrase!  ")
+    );
+}
+
+#[test]
+fn declined_prepared_credential_and_invalid_software_pin_never_begin_enrollment() {
+    for inputs in [
+        vec![b"".as_slice(), b"0019374820", b"0019374820", b"no"],
+        vec![b"".as_slice(), b"019374"],
+        vec![b"".as_slice(), b"11111111", b"11111111", b"q"],
+    ] {
+        let mut client = ScriptClient::new(vec![]);
+        let mut terminal = ScriptTerminal::new(&inputs);
+        assert_eq!(
+            mutate(
+                &mut client,
+                &mut terminal,
+                EnrollmentAction::Enroll,
+                Some(Backend::Software)
+            ),
+            Err(CliError::Cancelled)
+        );
+        assert!(
+            client
+                .requests
+                .iter()
+                .all(|request| matches!(request, Request::Cancel))
+        );
+    }
+}
+
+#[test]
+fn existing_passcode_is_the_default_for_change_and_migration() {
+    for action in [EnrollmentAction::Rotate, EnrollmentAction::Migrate] {
+        let mut terminal =
+            ScriptTerminal::new(&[b"", b"A phrase with space", b"A phrase with space"]);
+        let prepared = prepare_mutation(
+            &mut terminal,
+            action,
+            Some(Backend::Software),
+            Some(CredentialProfile {
+                kind: CredentialKind::Passcode,
+                policy: 1,
+                length: 18,
+            }),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(prepared.kind, CredentialKind::Passcode);
+    }
+}
+
+#[test]
+fn unvalidated_programmatic_preparation_is_rejected_before_begin() {
+    let mut client = ScriptClient::new(vec![]);
+    let prepared =
+        PreparedCredential::new(CredentialKind::NumericPin, Pin::parse(b"019374").unwrap());
+    assert_eq!(
+        mutate_confirmed(
+            &mut client,
+            &mut ScriptTerminal::new(&[]),
+            EnrollmentAction::Enroll,
+            Some(Backend::Software),
+            Some(prepared)
+        ),
+        Err(CliError::PinFormat)
+    );
+    assert!(
+        client
+            .requests
+            .iter()
+            .all(|request| matches!(request, Request::Cancel))
+    );
+}
+
+#[test]
+fn success_distinguishes_action_and_current_activation_state() {
+    use localpin_protocol::{Integration, integration::Gate};
+    let message = completion_message(
+        Completion::Enrolled(Backend::Software),
+        EnrollmentAction::Rotate,
+        Some(Integration::Active),
+        Gate::Active,
+    )
+    .unwrap();
+    assert!(message.starts_with("Credential changed."));
+    assert!(message.contains("Desktop integration is active"));
+    let message = completion_message(
+        Completion::Enrolled(Backend::Tpm),
+        EnrollmentAction::Migrate,
+        Some(Integration::Inactive),
+        Gate::Disabled,
+    )
+    .unwrap();
+    assert!(message.starts_with("Protection switched"));
+    assert!(message.contains("run localpin setup"));
+    let unknown = completion_message(
+        Completion::Enrolled(Backend::Software),
+        EnrollmentAction::Rotate,
+        None,
+        Gate::Active,
+    )
+    .unwrap();
+    assert!(unknown.starts_with("Credential changed."));
+    assert!(unknown.contains("activation could not be confirmed"));
+    assert!(!unknown.contains("integration is active"));
 }

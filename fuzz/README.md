@@ -20,7 +20,9 @@ for the nightly tools. `--toolchain nightly` selects an already installed
 nightly; the runner records the actual compiler and tool versions. The
 production compiler stays pinned by the repository's `rust-toolchain.toml`.
 
-The runner generates canonical public seeds, then runs three coverage-guided
+The runner generates public legacy and current credential envelopes plus IPC v2
+numeric/passcode boundary seeds (including exact spaces and numeric-looking
+passcodes), then runs three coverage-guided
 campaigns with AddressSanitizer, debug assertions, overflow checks, a fixed
 initial seed, input/RSS/time limits and a watchdog. `summary.json` binds the
 source commit, harness/lockfile hashes, starting and resulting corpus hashes,
@@ -28,7 +30,8 @@ commands, elapsed time, executed inputs, logs and failure artifacts. Time bounds
 make a campaign repeatable in method, not identical in iteration count or
 coverage. Do not treat coverage counters as a coverage percentage.
 
-- `records` checks canonical configuration, credential and throttle decoding.
+- `records` checks canonical configuration, credential and throttle decoding,
+  including profile validity and byte-exact legacy round trips.
 - `streams` checks request and response frames with whole and split input,
   canonical re-encoding, progress bounds, EOF rejection and permanent poisoning.
 - `phc` checks strict software-record parsing and allowed KDF work parameters.

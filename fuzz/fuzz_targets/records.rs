@@ -16,6 +16,7 @@ fuzz_target!(|bytes: &[u8]| {
     if let Ok(record) = CredentialRecord::decode(bytes) {
         assert_eq!(record.encode().unwrap().expose(), bytes);
         assert!(!record.payload().is_empty());
+        assert!(record.profile().validate(record.backend()).is_ok());
     }
     if let Ok(record) = ThrottleRecord::decode(bytes) {
         assert_eq!(record.encode().unwrap(), bytes);

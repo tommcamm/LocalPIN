@@ -3,6 +3,8 @@
 Date: 2026-10-17. Original M6 status: accepted development implementation; installed PAM,
 confinement and production account lifecycle gates remain open.
 
+Credential-entry amendment: [ADR 0021](0021-flexible-credentials.md) adds masked numeric/passcode preparation before opening the fresh password transaction. Password authorization, bounded commit grants and protected secret channels remain mandatory.
+
 ## Decision
 
 An own-user mutation is a single broker-owned transaction on one authenticated

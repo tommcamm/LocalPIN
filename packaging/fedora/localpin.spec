@@ -143,6 +143,7 @@ fi
 %doc docs/adr/0018-kde-native-update-compatibility.md
 %doc docs/adr/0019-guided-setup-orchestration.md
 %doc docs/adr/0020-setup-accounting-maintenance.md
+%doc docs/adr/0021-flexible-credentials.md
 %{_bindir}/localpinctl
 %{_bindir}/localpin
 %{_sbindir}/localpin-integration

@@ -201,7 +201,7 @@ fn active_unenrolled_installation_enrolls_without_changing_integration() {
     assert_eq!(host.backends, [BackendPreference::Software]);
     assert_eq!(host.inspections, 2);
     assert_eq!(host.state, report(Phase::Active, true, false));
-    assert!(ui.contains("Your new PIN is ready"));
+    assert!(ui.contains("Your new credential is ready"));
     assert!(ui.contains("Desktop integration remains active"));
     assert!(ui.answers.is_empty());
 }
@@ -216,7 +216,7 @@ fn declining_active_reenrollment_leaves_the_account_unchanged() {
     assert!(host.actions.is_empty());
     assert!(host.backends.is_empty());
     assert_eq!(host.inspections, 1);
-    assert!(!ui.contains("Your new PIN is ready"));
+    assert!(!ui.contains("Your new credential is ready"));
     assert!(ui.answers.is_empty());
 }
 
@@ -232,7 +232,7 @@ fn cancelled_active_reenrollment_does_not_start_enrollment() {
         assert!(host.actions.is_empty());
         assert!(host.backends.is_empty());
         assert_eq!(host.inspections, 1);
-        assert!(!ui.contains("Your new PIN is ready"));
+        assert!(!ui.contains("Your new credential is ready"));
         assert!(ui.answers.is_empty());
     }
 }
@@ -248,7 +248,7 @@ fn active_reenrollment_failure_does_not_retry_or_claim_success() {
     assert!(host.actions.is_empty());
     assert_eq!(host.backends, [BackendPreference::Tpm]);
     assert_eq!(host.inspections, 1);
-    assert!(!ui.contains("Your new PIN is ready"));
+    assert!(!ui.contains("Your new credential is ready"));
     assert!(ui.answers.is_empty());
 }
 
@@ -265,7 +265,7 @@ fn active_reenrollment_requires_fresh_active_enrollment_and_broker_readiness() {
         assert!(host.actions.is_empty());
         assert_eq!(host.backends, [BackendPreference::Software]);
         assert_eq!(host.inspections, 2);
-        assert!(!ui.contains("Your new PIN is ready"));
+        assert!(!ui.contains("Your new credential is ready"));
         assert!(ui.answers.is_empty());
     }
 
@@ -276,7 +276,7 @@ fn active_reenrollment_requires_fresh_active_enrollment_and_broker_readiness() {
     assert!(host.actions.is_empty());
     assert_eq!(host.backends, [BackendPreference::Software]);
     assert_eq!(host.inspections, 2);
-    assert!(!ui.contains("Your new PIN is ready"));
+    assert!(!ui.contains("Your new credential is ready"));
     assert!(ui.answers.is_empty());
 }
 

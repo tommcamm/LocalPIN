@@ -17,7 +17,8 @@ use localpin_protocol::{
 use localpin_storage::Storage;
 use localpind::{
     broker::{
-        Authorities, Broker, Engine, ProtectedEngine, SystemAuthorities, VerificationDeadlines,
+        Authorities, Broker, Engine, ProtectedEngine, SystemAuthorities, VerificationContext,
+        VerificationDeadlines,
     },
     enrollment::EnrollmentIo,
     platform::Peer,
@@ -138,10 +139,19 @@ impl Engine for EngineProbe {
     ) -> Result<(), TransportError> {
         self.actual.enroll(peer, expected, request, channel)
     }
+    fn challenge(
+        &self,
+        peer: Arc<Peer>,
+        expected: EligibilitySnapshot,
+        deadline: Instant,
+    ) -> Result<VerificationContext, Reason> {
+        self.actual.challenge(peer, expected, deadline)
+    }
     fn verify(
         &self,
         peer: Arc<Peer>,
         expected: EligibilitySnapshot,
+        context: VerificationContext,
         pin: Pin,
         deadlines: VerificationDeadlines,
         cancelled: &mut dyn FnMut() -> bool,
@@ -150,6 +160,7 @@ impl Engine for EngineProbe {
         self.actual.verify(
             peer,
             expected,
+            context,
             pin,
             deadlines,
             cancelled,

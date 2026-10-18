@@ -2,7 +2,7 @@
 
 # LocalPIN
 
-**A six-digit PIN for your Fedora KDE lock screen.**
+**A PIN or passcode for your Fedora KDE lock screen.**
 
 [![Experimental](https://img.shields.io/badge/status-experimental-orange?style=flat-square)](#compatibility-and-limitations)
 [![CI](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml)
@@ -28,9 +28,9 @@ password stays in place for password unlocking and recovery.
 
 | Feature | What you get |
 | --- | --- |
-| **Keyboard-friendly unlocking** | A six-digit PIN, including leading zeroes, submitted with Enter in KDE's existing lock screen. |
+| **Keyboard-friendly unlocking** | Numeric PINs or optional passcodes, submitted with Enter in KDE's existing lock screen. |
 | **Password fallback** | Use your account password when you prefer it or the PIN route is unavailable, subject to normal account policy. |
-| **A choice of credentials** | TPM 2.0 protection or an explicitly selected Argon2id software backend. |
+| **A choice of protection** | TPM 2.0 with 4–16 digit PINs, or explicit software protection with 8–16 digits; either supports 8–64 character passcodes. |
 | **Persistent attempt limits** | PIN throttling survives service restarts and retains protection across reboots. |
 | **Guided setup and management** | An interactive terminal guide for setup, status, PIN changes, backend selection and recovery. |
 | **Diagnostics and recovery** | Inspect status, follow actionable diagnostics, and recover through a separate administrator console tool. |
@@ -64,7 +64,7 @@ earlier guided builds retain the manual accounting handoff.
 
    Installation leaves authentication unchanged and services stopped. Setup
    explains preparation, helps you choose TPM or software protection, enrolls
-   your PIN privately, and guides trial, recovery rehearsal and activation.
+   your credential privately, and guides trial, recovery rehearsal and activation.
 3. **Complete the required checks.** On a supported fresh installation, setup
    offers to prepare persistent password accounting automatically. Save your
    work before confirming: maintenance signs out sessions and temporarily stops
@@ -83,12 +83,14 @@ for counter preservation, automatic resumption, interruption recovery, TPM setup
 actual PIN/password tests, compatible RPM update, reboot and removal. The report
 identifies each tested build. Independent review, physical hardware and
 signed-release gates remain open; historical evidence retains its tested scope.
+Flexible credentials have a [separate validation record](docs/development/flexible-credentials.md);
+the earlier installed results do not validate this change.
 
 ## Everyday use
 
-After setup, type your PIN into KDE's existing lock-screen field and press
+After setup, type your PIN or passcode into KDE's existing lock-screen field and press
 **Enter**. The field may still say **Password**; there is no separate PIN selector
-or automatic submission after six digits. Enter your full account password in
+or automatic submission. Enter your full account password in
 the same field whenever needed.
 
 Run `localpin` as your normal user for the interactive menu, or use these commands:
@@ -101,9 +103,12 @@ Run `localpin` as your normal user for the interactive menu, or use these comman
 | Disable your account's PIN credential | `localpin disable` |
 
 `localpinctl` remains available for existing commands and scripts. Credential
-changes require confirmation and fresh account-password verification.
-PINs and passwords are entered privately and interactively, never as command
-arguments or through pipes. See the [usage guide](docs/usage.md) for enrollment,
+changes require confirmation and fresh account-password verification. The shared
+form recommends 6 numeric digits with TPM, 10 with software, or a 12+ character
+passcode. Existing six-digit software PINs keep working with replacement advice.
+New credentials use masked interactive entry; account passwords stay fully
+hidden. Never pass either as command arguments or through pipes. See the
+[usage guide](docs/usage.md) for enrollment,
 backend migration, cooldowns, and troubleshooting.
 
 For system-wide recovery, use the
@@ -119,7 +124,8 @@ Disabling your own PIN credential does not restore the system's PAM configuratio
 | **Where PIN works** | Unlocking an existing local graphical session. Initial login, text-console login, sudo, SSH, polkit, and disk encryption retain their existing authentication. |
 | **Validation** | Targeted installed tests used a disposable Fedora KDE VM, Btrfs, and a private TPM emulator. Physical TPMs and fingerprint devices, alternate filesystems, GUI account administration, and full legacy TPM migration still need validation. |
 
-A six-digit PIN has limited entropy. Software mode provides online throttling,
+Short or predictable credentials have limited entropy. Software mode provides
+online throttling,
 but copied verifier material remains susceptible to offline guessing. TPM
 protection depends on the device and platform; full-disk encryption remains a
 separate defense. LocalPIN does not protect against root, a compromised kernel

@@ -74,16 +74,39 @@ impl Engine for TestEngine {
         unavailable_status(Reason::None)
     }
 
+    fn challenge(
+        &self,
+        _: Arc<Peer>,
+        _: EligibilitySnapshot,
+        _: Instant,
+    ) -> Result<VerificationContext, Reason> {
+        Ok(VerificationContext {
+            generation: 1,
+            backend: if matches!(self.mode, Mode::TpmWaitForCancel) {
+                localpin_protocol::Backend::Tpm
+            } else {
+                localpin_protocol::Backend::Software
+            },
+            profile: localpin_core::secret::CredentialProfile::legacy(),
+        })
+    }
+
     fn verify(
         &self,
         peer: Arc<Peer>,
         expected: EligibilitySnapshot,
+        context: VerificationContext,
         _: Pin,
         deadlines: VerificationDeadlines,
         cancelled: &mut dyn FnMut() -> bool,
         deliver: &mut dyn FnMut(VerificationOutcome, Instant),
     ) {
         assert_eq!(expected.account().uid.get(), peer.uid());
+        assert_eq!(context.generation, 1);
+        assert_eq!(
+            context.profile,
+            localpin_core::secret::CredentialProfile::legacy()
+        );
         self.verifies.fetch_add(1, Ordering::SeqCst);
         *self.verify_deadlines.lock().unwrap() = Some(deadlines);
         let deadline = if matches!(self.mode, Mode::TpmWaitForCancel) {
@@ -175,6 +198,7 @@ impl Harness {
             Response::VerifyChallenge {
                 challenge,
                 valid_for_ms,
+                ..
             } => {
                 assert_eq!(valid_for_ms, 5000);
                 challenge

@@ -2,14 +2,14 @@
 
 - Date: 2026-10-18
 - Status: M0–M8 implemented with historical appliance acceptance; M8.1 final source checks and targeted installed RPM acceptance passed on Fedora KDE 44 x86_64 with SELinux enforcing and a private TPM emulator. The [M8.1 report](development/m8.1-desktop-compatibility.md) records evidence and each installed case's build scope. [M8.2 targeted TPM-required guided setup, recovery and package acceptance](development/m8.2-installed-acceptance.md) also passed in a fresh enforcing VM. [M8.3](development/m8.3-accounting-maintenance.md) adds build-scoped installed maintenance, automatic resumption and interruption recovery evidence. GUI/DBus AccountsService, full old-TPM-credential migration and physical hardware remain unvalidated. M9 independent human/specialist review and release gates remain open. [Hosted CI](https://github.com/tommcamm/LocalPIN/actions/workflows/ci.yml) and its unsigned testing RPMs provide separate build/test evidence; recorded local/VM acceptance does not imply a passing workflow run.
-- Source of requirements: [product-specification.md](product-specification.md), version 1.7. ADR 0017 replaces the frozen lifecycle domain with native shadow-record markers and locking; ADR 0018 defines KDE/native-update compatibility; ADR 0019 defines fixed guided-setup orchestration; ADR 0020 defines setup-managed accounting maintenance.
+- Source of requirements: [product-specification.md](product-specification.md), version 1.8. ADR 0017 replaces the frozen lifecycle domain with native shadow-record markers and locking; ADR 0018 defines KDE/native-update compatibility; ADR 0019 defines fixed guided-setup orchestration; ADR 0020 defines setup-managed accounting maintenance; ADR 0021 defines flexible numeric PIN/passcode policy and compatibility.
 
 
 This plan turns the specification into independently reviewable changes and evidence gates. The specification remains authoritative. An unresolved design question below must be resolved in an architecture decision record (ADR), with a specification amendment if necessary, rather than silently changing the requirements.
 
 ## Scope and intended outcome
 
-Build an independent Rust project for six-digit PIN unlocking of an existing Fedora KDE graphical session, initially on x86_64 with local, non-root accounts. Deliver the broker, small PAM adapter, password enrollment worker, CLI, TPM and explicit software backends, durable throttling, Fedora RPMs, SELinux policy, recovery tooling, and public maintenance documentation.
+Build an independent Rust project for numeric PIN or optional passcode unlocking of an existing Fedora KDE graphical session, initially on x86_64 with local, non-root accounts. Deliver the broker, small PAM adapter, password enrollment worker, CLI, TPM and explicit software backends, durable throttling, Fedora RPMs, SELinux policy, recovery tooling, and public maintenance documentation.
 
 Normal passwords and their existing policies remain the recovery route. Login, sudo, SSH, polkit, disk encryption, other distributions/desktops, a custom lock-screen theme, and PCR-based measured-boot policies are outside the initial supported scope. Public source can be useful before production readiness; an experimental source release does not satisfy the production completion gates.
 
@@ -322,9 +322,9 @@ for the production authorities or pass the M7 gate.
 
 - Keep the C ABI and unsafe surface small, documented and reviewed. Validate ABI inputs within the PAM contract, match allocator ownership, contain Rust panics, and clean up sensitive buffers without unwinding across FFI.
 - Enforce the supported screen-lock service, target identity and real/effective UID rules. Do not expose this module as an alternative for sudo, SSH, login, or another account.
-- Accept only six ASCII digits for the PIN route; require Enter. Preserve other candidate bytes and the proven authentication-token lifetime for password fallback.
+- Obtain the enrolled exact-length/type profile through a bound challenge and accept only matching candidates for the LocalPIN route; require Enter. Preserve other candidate bytes and the proven authentication-token lifetime for password fallback.
 - Return success only on authoritative, durable broker success. Map all other outcomes to the tested control-rule behavior that preserves the original password route.
-- Cover six-digit account passwords, failed PIN followed by full password, cooldown, empty/Unicode input, stopped/crashed broker, missing module, TPM faults and corrupt state. Test original failure counters, locked/expired account behavior, and repeated authentication calls on KDE's reused PAM handle without stale tokens or cached success.
+- Cover account passwords matching numeric/passcode profiles, failed credentials followed by full password, cooldown, empty/Unicode input, stopped/crashed broker, missing module, TPM faults and corrupt state. Test original failure counters, locked/expired account behavior, and repeated authentication calls on KDE's reused PAM handle without stale tokens or cached success.
 
 Exit gate: isolated PAM tests and real stock-theme KDE tests pass in the disposable enforcing VM, including account eligibility and password fallback under failures. Successful mock PAM authentication alone does not pass this gate.
 
@@ -499,6 +499,30 @@ resumption, PIN/password tests, interruption/recovery and ordinary reboot.
 Source checks and historical M8.2 results do not establish the new installed
 boundary. M9 independent review and hardware gates remain separate.
 
+### Flexible credentials and shared terminal management
+
+[ADR 0021](adr/0021-flexible-credentials.md) replaces fixed-six enrollment with
+TPM numeric 4–16, software numeric 8–16 and optional printable-ASCII passcodes
+8–64. Recommend 6/10 numeric digits by backend and 12+ passcode characters;
+users enter any permitted length. Existing six-digit software credentials
+continue working with upgrade advice. New changes/migrations enforce the target
+policy. [Feature validation](development/flexible-credentials.md) records the
+current source checks and outstanding installed evidence separately.
+
+- Share type selection, protection/range guidance, masked new-credential entry,
+  confirmation and advisory predictable-choice warnings across management and
+  setup. Complete preparation within five minutes before fresh password
+  verification; commit under the existing short grant immediately afterward.
+- Use credential envelope 2 and IPC 2 with explicit profile metadata and bounded
+  64-byte secrets. Keep configuration, pointer and throttle formats stable;
+  preserve legacy bytes during upgrades and validate before reopening the gate.
+- Match lock-screen candidates to the challenge's exact profile and fence account,
+  generation, backend and profile under the user lock before consuming attempts.
+  Preserve exact password fallback, native counters and TPM safety reserves.
+- Require boundary/record/wire/worker/race/terminal/backend tests plus isolated
+  Fedora KDE/SELinux package, legacy-upgrade, password-overlap and recovery cases.
+  Prior M8 evidence does not validate this feature or complete M9/hardware gates.
+
 ### M9 — Review, hardware validation and versioned release
 
 In progress: the [requirement-to-evidence checklist](development/m9-release-readiness.md)
@@ -530,7 +554,7 @@ Exit gate: all specification completion gates have evidence and no unresolved se
 |---|---|---|
 | PAM token reuse and UI | Does the actual Fedora stack consume the candidate without a second password prompt? If not, prove an explicit password-selection conversation or refuse activation. | M1, before M7 |
 | Account eligibility | M8.1 uses ADR 0017 local-record authority and ADR 0018 reviewed KDE policy; unknown restrictions/state remain unavailable. Historical M6.1 evidence does not certify these changes. | M8.1 before M9 |
-| Failure accounting | A six-digit account password is indistinguishable from a PIN candidate until tested. Document potential PIN-budget consumption, wrong-PIN effects on password lockout counters, supported authselect features, and the exact fifth-attempt boundary. Reconcile ambiguous wording in specification section 11 without bypassing existing lockout policy. | M1/M2 |
+| Failure accounting | An account password matching the enrolled length/format is indistinguishable from a LocalPIN candidate until tested. Document potential PIN-budget consumption, wrong-PIN effects on password lockout counters, supported authselect features, and the exact fifth-attempt boundary. Reconcile ambiguous wording in specification section 11 without bypassing existing lockout policy. | M1/M2 |
 | TPM authorization and parent | Fix the reviewed object template, parent recreation, object identity checks, salted sessions, DA-budget inspection and behavior under unavailable hierarchy authorization. | M1/M4 |
 | Blocking backends | Prove how hard LocalPIN deadlines survive a blocked native call, discard late authorization, and clean up workers/handles/reservations without unbounded spawning. Measure total fallback latency separately, including delays in the original password stack. | M1/M5 |
 | Reboot throttling | Define conservative behavior for recent attempts even if no cooldown was active; a boot-ID change must not allow reboot-assisted unlimited guesses. | M2/M3 |

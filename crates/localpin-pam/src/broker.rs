@@ -58,15 +58,20 @@ fn exchange(client: &mut impl Broker, pin: Pin, unavailable: Deadline, tpm: Dead
         {
             return None;
         }
-        let backend = status.enrolled?;
+        status.enrolled?;
         let Response::VerifyChallenge {
             challenge,
             valid_for_ms,
+            generation,
+            backend,
+            profile,
         } = response(client, Request::BeginVerify, unavailable)?
         else {
             return None;
         };
-        if challenge == client.id()
+        if !profile.matches(&pin)
+            || generation == 0
+            || challenge == client.id()
             || valid_for_ms == 0
             || u64::from(valid_for_ms) > VERIFY_LIFETIME_MS
         {
@@ -112,6 +117,7 @@ mod tests {
         calls: Vec<&'static str>,
         closed: bool,
         delay: Duration,
+        expected: Vec<u8>,
     }
 
     fn id(byte: u8) -> Id {
@@ -122,6 +128,7 @@ mod tests {
         Response::Status(Status {
             configured: BackendPreference::Auto,
             enrolled: Some(backend),
+            profile: Some(localpin_core::secret::CredentialProfile::legacy()),
             availability: Availability::Available,
             cooldown_ms: 0,
             integration: Integration::Inactive,
@@ -131,10 +138,13 @@ mod tests {
         })
     }
 
-    fn challenge() -> Response {
+    fn challenge_for(backend: Backend) -> Response {
         Response::VerifyChallenge {
             challenge: id(2),
             valid_for_ms: 4999,
+            generation: 1,
+            backend,
+            profile: localpin_core::secret::CredentialProfile::legacy(),
         }
     }
 
@@ -150,6 +160,7 @@ mod tests {
             calls: Vec::new(),
             closed: false,
             delay: Duration::ZERO,
+            expected: b"000001".to_vec(),
         }
     }
 
@@ -169,7 +180,7 @@ mod tests {
                 Request::BeginVerify => self.calls.push("begin"),
                 Request::Verify { challenge, pin } => {
                     assert_eq!(challenge, id(2));
-                    assert_eq!(pin.expose(), b"000001");
+                    assert_eq!(pin.expose(), self.expected);
                     self.calls.push("verify");
                 }
                 _ => panic!("unexpected authorizing operation"),
@@ -207,12 +218,66 @@ mod tests {
         ] {
             let mut client = broker([
                 available(Backend::Software),
-                challenge(),
+                challenge_for(Backend::Software),
                 Response::Verification(outcome),
             ]);
             assert_eq!(run(&mut client), outcome == VerificationOutcome::Granted);
             assert_eq!(client.calls, ["status", "begin", "verify"]);
             assert!(client.closed);
+        }
+    }
+
+    #[test]
+    fn authoritative_profile_filters_candidates_without_submitting_an_attempt() {
+        for candidate in [
+            b"12345".as_slice(),
+            b"1234567",
+            b"ABCDEFGH",
+            b"ordinary password",
+        ] {
+            let mut client = broker([
+                available(Backend::Software),
+                challenge_for(Backend::Software),
+            ]);
+            assert!(!exchange(
+                &mut client,
+                Pin::parse(candidate).unwrap(),
+                Deadline::after(UNAVAILABLE_TIMEOUT),
+                Deadline::after(TPM_TIMEOUT)
+            ));
+            assert_eq!(client.calls, ["status", "begin"]);
+            assert!(client.closed);
+        }
+    }
+
+    #[test]
+    fn passcodes_preserve_spaces_case_and_numeric_looking_content() {
+        for candidate in [b" A passcode ".as_slice(), b"0011223344", &[b'Z'; 64]] {
+            let profile = localpin_core::secret::CredentialProfile::for_enrollment(
+                localpin_core::types::Backend::Software,
+                localpin_core::secret::CredentialKind::Passcode,
+                &Pin::parse(candidate).unwrap(),
+            )
+            .unwrap();
+            let mut client = broker([
+                available(Backend::Software),
+                Response::VerifyChallenge {
+                    challenge: id(2),
+                    generation: 9,
+                    backend: Backend::Software,
+                    profile,
+                    valid_for_ms: 4999,
+                },
+                Response::Verification(VerificationOutcome::Granted),
+            ]);
+            client.expected = candidate.to_vec();
+            assert!(exchange(
+                &mut client,
+                Pin::parse(candidate).unwrap(),
+                Deadline::after(UNAVAILABLE_TIMEOUT),
+                Deadline::after(TPM_TIMEOUT)
+            ));
+            assert_eq!(client.calls, ["status", "begin", "verify"]);
         }
     }
 
@@ -231,7 +296,7 @@ mod tests {
             status.availability = availability;
             let mut client = broker([
                 Response::Status(status),
-                challenge(),
+                challenge_for(Backend::Software),
                 Response::Verification(VerificationOutcome::Granted),
             ]);
             assert!(!run(&mut client));
@@ -248,14 +313,23 @@ mod tests {
             Response::VerifyChallenge {
                 challenge: id(1),
                 valid_for_ms: 4999,
+                generation: 1,
+                backend: Backend::Tpm,
+                profile: localpin_core::secret::CredentialProfile::legacy(),
             },
             Response::VerifyChallenge {
                 challenge: id(2),
                 valid_for_ms: 0,
+                generation: 1,
+                backend: Backend::Tpm,
+                profile: localpin_core::secret::CredentialProfile::legacy(),
             },
             Response::VerifyChallenge {
                 challenge: id(2),
                 valid_for_ms: 5001,
+                generation: 1,
+                backend: Backend::Tpm,
+                profile: localpin_core::secret::CredentialProfile::legacy(),
             },
         ] {
             let mut client = broker([available(Backend::Software), invalid]);
@@ -265,7 +339,7 @@ mod tests {
         }
         let mut client = broker([
             available(Backend::Software),
-            challenge(),
+            challenge_for(Backend::Software),
             Response::Verification(VerificationOutcome::Granted),
         ]);
         client.responses.back_mut().unwrap().connection = id(3);
@@ -276,8 +350,8 @@ mod tests {
     #[test]
     fn software_reuses_one_deadline_across_status_challenge_and_attempt() {
         let mut client = broker([
-            available(Backend::Software),
-            challenge(),
+            available(Backend::Tpm), // stale status cannot grant the longer TPM budget
+            challenge_for(Backend::Software),
             Response::Verification(VerificationOutcome::Granted),
         ]);
         client.delay = Duration::from_millis(45);
@@ -296,7 +370,7 @@ mod tests {
     fn tpm_uses_original_extended_deadline_without_renewing_it() {
         let mut client = broker([
             available(Backend::Tpm),
-            challenge(),
+            challenge_for(Backend::Tpm),
             Response::Verification(VerificationOutcome::Granted),
         ]);
         client.delay = Duration::from_millis(45);

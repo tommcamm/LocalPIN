@@ -101,6 +101,7 @@ fn responses() -> Vec<EncodedFrame> {
         Response::Status(Status {
             configured: BackendPreference::Auto,
             enrolled: Some(Backend::Tpm),
+            profile: Some(localpin_core::secret::CredentialProfile::legacy()),
             availability: Availability::Cooldown,
             cooldown_ms: u32::MAX,
             integration: Integration::NeedsAttention,
@@ -111,6 +112,9 @@ fn responses() -> Vec<EncodedFrame> {
         Response::VerifyChallenge {
             challenge: id(2),
             valid_for_ms: VERIFY_LIFETIME_MS as u32,
+            generation: 1,
+            backend: Backend::Tpm,
+            profile: localpin_core::secret::CredentialProfile::legacy(),
         },
         Response::EnrollmentStarted {
             transaction: id(3),
@@ -191,6 +195,7 @@ fn coalesced_frames_and_malformed_tails_are_independent_of_stream_partition() {
         Request::BeginEnroll {
             action: EnrollmentAction::Enroll,
             backend: Some(Backend::Software),
+            kind: Some(localpin_core::secret::CredentialKind::NumericPin),
         },
         Request::EnrollConversation {
             transaction: id(3),

@@ -701,7 +701,7 @@ impl Client {
 
     /// Perform one verification exchange and permanently close its connection.
     ///
-    /// The caller selects the credential backend obtained from trusted status.
+    /// Challenge metadata determines credential format and operation budget.
     /// Challenge acquisition is bounded to two seconds; the actual attempt is
     /// bounded to two seconds for software and five seconds for TPM. Only an
     /// exact challenge followed by a terminal verification outcome is accepted;
@@ -709,13 +709,18 @@ impl Client {
     pub fn verify(
         &mut self,
         pin: Pin,
-        backend: Backend,
+        _backend: Backend,
     ) -> Result<VerificationOutcome, TransportError> {
         let result = (|| {
             let response =
                 self.request(Request::BeginVerify, Deadline::after(UNAVAILABLE_TIMEOUT))?;
-            let challenge = match response.response {
-                Response::VerifyChallenge { challenge, .. } if challenge != self.id => challenge,
+            let (challenge, backend) = match response.response {
+                Response::VerifyChallenge {
+                    challenge,
+                    backend,
+                    profile,
+                    ..
+                } if challenge != self.id && profile.matches(&pin) => (challenge, backend),
                 Response::Error(error) => return Err(TransportError::Rejected(error)),
                 _ => return Err(ProtocolError::OutOfOrder.into()),
             };

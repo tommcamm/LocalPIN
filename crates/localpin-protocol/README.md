@@ -1,4 +1,4 @@
-# LocalPIN protocol version 1
+# LocalPIN protocol version 2
 
 M2 defines the wire/state contract; M5 adds Linux transport and typed clients.
 The broker composes
@@ -40,19 +40,31 @@ bytes; the body is therefore at most 4092 bytes and at least 18 bytes.
 | Complete-frame offset | Bytes | Meaning |
 | --- | --- | --- |
 | 0 | 4 | Body length, `u32` |
-| 4 | 1 | Version, exactly `1` |
+| 4 | 1 | Version, exactly `2` |
 | 5 | 1 | Explicit direction-specific operation code |
 | 6 | 16 | Nonzero connection identifier |
 | 22 | Defined by operation | Payload |
 
 There is no padding, extensible field map, implicit terminator or ignored suffix.
-Unknown versions, operations, enums, zero identifiers, invalid six-ASCII-digit
-PINs, unknown fields and trailing bytes are errors. Request and response operation
+Unknown versions, operations, enums, zero identifiers, invalid credential
+candidates, unknown fields and trailing bytes are errors. Version 1 greetings
+are rejected before clients transmit credential or password bytes. Request and response operation
 spaces are separate; a client cannot send a server authentication-success message.
 
-`id` means exactly 16 opaque nonzero bytes. `pin` means exactly six ASCII decimal
-bytes, preserving leading zeroes. `blob` is a `u16` byte length followed by that
-many bytes, at most 2048. Conversation responses preserve arbitrary bytes and
+`id` means exactly 16 opaque nonzero bytes. `pin` is a `u16` byte length followed
+by at most 64 bytes: a plausible numeric candidate has at least four ASCII digits,
+and a plausible passcode has at least eight printable ASCII characters. Exact
+enrolled type and length are checked against the authoritative challenge before
+submission and again by the broker. Leading zeroes, case, and spaces are
+preserved. `blob` is a `u16` byte length followed by that many bytes, at most 2048.
+`profile` is policy `u8`, kind `u8`, exact length `u8`; kinds are numeric `1` and
+passcode `2`. Policy `0` represents only legacy six-digit numeric credentials;
+policy `1` represents the current backend-specific enrollment rules.
+`optional-profile` is presence `u8` (`0` absent, `1` present), then `profile` when
+present. An enrolled backend normally has a profile. An `unavailable` status may
+retain its enrolled backend while omitting an unreadable profile, preserving
+storage-failure diagnostics; all other enrolled statuses require the profile.
+An absent backend never carries a profile. Conversation responses preserve arbitrary bytes and
 perform no text conversion or NUL truncation; the M6 PAM bridge must apply its
 documented native representation constraints explicitly. `text` uses the same
 `u16` length encoding but contains at most 1024 UTF-8 bytes and no NUL.
@@ -76,7 +88,7 @@ password responses and prompt text have redacted `Debug` and no serialization.
 | `02` | BeginVerify | empty |
 | `03` | Verify | challenge `id`, `pin` |
 | `04` | Cancel | empty |
-| `05` | BeginEnroll | action `u8`, proposed backend `u8` |
+| `05` | BeginEnroll | action `u8`, proposed backend `u8`, credential kind `u8` |
 | `06` | EnrollConversation | transaction `id`, prompt `id`, response `blob` |
 | `07` | CommitEnrollment | transaction `id`, new `pin` |
 | `08` | Disable | transaction `id` |
@@ -84,7 +96,8 @@ password responses and prompt text have redacted `Debug` and no serialization.
 
 Actions: enroll `1`, rotate `2`, explicit backend migration `3`, disable `4`.
 Backends: absent `0`, TPM `1`, explicitly accepted software `2`. Only disable
-requires absent backend; every other action requires an explicit backend. Core
+requires absent backend and kind `0`; every other action requires an explicit
+backend and numeric `1` or passcode `2` kind. Core
 policy independently checks current enrollment/backend and the correct action.
 The broker **must call `resolve_enrollment_action` with the protected committed
 backend before issuing enrollment IDs or starting a password worker**, and use
@@ -100,7 +113,10 @@ kernel peer's own non-root UID, without a client target field. Only distinct
 and the `u32::MAX` sentinel are rejected. Root cannot perform normal operations.
 
 `BeginVerify` requires current trusted eligibility. The broker issues a fresh
-random challenge valid for strictly less than five seconds from issuance.
+random challenge bound to the committed generation, backend and exact profile,
+valid for strictly less than five seconds from issuance. The broker rechecks the
+same account incarnation, generation, backend and profile under the user lock
+before reserving an attempt; a concurrent credential change invalidates it.
 `Verify` requires that challenge, connection and a fresh eligibility result; it
 consumes the challenge and permits one bounded backend action. A separate
 five-second backend deadline starts at accepted submission. A repeat, mismatched
@@ -110,7 +126,7 @@ complete before success, and reject stale generation/identity/revocation results
 Abandoned reservations stay consumed. Eligibility is rechecked before success.
 
 `BeginEnroll` binds broker-owned worker context to connection, UID, action,
-proposed generation and fresh transaction ID. The password conversation has a
+proposed generation, selected credential kind and fresh transaction ID. The password conversation has a
 strict sixty-second deadline and at most sixteen sequential prompts. Each prompt
 has a fresh random ID; repeated IDs, answers without an outstanding prompt,
 cross-transaction answers and duplicate answers fail closed. Info/error messages
@@ -120,7 +136,8 @@ worker and confer no authority themselves.
 Only the server API `password_authenticated` consumes a success from the trusted
 password-only PAM worker with the identical context. It is never decoded from a
 client field or Boolean. Authentication starts a commit interval of at most sixty
-seconds. A matching `CommitEnrollment` or `Disable` can request its one bound
+seconds. `CommitEnrollment` validates the bound kind, exact format and current
+backend-specific policy. A matching `CommitEnrollment` or `Disable` can request its one bound
 action only before that interval expires; equality with the deadline is expired.
 Disconnect/reconnect, replay, another UID, action/generation/context change,
 password failure, worker crash, or expiry cannot transfer that authorization.
@@ -134,8 +151,8 @@ recovery uses its separate root path and a bounded five-second pending operation
 | Code | Response | Exact payload |
 | --- | --- | --- |
 | `80` | Hello | empty |
-| `81` | Status | preference `u8`, enrolled backend `u8`, availability `u8`, cooldown milliseconds `u32`, integration `u8`, detected `u8`, usable `u8`, reason `u8` |
-| `82` | VerifyChallenge | challenge `id`, remaining milliseconds `u32` |
+| `81` | Status | preference `u8`, enrolled backend `u8`, `optional-profile`, availability `u8`, cooldown milliseconds `u32`, integration `u8`, detected `u8`, usable `u8`, reason `u8` |
+| `82` | VerifyChallenge | challenge `id`, committed generation `u64`, backend `u8`, `profile`, remaining milliseconds `u32` |
 | `83` | EnrollmentStarted | transaction `id`, nonzero proposed generation `u64`, remaining milliseconds `u32` |
 | `84` | ConversationPrompt | transaction `id`, prompt `id`, style `u8`, prompt `text` |
 | `85` | EnrollmentReady | transaction `id`, remaining milliseconds `u32` |

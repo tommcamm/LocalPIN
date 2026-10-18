@@ -1,6 +1,6 @@
 # LocalPIN documentation
 
-LocalPIN adds six-digit PIN unlocking to an existing Fedora KDE session, with
+LocalPIN adds numeric PIN or optional passcode unlocking to an existing Fedora KDE session, with
 the account password as the recovery route. It is experimental authentication
 software with no supported production release. Begin in a disposable Fedora KDE
 44 x86_64 VM with SELinux enforcing.
@@ -19,7 +19,7 @@ software with no supported production release. Begin in a disposable Fedora KDE
 ## Use LocalPIN
 
 - [Everyday use](usage.md): choose a backend, enroll, unlock, change or disable
-  a PIN, interpret status, and troubleshoot.
+  a credential, interpret status, and troubleshoot.
 - [CLI reference](../crates/localpinctl/README.md): the `localpin` menu and guided
   setup, compatible `localpinctl` commands, private input and diagnostic fields.
 
@@ -48,7 +48,9 @@ software with no supported production release. Begin in a disposable Fedora KDE
 The [product specification](product-specification.md) defines the requirements
 and threat model. [Architecture decision records](adr/) explain design contracts.
 The retained [implementation plan](implementation-plan.md) tracks development
-work and remaining milestones.
+work and remaining milestones. [Flexible credentials](adr/0021-flexible-credentials.md)
+defines current numeric/passcode policy; its [validation record](development/flexible-credentials.md)
+separates source checks from outstanding installed acceptance.
 
 | Component | Responsibility |
 | --- | --- |

@@ -84,7 +84,7 @@ def run_case(case, input_kind):
         assert select.select([report_r], [], [], 3)[0], "no child process identity"
         child_pid = int(os.read(report_r, 64))
         deadline = time.monotonic() + 3
-        prompt = b"Choose [1]: " if input_kind == "choice" else b"Type yes: "
+        prompt = {"choice": b"Choose [1]: ", "masked": b"New credential: ", "secret": b"Type yes: "}[input_kind]
         while prompt not in output:
             remaining = deadline - time.monotonic()
             assert remaining > 0 and select.select([master], [], [], remaining)[0], "no private prompt"
@@ -116,9 +116,76 @@ def run_case(case, input_kind):
         os.close(slave)
 
 
-for kind in ("secret", "choice"):
+for kind in ("secret", "choice", "masked"):
     for scenario in ("foreground-loss", "SIGTTIN", "SIGTTOU"):
         run_case(scenario, kind)
+
+
+def run_form_case(*, term, no_color=False):
+    """Exercise the shared real terminal form, without opening a broker."""
+    master, slave = os.openpty()
+    original = termios.tcgetattr(slave)
+    child = os.fork()
+    if child == 0:
+        os.setsid()
+        fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
+        for descriptor in (0, 1, 2):
+            os.dup2(slave, descriptor)
+        environment = dict(os.environ, TERM=term, LOCALPIN_CLI_JOB_CONTROL_CHILD="form")
+        environment.pop("NO_COLOR", None)
+        if no_color:
+            environment["NO_COLOR"] = ""
+        os.execve(sys.argv[1], [sys.argv[1]], environment)
+    output = b""
+    pending = b""
+    secret = b"  Demo phrase!? "
+    steps = [(b"Type [1] (q to cancel): ", b"2"),
+             (b"New passcode      ", secret), (b"Confirm passcode  ", secret)]
+    sent = 0
+    reaped = False
+    try:
+        deadline = time.monotonic() + 3
+        while True:
+            found, status = os.waitpid(child, os.WNOHANG)
+            if found:
+                reaped = True
+                assert os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0, output
+                break
+            assert time.monotonic() < deadline, "credential form did not complete promptly"
+            if select.select([master], [], [], .05)[0]:
+                data = os.read(master, 4096)
+                output += data
+                pending += data
+            if sent < len(steps) and steps[sent][0] in pending:
+                os.write(master, steps[sent][1] + b"\n")
+                sent += 1
+                pending = b""
+        while select.select([master], [], [], 0)[0]:
+            data = os.read(master, 4096)
+            if not data:
+                break
+            output += data
+        assert sent == len(steps), "form stopped before confirmation"
+        assert secret not in output and output.count(b"*") == len(secret) * 2, output
+        assert b"Credential ready. Verify your account password to save." in output, output
+        assert b"Protection  Software" in output, output
+        assert termios.tcgetattr(slave) == original, "form did not restore terminal"
+        expect_color = term != "dumb" and not no_color
+        assert (b"\x1b[1;36mLocalPIN\x1b[0m" in output) == expect_color, output
+        if not expect_color:
+            assert b"\x1b" not in output, output
+    finally:
+        if not reaped:
+            os.kill(child, signal.SIGKILL)
+            os.waitpid(child, 0)
+        termios.tcsetattr(slave, termios.TCSANOW, original)
+        os.close(master)
+        os.close(slave)
+
+
+run_form_case(term="xterm-256color")
+run_form_case(term="xterm-256color", no_color=True)
+run_form_case(term="dumb")
 
 
 def run_menu_case(*, term, no_color=False, redirected=False):

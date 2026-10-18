@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Opt-in M6 enrollment broker test; host mounts stay read-only, writes use tmpfs.
+"""Opt-in enrollment broker lifecycle and flexible-credential tests in tmpfs.
+
+Covers legacy software verification, current numeric/passcode policy, explicit
+kind changes, stale challenge metadata and unchanged throttle on profile refusal.
+Host mounts stay read-only; synthetic historical records never leave tmpfs.
 
 Requires unshare, bubblewrap, configured subordinate IDs and native Cargo build
 dependencies. Never installs a service, edits accounts or accesses a real TPM.

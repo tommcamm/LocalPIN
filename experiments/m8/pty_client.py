@@ -34,10 +34,12 @@ def main():
         os.execv('/usr/bin/localpinctl', ['localpinctl', *commands[operation]])
     transcript = bytearray()
     pending = bytearray()
-    prompts = [(b'Type yes: ', b'yes')]
-    if password is not None: prompts.append((b'Existing account password: ', password))
+    prompts = []
     if pin is not None:
-        prompts.extend([(b'New six-digit PIN: ', pin), (b'Confirm new PIN: ', pin)])
+        prompts.extend([(b'Type [1] (q to cancel): ', b''),
+                        (b'New PIN      ', pin), (b'Confirm PIN  ', pin)])
+    prompts.append((b'Type yes: ', b'yes'))
+    if password is not None: prompts.append((b'Existing account password: ', password))
     sent = 0
     deadline = time.monotonic() + 70
     status = None

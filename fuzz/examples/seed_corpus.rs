@@ -2,7 +2,7 @@
 use localpin_core::{
     limits::KdfParameters,
     records::{ConfigRecord, CredentialRecord},
-    secret::{Pin, SecretBytes},
+    secret::{CredentialKind, CredentialProfile, Pin, SecretBytes},
     throttle::ThrottleRecord,
     types::{
         AccountId, Backend as CoreBackend, BackendSelection, BootId, Generation, Incarnation,
@@ -43,6 +43,35 @@ fn main() {
         .encode()
         .unwrap();
     fs::write(root.join("records/credential"), credential.expose()).unwrap();
+    // Envelope parser seeds deliberately reuse one opaque synthetic PHC. They
+    // exercise metadata and canonical encoding, never KDF work or verification.
+    for (name, kind, length) in [
+        ("pin-min", CredentialKind::NumericPin, 8),
+        ("pin-max", CredentialKind::NumericPin, 16),
+        ("passcode-min", CredentialKind::Passcode, 8),
+        ("passcode-max", CredentialKind::Passcode, 64),
+    ] {
+        let profile = CredentialProfile {
+            policy: 1,
+            kind,
+            length,
+        };
+        let record = CredentialRecord::new_with_profile(
+            account,
+            generation,
+            CoreBackend::Software,
+            profile,
+            phc,
+        )
+        .unwrap()
+        .encode()
+        .unwrap();
+        fs::write(
+            root.join(format!("records/credential-v2-{name}")),
+            record.expose(),
+        )
+        .unwrap();
+    }
     let throttle = ThrottleRecord::initial(
         account,
         generation,
@@ -54,7 +83,7 @@ fn main() {
     .encode()
     .unwrap();
     fs::write(root.join("records/throttle"), throttle).unwrap();
-    let requests = [
+    let mut requests = vec![
         Request::Status,
         Request::BeginVerify,
         Request::Verify {
@@ -65,6 +94,7 @@ fn main() {
         Request::BeginEnroll {
             action: EnrollmentAction::Enroll,
             backend: Some(Backend::Software),
+            kind: Some(CredentialKind::NumericPin),
         },
         Request::EnrollConversation {
             transaction: id(3),
@@ -73,11 +103,37 @@ fn main() {
         },
         Request::CommitEnrollment {
             transaction: id(3),
-            pin: Pin::parse(b"000001").unwrap(),
+            pin: Pin::parse(b"00000123").unwrap(),
         },
         Request::Disable { transaction: id(3) },
         Request::RecoverDisable { target_uid: 1000 },
     ];
+    for (kind, bytes) in [
+        (CredentialKind::NumericPin, b"0012".as_slice()),
+        (CredentialKind::NumericPin, b"0012345678901234"),
+        (CredentialKind::Passcode, b" spaced "),
+        (CredentialKind::Passcode, b"00112233"),
+        (CredentialKind::Passcode, &[b'X'; 64]),
+    ] {
+        requests.push(Request::BeginEnroll {
+            action: EnrollmentAction::Enroll,
+            backend: Some(Backend::Tpm),
+            kind: Some(kind),
+        });
+        requests.push(Request::Verify {
+            challenge: id(2),
+            pin: Pin::parse(bytes).unwrap(),
+        });
+        requests.push(Request::CommitEnrollment {
+            transaction: id(3),
+            pin: Pin::parse(bytes).unwrap(),
+        });
+    }
+    requests.push(Request::BeginEnroll {
+        action: EnrollmentAction::Disable,
+        backend: None,
+        kind: None,
+    });
     let mut coalesced = Vec::new();
     for (index, request) in requests.into_iter().enumerate() {
         let frame = encode_request(&RequestEnvelope {
@@ -97,6 +153,7 @@ fn main() {
         Response::Status(Status {
             configured: BackendPreference::Auto,
             enrolled: Some(Backend::Tpm),
+            profile: Some(CredentialProfile::legacy()),
             availability: Availability::Cooldown,
             cooldown_ms: u32::MAX,
             integration: Integration::NeedsAttention,
@@ -106,8 +163,48 @@ fn main() {
         }),
         Response::VerifyChallenge {
             challenge: id(2),
+            generation: 1,
+            backend: Backend::Tpm,
+            profile: CredentialProfile::legacy(),
             valid_for_ms: 1,
         },
+        Response::VerifyChallenge {
+            challenge: id(2),
+            generation: 1,
+            backend: Backend::Tpm,
+            profile: CredentialProfile {
+                policy: 1,
+                kind: CredentialKind::NumericPin,
+                length: 4,
+            },
+            valid_for_ms: 5000,
+        },
+        Response::VerifyChallenge {
+            challenge: id(2),
+            generation: u64::MAX,
+            backend: Backend::Software,
+            profile: CredentialProfile {
+                policy: 1,
+                kind: CredentialKind::Passcode,
+                length: 64,
+            },
+            valid_for_ms: 5000,
+        },
+        Response::Status(Status {
+            configured: BackendPreference::Software,
+            enrolled: Some(Backend::Software),
+            profile: Some(CredentialProfile {
+                policy: 1,
+                kind: CredentialKind::Passcode,
+                length: 8,
+            }),
+            availability: Availability::Available,
+            cooldown_ms: 0,
+            integration: Integration::Active,
+            tpm_detected: false,
+            tpm_usable: false,
+            reason: Reason::None,
+        }),
         Response::EnrollmentStarted {
             transaction: id(3),
             generation: 1,
@@ -141,4 +238,23 @@ fn main() {
         .unwrap();
     }
     fs::write(root.join("streams/coalesced"), coalesced).unwrap();
+    let hello = encode_response(&ResponseEnvelope {
+        connection: id(1),
+        response: Response::Hello,
+    })
+    .unwrap();
+    let mut old_hello = hello.as_bytes().to_vec();
+    old_hello[4] = 1;
+    fs::write(root.join("streams/old-version-hello"), old_hello).unwrap();
+    let request = encode_request(&RequestEnvelope {
+        connection: id(1),
+        request: Request::Verify {
+            challenge: id(2),
+            pin: Pin::parse(b"00112233").unwrap(),
+        },
+    })
+    .unwrap();
+    let mut overflow = request.as_bytes().to_vec();
+    overflow[38..40].copy_from_slice(&65u16.to_be_bytes());
+    fs::write(root.join("streams/credential-length-overflow"), overflow).unwrap();
 }
