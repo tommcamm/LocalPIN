@@ -390,6 +390,11 @@ installation offline after explicit sign-out approval. Its protected transaction
 and all-account counter-preservation rules are separate from enrollment. The
 post-login launcher supplies only a nonsecret UI hint; setup rechecks privileged
 state and requires fresh account-password authorization.
+Verified maintenance aborts must also reopen setup with an incomplete-preparation
+explanation and the failed operation when known. Partial authentication masking
+must not initiate desktop isolation. Migration outcome and observed login
+restoration are distinct; pending restoration blocks preparation and enrollment.
+Any retry requires new explicit service-interruption approval.
 Before trial and activation, the broker must establish current account/session
 readiness and an available enrollment; protected pointer inspection alone does
 not prove native account continuity.

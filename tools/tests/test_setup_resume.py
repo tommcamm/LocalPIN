@@ -52,9 +52,11 @@ class ResumeTests(unittest.TestCase):
                 mock.patch.object(os, "fstat", lambda fd: metadata(original_fstat(fd))):
             yield
 
-    def test_only_exact_bounded_ready_hint_for_current_uid_is_accepted(self):
+    def test_only_exact_bounded_outcome_hint_for_current_uid_is_accepted(self):
         with self.root_owned():
-            self.assertEqual(resume.read_hint(UID), REQUEST)
+            for state in ("ready", "aborted"):
+                self.write_hint({**self.value, "state": state})
+                self.assertEqual(resume.read_hint(UID), REQUEST)
             for key, value in (("schema_version", 2), ("schema_version", True), ("uid", UID + 1),
                                ("uid", True), ("request_id", "../injected"),
                                ("request_id", "A" * 64), ("state", "pending"),
@@ -66,6 +68,18 @@ class ResumeTests(unittest.TestCase):
                          b'{"uid":1001,"uid":1001}', b"[" * 1500 + b"]" * 1500):
                 self.hint.write_bytes(data)
                 self.assertIsNone(resume.read_hint(UID))
+
+    def test_aborted_hint_opens_only_fixed_setup_once_for_that_request(self):
+        self.write_hint({**self.value, "state": "aborted"})
+        with self.root_owned():
+            request = resume.read_hint(UID)
+        self.assertEqual(request, REQUEST)
+        with mock.patch.object(resume, "read_hint", return_value=request), \
+                mock.patch.object(resume.subprocess, "Popen") as launch:
+            resume.resume(os.getuid(), self.root)
+            resume.resume(os.getuid(), self.root)
+            launch.assert_called_once()
+            self.assertEqual(launch.call_args.args[0], resume.COMMAND)
 
     def test_hint_requires_root_ownership_exact_mode_and_single_regular_file(self):
         for changes in ({"st_uid": UID}, {"st_gid": UID}, {"st_nlink": 2},

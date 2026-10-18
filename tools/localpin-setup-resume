@@ -32,7 +32,7 @@ def _object(pairs):
 
 
 def read_hint(uid):
-    """Accept only the fixed, bounded, root-owned ready hint for this user."""
+    """Accept a fixed root-owned outcome hint; it supplies no setup authority."""
     if not 1000 <= uid <= 59999:
         return None
     try:
@@ -54,7 +54,7 @@ def read_hint(uid):
                 or set(hint) != {"schema_version", "uid", "request_id", "state"}
                 or type(hint["schema_version"]) is not int or hint["schema_version"] != 1
                 or type(hint["uid"]) is not int or hint["uid"] != uid
-                or hint["state"] != "ready"
+                or hint["state"] not in ("ready", "aborted")
                 or not isinstance(hint["request_id"], str)
                 or re.fullmatch(r"[a-f0-9]{64}", hint["request_id"], re.ASCII) is None):
             return None

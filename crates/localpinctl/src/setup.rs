@@ -2,7 +2,7 @@
 
 use crate::{
     CliError,
-    admin::{self, Blocker, Operation, Phase, SetupReport},
+    admin::{self, AccountingResult, Blocker, Operation, Phase, Restoration, SetupReport},
     args::Command,
     menu::{self, Ui},
     terminal::Terminal,
@@ -112,6 +112,14 @@ fn check_account(host: &mut impl Host, ui: &mut impl Ui) -> Result<(), CliError>
 }
 
 fn ready(report: &SetupReport, ui: &mut impl Ui) -> Result<(), CliError> {
+    if report
+        .accounting_outcome
+        .as_ref()
+        .is_some_and(|outcome| outcome.restoration == Restoration::Pending)
+    {
+        ui.say("Login service restoration remains incomplete. Setup will not retry maintenance or enroll a credential; use administrator recovery to inspect the protected maintenance state.")?;
+        return Err(CliError::SetupBlocked);
+    }
     let message = match report.blocker {
         Blocker::Accounting => Some(
             "Password-failure counters need persistent storage. This installation requires administrator maintenance; setup cannot safely schedule it in the reported state.",
@@ -187,6 +195,40 @@ fn drive(host: &mut impl Host, ui: &mut impl Ui) -> Result<(), CliError> {
     }
     ui.step(1, 5, "Check your system")?;
     let mut report = host.inspect()?;
+    while let Some(outcome) = &report.accounting_outcome {
+        match outcome.result {
+            AccountingResult::Aborted => ui.say("The previous password-accounting maintenance was aborted. Native accounting was preserved; the prior preparation remains incomplete. Setup has not retried it.")?,
+            AccountingResult::Complete => ui.say("The previous password-accounting migration completed. Setup will recheck current readiness before continuing.")?,
+        }
+        if let Some(operation) = outcome.failed_operation {
+            ui.say(&format!(
+                "Failed maintenance operation: {}.",
+                operation.description()
+            ))?;
+        }
+        match outcome.restoration {
+            Restoration::NotNeeded => ui.say("Login services did not require a restart.")?,
+            Restoration::Restored => {
+                ui.say("Login service restoration is recorded as complete.")?
+            }
+            Restoration::Pending => {
+                ui.say("Login service restoration has not yet been verified. Setup will not retry maintenance or enroll a credential while restoration is unverified. You can recheck readiness without changing the system, or exit and use administrator recovery if restoration remains incomplete.")?;
+                ui.say(&format!("Guide: {GUIDE}#prepare-native-accounting-once"))?;
+                match ui.choose(
+                    "Recheck readiness or exit setup?",
+                    &["Recheck readiness", "Exit setup"],
+                )? {
+                    0 => {
+                        report = host.inspect()?;
+                        continue;
+                    }
+                    1 => return Err(CliError::SetupBlocked),
+                    _ => return Err(CliError::Arguments),
+                }
+            }
+        }
+        break;
+    }
     if report.blocker == Blocker::Accounting
         && report.phase == Phase::Unprepared
         && !report.enrolled

@@ -1,4 +1,5 @@
 use super::*;
+use crate::admin::{AccountingOutcome, FailedOperation};
 use std::collections::VecDeque;
 
 fn report(phase: Phase, enrolled: bool, trial: bool) -> SetupReport {
@@ -11,6 +12,7 @@ fn report(phase: Phase, enrolled: bool, trial: bool) -> SetupReport {
         trial_remaining_seconds: if trial { 590 } else { 0 },
         trial_ref: trial.then(|| "a".repeat(64)),
         tests_recorded: false,
+        accounting_outcome: None,
     }
 }
 
@@ -332,6 +334,127 @@ fn accounting_maintenance_requires_explicit_logout_approval_and_exits_before_enr
     assert!(ui.contains("No credential has been created yet"));
     assert!(!ui.contains("LocalPIN is active"));
     assert!(ui.answers.is_empty());
+}
+
+fn aborted_accounting(restoration: Restoration) -> SetupReport {
+    let mut state = report(Phase::Unprepared, false, false);
+    state.blocker = Blocker::Accounting;
+    state.accounting_outcome = Some(AccountingOutcome {
+        result: AccountingResult::Aborted,
+        restoration,
+        failed_operation: Some(FailedOperation::StopSessions),
+    });
+    state
+}
+
+#[test]
+fn aborted_accounting_is_explained_before_deliberate_retry_approval() {
+    for retry in [false, true] {
+        let mut host = Fake::new(aborted_accounting(Restoration::Restored));
+        let mut ui = Script::new(&[0, if retry { 0 } else { 1 }]);
+        drive(&mut host, &mut ui).unwrap();
+        assert_eq!(
+            host.actions,
+            if retry {
+                vec![Operation::PrepareAccounting]
+            } else {
+                vec![]
+            }
+        );
+        assert!(host.backends.is_empty());
+        assert!(ui.contains("previous password-accounting maintenance was aborted"));
+        assert!(ui.contains("prior preparation remains incomplete"));
+        assert!(ui.contains("Failed maintenance operation: stop user sessions"));
+        let explanation = ui
+            .messages
+            .iter()
+            .position(|message| message.contains("maintenance was aborted"))
+            .unwrap();
+        let failure = ui
+            .messages
+            .iter()
+            .position(|message| message.contains("Failed maintenance operation"))
+            .unwrap();
+        let approval = ui
+            .messages
+            .iter()
+            .position(|message| message.contains("Have you saved your work"))
+            .unwrap();
+        assert!(explanation < approval && failure < approval);
+        assert!(ui.answers.is_empty());
+    }
+}
+
+#[test]
+fn pending_restoration_blocks_retry_even_if_readiness_blocker_is_inconsistent() {
+    for blocker in [
+        Blocker::None,
+        Blocker::Accounting,
+        Blocker::AccountingMaintenance,
+    ] {
+        let mut state = aborted_accounting(Restoration::Pending);
+        state.blocker = blocker;
+        let mut host = Fake::new(state);
+        let mut ui = Script::new(&[0, 1]);
+        assert_eq!(drive(&mut host, &mut ui), Err(CliError::SetupBlocked));
+        assert!(host.actions.is_empty());
+        assert!(host.backends.is_empty());
+        assert_eq!(host.inspections, 1);
+        assert!(ui.contains("maintenance was aborted"));
+        assert!(ui.contains("Login service restoration has not yet been verified"));
+        assert!(ui.contains("Recheck readiness or exit setup?"));
+        assert!(!ui.contains("Have you saved your work"));
+        assert!(ui.answers.is_empty());
+    }
+}
+
+#[test]
+fn pending_restoration_rechecks_only_after_a_visible_user_choice() {
+    let mut host = Fake::new(aborted_accounting(Restoration::Pending));
+    host.change_on_inspection = Some((3, aborted_accounting(Restoration::Restored)));
+    let mut ui = Script::new(&[0, 0, 0, 1]);
+    drive(&mut host, &mut ui).unwrap();
+    assert_eq!(host.inspections, 3);
+    assert!(host.actions.is_empty());
+    assert!(host.backends.is_empty());
+    assert_eq!(
+        ui.messages
+            .iter()
+            .filter(|message| message.contains("Recheck readiness or exit setup?"))
+            .count(),
+        2,
+    );
+    assert_eq!(
+        ui.messages
+            .iter()
+            .filter(|message| message.contains("maintenance was aborted"))
+            .count(),
+        3,
+    );
+    assert!(ui.contains("Login service restoration is recorded as complete"));
+    assert!(ui.contains("Have you saved your work"));
+    assert!(ui.answers.is_empty());
+}
+
+#[test]
+fn cancelling_pending_restoration_recheck_does_not_reinspect_or_mutate() {
+    let mut host = Fake::new(aborted_accounting(Restoration::Pending));
+    let mut ui = Script::new(&[0]);
+    ui.answers.push_back(Err(CliError::Cancelled));
+    assert_eq!(drive(&mut host, &mut ui), Err(CliError::Cancelled));
+    assert_eq!(host.inspections, 1);
+    assert!(host.actions.is_empty());
+    assert!(host.backends.is_empty());
+}
+
+#[test]
+fn aborted_request_can_restore_masks_without_restarting_login_services() {
+    let mut host = Fake::new(aborted_accounting(Restoration::NotNeeded));
+    let mut ui = Script::new(&[0, 1]);
+    drive(&mut host, &mut ui).unwrap();
+    assert!(host.actions.is_empty());
+    assert!(ui.contains("Login services did not require a restart"));
+    assert!(!ui.contains("did not change login services"));
 }
 
 #[test]

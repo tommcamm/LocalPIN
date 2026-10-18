@@ -1,0 +1,297 @@
+{
+  "schema": 1,
+  "date": "2026-10-18",
+  "scope": "Targeted PR13 installed accounting maintenance, failure preservation, shutdown ordering and setup resume; not full authentication acceptance.",
+  "isolation": {
+    "disposable_independent_fedora44_kde_clones": true,
+    "selinux": "Enforcing",
+    "synthetic_accounts": true,
+    "private_managed_tpm_emulator": true,
+    "no_physical_tpm_or_host_authentication_testing": true,
+    "original_vm_off": true
+  },
+  "initial_candidate": {
+    "candidate_evr": "0.1.0-0.1.alpha1.fc44",
+    "product_sha256": {
+      "/usr/libexec/localpin/localpin-accounting": "95ed64850f9172ae9a48816de37c16d240663d5a22874016ff578f8d079cb1c4",
+      "/usr/libexec/localpin/localpin-integration": "fe205343c33c142bbc3b375d39b7decf2f3b0a1c98327d0e30af00a03656f48d",
+      "/usr/bin/localpin": "819c3c41629c90c604ca5baeb77d965c8ce151b0d63ae286c5048a7ae8f215b4"
+    },
+    "native_environment": {
+      "packages": {
+        "pam": "0:1.7.2-2.fc44.x86_64",
+        "systemd": "0:259.9-1.fc44.x86_64",
+        "authselect": "0:1.7.1-1.fc44.x86_64",
+        "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+        "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+        "glibc-common": "0:2.43-9.fc44.x86_64",
+        "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+      },
+      "kernel_release": "7.2.10-200.fc44.x86_64",
+      "authselect_profile": "local with-silent-lastlog with-mdns4 with-fingerprint with-faillock"
+    },
+    "partial_mask": {
+      "phase": "installed-partial-mask-refusal",
+      "passed": true,
+      "actual_systemctl_exit1": "file-exists",
+      "failed_operation": "mask-authentication",
+      "aborted_before_isolation": true,
+      "restoration": "not-needed",
+      "original_desktop_session_and_user_manager_preserved": true,
+      "cups_and_login_services_active": true,
+      "native_tallies_and_security_metadata_preserved": true,
+      "stock_policy_preserved": true,
+      "no_backup_copy_or_barrier": true,
+      "owned_masks_released_and_conflict_preserved": true,
+      "aborted_resume_hint": true,
+      "no_credential_enrolled": true,
+      "selinux": "Enforcing"
+    },
+    "abort_autoresume": {
+      "phase": "installed-abort-autoresume",
+      "passed": true,
+      "real_display_manager_password_login": true,
+      "shipped_launcher_opened_actual_setup_konsole": true,
+      "abort_and_incomplete_preparation_explained": true,
+      "failed_operation_explained": true,
+      "deliberate_retry_approval_prompt": true,
+      "no_automatic_retry": true,
+      "secret_echo_absent": true,
+      "selinux": "Enforcing",
+      "explicit_retry_declined": true,
+      "request_unchanged_after_declining": true,
+      "exact_conflict_fixture_removed": true
+    },
+    "migration": {
+      "phase": "installed-maintenance-successful-retry",
+      "passed": true,
+      "transaction_complete": true,
+      "restoration": "restored",
+      "native_counter_count": 2,
+      "nonempty_counter_count": 1,
+      "native_counter_bytes_and_security_metadata_preserved_before_login": true,
+      "volatile_sources_untouched": true,
+      "backup_preserves_original_metadata": true,
+      "destination_only_group_conversion": true,
+      "persistent_policy_installed": true,
+      "kde_pam_unchanged": true,
+      "kernel_barrier_executed": true,
+      "owned_masks_released": true,
+      "original_abort_evidence_archived": true,
+      "success_hint_ready": true,
+      "no_enrollment": true,
+      "selinux": "Enforcing"
+    },
+    "ordering": {
+      "phase": "initial-installed-shutdown-order",
+      "passed": false,
+      "cups_stopped_before_user_manager_shutdown": true,
+      "observer_output_bytes": 0,
+      "native_monotonic_microseconds": {
+        "cups.service-stopping": 432374139,
+        "user@21061.service-stopping": 432453764,
+        "cups.service-stopped": 432512239
+      },
+      "corrective_action": "explicitly wait for loaded user-manager and runtime-dir stop jobs"
+    }
+  },
+  "manager_drain_barrier_failure": {
+    "phase": "intermediate-explicit-user-drain",
+    "passed": false,
+    "candidate_evr": "0.1.0-0.1.alpha1.fc44",
+    "product_sha256": {
+      "/usr/libexec/localpin/localpin-accounting": "230788d6c7c8849780b8dc6e872173d9a959eea3c1b1d21d7d5b7a73dbb45a4e",
+      "/usr/libexec/localpin/localpin-integration": "fe205343c33c142bbc3b375d39b7decf2f3b0a1c98327d0e30af00a03656f48d",
+      "/usr/bin/localpin": "819c3c41629c90c604ca5baeb77d965c8ce151b0d63ae286c5048a7ae8f215b4"
+    },
+    "cups_ordering_passed": true,
+    "cups_observer_samples": 7,
+    "cups_observer_duration_microseconds": 3047123,
+    "cups_stop_after_observer_microseconds": 207670,
+    "failure": {
+      "errno": 2,
+      "exception": "FileNotFoundError",
+      "phase": "barrier-started",
+      "schema": 1
+    },
+    "no_snapshot_backup_or_copy_started": true,
+    "sameboot_native_counter_bytes_preserved": true,
+    "verified_recovery_result": "aborted",
+    "verified_restoration": "restored",
+    "real_emergency_password_login_observed": true,
+    "restoration_initially_pending_until_recovery_console_closed": true
+  },
+  "pid1_preflight_refusal": {
+    "phase": "vm13.3-preflight-refusal",
+    "maintenance_result": "safe-abort",
+    "failure_phase": "quiescing",
+    "fixed_reason": "unexpected init scope processes",
+    "restoration": "restored",
+    "no_barrier_or_copy": true,
+    "native_counter_bytes_preserved": true,
+    "cups_observer_7_samples_passed": true,
+    "observer_duration_microseconds": 3053909,
+    "init_scope_later_observed_only_pid1": true
+  },
+  "final_migration": {
+    "phase": "installed-maintenance-successful-retry",
+    "passed": true,
+    "transaction_complete": true,
+    "restoration": "restored",
+    "native_counter_count": 2,
+    "nonempty_counter_count": 1,
+    "native_counter_bytes_and_security_metadata_preserved_before_login": true,
+    "volatile_sources_untouched": true,
+    "backup_preserves_original_metadata": true,
+    "destination_only_group_conversion": true,
+    "persistent_policy_installed": true,
+    "kde_pam_unchanged": true,
+    "kernel_barrier_executed": true,
+    "owned_masks_released": true,
+    "sameboot_recovered_abort_retried": true,
+    "success_hint_ready": true,
+    "no_enrollment": true,
+    "selinux": "Enforcing"
+  },
+  "final_ordering": {
+    "phase": "pr13-installed-session-cups-order",
+    "passed": true,
+    "candidate_evr": "0.1.0-0.1.alpha1.vm13.4.fc44",
+    "actual_user_stop_observer_ran": true,
+    "observer_sample_count": 7,
+    "observer_duration_microseconds": 3051291,
+    "cups_active_throughout_user_stop": true,
+    "native_cups_stop_after_observer": true,
+    "systemd_stop_timestamp_proves_order": true,
+    "native_stop_journal_proves_order": true,
+    "cups_currently_active": true,
+    "migration_complete": true,
+    "login_restoration_observed": true,
+    "restored_login_services_active": true,
+    "cgroups_thawed": true,
+    "unrelated_systemd_jobs_absent": true,
+    "product_source_unchanged": true,
+    "cups_stop_after_observer_microseconds": 189379
+  },
+  "final_ready_autoresume": {
+    "phase": "final-ready-autoresume",
+    "passed": true,
+    "actual_display_manager_password_login": true,
+    "shipped_launcher_actual_setup_konsole": true,
+    "completed_migration_and_restoration_explained": true,
+    "explicit_readiness_rechecked": true,
+    "next_deliberate_preparation_gate_reached": true,
+    "no_automatic_maintenance_retry": true,
+    "no_credential_enrolled": true,
+    "secret_echo_absent": true
+  },
+  "final_erase": {
+    "phase": "erase",
+    "passed": true,
+    "candidate": "0.1.0-0.1.alpha1.vm13.4.fc44",
+    "actual_final_candidate_erased": true,
+    "setup_cancelled_before_preparation": true,
+    "no_account_authority_or_enrollment": true,
+    "original_stock_kde_policy_unchanged": true,
+    "persistent_native_accounting_policy_and_all_counter_bytes_uid_gid_mode_mtime_xattrs_retained": true,
+    "module_absent_broker_inactive_socket_boot_disabled": true,
+    "selinux": "Enforcing"
+  },
+  "final_identity": {
+    "candidate_evr": "0.1.0-0.1.alpha1.vm13.4.fc44",
+    "installed_product_sha256": {
+      "/usr/libexec/localpin/localpin-accounting": "b3fb8cd341becfe9f4b51b4ca58325043eab26fb88dd8f7a9a62fae47ecfb1c0",
+      "/usr/libexec/localpin/localpin-integration": "fe205343c33c142bbc3b375d39b7decf2f3b0a1c98327d0e30af00a03656f48d",
+      "/usr/bin/localpin": "819c3c41629c90c604ca5baeb77d965c8ce151b0d63ae286c5048a7ae8f215b4"
+    },
+    "native_environment": {
+      "packages": {
+        "pam": "0:1.7.2-2.fc44.x86_64",
+        "systemd": "0:259.9-1.fc44.x86_64",
+        "authselect": "0:1.7.1-1.fc44.x86_64",
+        "kscreenlocker": "0:6.7.5-1.fc44.x86_64",
+        "selinux-policy-targeted": "0:44.11-1.fc44.noarch",
+        "glibc-common": "0:2.43-9.fc44.x86_64",
+        "tpm2-tss": "0:4.1.3-9.fc44.x86_64"
+      },
+      "kernel_release": "7.2.10-200.fc44.x86_64",
+      "authselect_profile": "local with-silent-lastlog with-mdns4 with-fingerprint with-faillock"
+    },
+    "observer_source_sha256": "3face5280d08e6f8b3eb60fa7efbeb5400033ffaefe479600c236fa955f14373",
+    "observer_unit_sha256": "7a2d99f6dd27733b004e2f021ddce362d3201f28384db4876622e859894b296c",
+    "source_base_commit": "559395c09b6c533ac44014cefd5f1efd4f39a3d9",
+    "changed_runtime_source_paths_since_base": [
+      "tools/localpin-accounting.py"
+    ],
+    "tested_accounting_source_sha256": "b3fb8cd341becfe9f4b51b4ca58325043eab26fb88dd8f7a9a62fae47ecfb1c0",
+    "rpm_archive_sha256": "fb5ea182f4c8728297c433139a3a274fe7f40b1c9cec26b2f63825445e288cf2",
+    "rpm_archive_name": "localpin-0.1.0-0.1.alpha1.vm13.4.fc44.x86_64.rpm"
+  },
+  "final_post_erase_password": {
+    "phase": "restored-password",
+    "passed": true,
+    "selinux": "Enforcing",
+    "observations": {
+      "unlocked": true,
+      "enter_required_observed": false,
+      "locked_before_enter": false,
+      "unlock_elapsed_seconds": 0.332,
+      "before_enter_tally": {
+        "bytes": 64
+      },
+      "after_tally": {
+        "bytes": 64
+      }
+    }
+  },
+  "cleanup": {
+    "initial_clone": {
+      "phase": "initial-order-failure-clone-cleanup",
+      "passed": true,
+      "sanitized_failure_and_passed_cases_retained": true,
+      "only_task_owned_domain_independent_volume_and_emulator_removed": true,
+      "temporary_access_and_synthetic_recovery_secret_removed": true,
+      "original_vm_defined_and_off": true
+    },
+    "final_clone": {
+      "phase": "normal-clone-cleanup",
+      "passed": true,
+      "candidate": "0.1.0-0.1.alpha1.vm13.4.fc44",
+      "no_live_account_authority_present": true,
+      "package_absent": true,
+      "temporary_guest_ssh_key_removed": true,
+      "guarded_task_clone_domain_volume_and_private_emulator_removed": true,
+      "temporary_host_access_and_recovery_secret_removed": true,
+      "original_vm_remains_defined_and_off": true,
+      "stock_kde_policy_unchanged": true
+    }
+  },
+  "local_checks": {
+    "tools_tests": {
+      "passed": 179
+    },
+    "m83_fixture_tests": {
+      "passed": 16
+    },
+    "fedora_packaging_tests_including_release_helpers": {
+      "passed": 86
+    },
+    "final_native_rpm_build": "passed",
+    "rust_checks_at_source_base": {
+      "workspace_passed": 399,
+      "workspace_ignored": 11,
+      "fmt": "passed",
+      "clippy_all_targets_all_features": "passed",
+      "release_build": "passed",
+      "rust_source_unchanged_by_vm_followup": true
+    },
+    "hosted_ci": "Separate; no hosted pass claimed by this record."
+  },
+  "limits": [
+    "The real partial runtime-mask refusal was tested on the initial candidate; mask and CLI payload paths are unchanged by the final helper ordering follow-up, but that whole scenario was not repeated on vm13.4.",
+    "Initial and intermediate failed acceptance observations remain failures, despite passing refusal/recovery checks.",
+    "The transient systemd-executor explanation for vm13.3 is an inference from the exact-membership refusal and later PID1-only inventory, not a captured process identity.",
+    "CUPS availability during an actual user stop observer proves the tested shutdown ordering, not the destination or cause of the physical-machine blocked request.",
+    "No full PIN enrollment, activation, reboot, active-upgrade or hardware matrix was repeated. M9 independent review and hardware gates remain open."
+  ]
+}

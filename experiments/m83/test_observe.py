@@ -75,6 +75,26 @@ class ObservationTests(unittest.TestCase):
                 known + '1\nUnrecognized password request: '):
             self.assertIsNone(observer.terminal_prompt(known + '1\n' + current)['id'])
 
+    def test_pending_restoration_choices_survive_ansi_and_both_kinds_of_wrap(self):
+        text = ('\x1b[1;36mRecheck readiness or\nexit setup?\x1b[0m\n'
+                '  1. Recheck readi\nness\n  2. Exit setup\n'
+                'Choose a number (q to cancel):\n\n')
+        result = observer.terminal_prompt(text)
+        self.assertEqual(result['id'], 'restoration-readiness')
+        self.assertEqual(result['answers'], {'1': 'recheck', '2': 'exit', 'q': 'cancel'})
+
+    def test_restoration_question_and_options_cannot_be_reinterpreted_as_retry_approval(self):
+        known = ('Recheck readiness or exit setup?\n'
+                 '  1. Recheck readiness\n  2. Exit setup\n'
+                 'Choose a number (q to cancel): ')
+        for current in (
+                known.replace('Recheck readiness or exit setup?', 'Approve maintenance retry?'),
+                known.replace('1. Recheck readiness', '1. Retry maintenance'),
+                known.replace('2. Exit setup', '2. Continue setup'),
+                'Unknown new question?\n  1. Recheck readiness\n  2. Exit setup\n'
+                'Choose a number (q to cancel): '):
+            self.assertIsNone(observer.terminal_prompt(known + '1\n' + current)['id'])
+
 
 if __name__ == '__main__':
     unittest.main()

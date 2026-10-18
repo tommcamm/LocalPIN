@@ -33,6 +33,82 @@ pub(crate) enum Blocker {
     Policy,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum AccountingResult {
+    Complete,
+    Aborted,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum Restoration {
+    NotNeeded,
+    Pending,
+    Restored,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum FailedOperation {
+    RpmLockPath,
+    MaskAuthentication,
+    StopSessions,
+    IsolateMaintenance,
+    PersistentFilesystem,
+    LabelWork,
+    LabelResume,
+    LabelPersistent,
+    ScheduleMaintenance,
+    BeginMaintenance,
+    UnmaskOwned,
+    RestoreGraphical,
+    RestoreListeners,
+    RestorationJobs,
+    RestorationStatus,
+    Emergency,
+    SelinuxStatus,
+    DisplayManagerStatus,
+    RestoreUnitStatus,
+    MaskStatus,
+}
+
+impl FailedOperation {
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::RpmLockPath => "check the native RPM lock path",
+            Self::MaskAuthentication => "temporarily mask authentication services",
+            Self::StopSessions => "stop user sessions",
+            Self::IsolateMaintenance => "isolate the maintenance target",
+            Self::PersistentFilesystem => "check the persistent accounting filesystem",
+            Self::LabelWork => "label the maintenance directory",
+            Self::LabelResume => "label the setup resume hint",
+            Self::LabelPersistent => "label persistent accounting",
+            Self::ScheduleMaintenance => "schedule the maintenance service",
+            Self::BeginMaintenance => "begin the maintenance service",
+            Self::UnmaskOwned => "remove maintenance authentication masks",
+            Self::RestoreGraphical => "restore the graphical login target",
+            Self::RestoreListeners => "restore login services",
+            Self::RestorationJobs => "check pending service restoration jobs",
+            Self::RestorationStatus => "verify restored login services",
+            Self::Emergency => "select administrator emergency recovery",
+            Self::SelinuxStatus => "check SELinux enforcement",
+            Self::DisplayManagerStatus => "check the display manager",
+            Self::RestoreUnitStatus => "check login services before maintenance",
+            Self::MaskStatus => "check authentication service masks",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct AccountingOutcome {
+    pub result: AccountingResult,
+    pub restoration: Restoration,
+    #[serde(deserialize_with = "Option::deserialize")]
+    pub failed_operation: Option<FailedOperation>,
+}
+
 /// Separate from the unchanged public status/doctor JSON schema.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -46,6 +122,8 @@ pub(crate) struct SetupReport {
     #[serde(deserialize_with = "Option::deserialize")]
     pub trial_ref: Option<String>,
     pub tests_recorded: bool,
+    #[serde(default)]
+    pub accounting_outcome: Option<AccountingOutcome>,
 }
 
 impl SetupReport {
@@ -271,5 +349,54 @@ mod tests {
             SetupReport::parse(missing.as_bytes()),
             Err(CliError::SetupReport)
         );
+    }
+
+    #[test]
+    fn accounting_outcome_is_optional_and_accepts_only_closed_nonsecret_fields() {
+        let base = r#"{"schema_version":1,"phase":"unprepared","blocker":"accounting","enrolled":false,"trial_valid":false,"trial_remaining_seconds":0,"trial_ref":null,"tests_recorded":false}"#;
+        assert!(
+            SetupReport::parse(base.as_bytes())
+                .unwrap()
+                .accounting_outcome
+                .is_none()
+        );
+        let add = |outcome: &str| {
+            format!(
+                "{},\"accounting_outcome\":{outcome}}}",
+                &base[..base.len() - 1]
+            )
+        };
+        let outcome =
+            r#"{"result":"aborted","restoration":"restored","failed_operation":"stop-sessions"}"#;
+        let parsed = SetupReport::parse(add(outcome).as_bytes()).unwrap();
+        assert_eq!(
+            parsed.accounting_outcome.unwrap(),
+            AccountingOutcome {
+                result: AccountingResult::Aborted,
+                restoration: Restoration::Restored,
+                failed_operation: Some(FailedOperation::StopSessions),
+            }
+        );
+        for outcome in [
+            outcome.replace("aborted", "failed"),
+            outcome.replace("restored", "unknown"),
+            outcome.replace("stop-sessions", "untrusted terminal output"),
+            outcome.replace("\"result\":", "\"extra\":true,\"result\":"),
+            outcome.replace("\"result\":", "\"result\":\"complete\",\"result\":"),
+            r#"{"result":"aborted","restoration":"pending"}"#.to_owned(),
+        ] {
+            assert_eq!(
+                SetupReport::parse(add(&outcome).as_bytes()),
+                Err(CliError::SetupReport)
+            );
+        }
+        for result in ["complete", "aborted"] {
+            for restoration in ["not-needed", "pending", "restored"] {
+                let outcome = format!(
+                    r#"{{"result":"{result}","restoration":"{restoration}","failed_operation":null}}"#
+                );
+                assert!(SetupReport::parse(add(&outcome).as_bytes()).is_ok());
+            }
+        }
     }
 }

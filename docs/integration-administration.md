@@ -161,6 +161,11 @@ If preflight refuses before entering the execution barrier, the service can
 restore password login automatically only after proving this is the same boot,
 the original accounting policy is intact, and no backup, counter copy or policy
 switch has begun. The failed request is retained for diagnosis.
+Masking failure removes only transaction-owned temporary masks without signing
+out the desktop. Before isolation, sessions stop while normal services remain
+available for desktop teardown. Successful migration and verified abort both
+reopen setup after login; an abort explains that preparation remains incomplete
+and requires explicit approval before retrying.
 
 ### Interrupted automatic maintenance
 
@@ -185,6 +190,26 @@ exact durable persistent snapshot and original private backups, then completes
 forward and restores login. Different or newer accounting is retained for
 manual review; recovery never overwrites it. After a verified abort, setup may
 offer a new explicitly approved request while retaining the prior evidence.
+
+`failure.json` records the original closed operation identifier, exit status
+and fixed diagnostic category; `recovery-failure.json` separately records a
+restoration failure. Neither contains raw command output. The terminal journal
+phase (`complete` or `aborted`) describes accounting, while `restoration` records
+`not-needed`, `pending` or `restored`. A normally exiting maintenance service can
+therefore represent a safe abort, rather than a successful migration. Consult
+the protected outcome and `setup-status --uid N` report when diagnosing it.
+
+A queued graphical-target job is still pending restoration. Setup blocks until
+the helper observes settled service jobs and active login services. If its
+bounded observation expires, use the same administrator recovery command to
+retry restoration. For a transaction already proven terminal, recovery checks
+current policy and native metadata, and requires previously completed persistent
+history to remain present; it allows legitimate newer tally bytes and never
+copies historical counters over them. This restoration-only retry also works
+after a later boot. It cannot certify a transaction interrupted before a durable
+accounting outcome. A later-boot retry never removes current runtime masks using
+the previous boot's ownership list. Older aborted journals without a restoration witness require
+this explicit verification before setup retries.
 
 Power loss before a durable snapshot can destroy `/run/faillock`. The helper
 cannot reconstruct lost counters and refuses to certify preservation. Use the

@@ -78,17 +78,29 @@ def accounting_module():
     return module
 
 
-def accounting_pending():
+def accounting_state():
+    """Validate protected maintenance evidence before treating it as terminal."""
     journal = CONTROL / 'accounting/transaction.json'
     if not journal.exists() and not journal.is_symlink():
-        return False
+        return None
+    accounting = accounting_module()
     try:
-        value = json.loads(read(journal, 4 * 1024 * 1024, mode=0o600))
-    except FileNotFoundError:
-        return False
-    require(isinstance(value, dict) and value.get('schema') == 1,
-            'invalid accounting maintenance journal; use emergency recovery')
-    return value.get('phase') not in ('complete', 'aborted')
+        return accounting.read_journal(sys.modules[__name__])
+    except (RuntimeError, ValueError, KeyError, TypeError, RecursionError):
+        raise Refusal('invalid accounting maintenance journal; use emergency recovery') from None
+
+
+def accounting_restoration(state):
+    # Older complete journals predate the restoration witness. An old aborted
+    # request only proves no service changes when its durable marker is false.
+    return state.get('restoration', 'restored' if state['phase'] == 'complete' else
+                     'not-needed' if state.get('isolation_requested') is False else 'pending')
+
+
+def accounting_pending(state=None):
+    state = accounting_state() if state is None else state
+    return state is not None and (state['phase'] not in ('complete', 'aborted')
+                                  or accounting_restoration(state) == 'pending')
 
 
 def require(condition, message):
@@ -566,7 +578,13 @@ def setup_status(uid):
     result = {'schema_version': 1, 'phase': phase, 'blocker': 'none', 'enrolled': False,
               'trial_valid': False, 'trial_remaining_seconds': 0, 'trial_ref': None,
               'tests_recorded': False}
-    if accounting_pending():
+    maintenance = accounting_state()
+    if (maintenance is not None and maintenance['phase'] in ('complete', 'aborted')
+            and maintenance['uid'] == uid):
+        result['accounting_outcome'] = {'result': maintenance['phase'],
+                                      'restoration': accounting_restoration(maintenance),
+                                      'failed_operation': maintenance.get('failure_operation')}
+    if maintenance is not None and accounting_pending(maintenance):
         result['blocker'] = 'accounting-maintenance'
         return result
     try:

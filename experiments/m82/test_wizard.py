@@ -81,6 +81,34 @@ class PromptTests(unittest.TestCase):
             self.assertIsNone(wizard.prompt((previous + current).encode())['id'])
         self.assertIsNone(wizard.prompt(b'Changed New PIN      ')['id'])
 
+    def test_pending_restoration_observes_only_the_fixed_readiness_choices(self):
+        heading = 'Recheck readiness or exit setup?'
+        options = ('Recheck readiness', 'Exit setup')
+        transcript = self.wrapped_block(heading, options)
+        result = wizard.prompt(transcript)
+        self.assertEqual(result['id'], 'restoration-readiness')
+        self.assertEqual(result['answers'], {'1': 'recheck', '2': 'exit', 'q': 'cancel'})
+        self.assertIsNone(wizard.prompt(transcript + b'1\r\n')['id'])
+        previous = transcript + b'1\r\n'
+        for current in (
+                wizard.choice_block('Retry maintenance or exit setup?', options),
+                wizard.choice_block(heading, ('Restart maintenance', 'Exit setup')),
+                wizard.choice_block(heading, ('Recheck readiness', 'Continue setup'))):
+            self.assertIsNone(wizard.prompt(previous + current.encode())['id'])
+
+    def test_maintenance_abort_or_pending_restoration_does_not_claim_activation(self):
+        transcript = (
+            'Warning\nThe previous password-accounting maintenance was aborted.\n'
+            'Native accounting was preserved; the prior preparation remains incomplete.\n'
+            'Login service restoration has not yet been verified.\n'
+            + wizard.choice_block('Recheck readiness or exit setup?',
+                                  ('Recheck readiness', 'Exit setup'))).encode()
+        self.assertEqual(wizard.prompt(transcript)['id'], 'restoration-readiness')
+        messages = wizard.fixed_messages(transcript)
+        self.assertFalse(messages['activated'])
+        self.assertFalse(messages['active_noop'])
+        self.assertIsNone(wizard.exit_code(transcript))
+
     def test_new_outcome_layout_is_observed_across_ansi_and_line_wraps(self):
         transcript = (
             '\x1b[32mDone\x1b[0m\n  LocalPIN is active.\n'

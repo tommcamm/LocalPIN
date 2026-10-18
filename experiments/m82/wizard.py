@@ -78,6 +78,9 @@ CHOICE_PROMPTS = (
     ('Review proposed policy changes', 'policy-preview', (
         'View policy diff', 'Continue to apply confirmation', 'Pause setup'),
      {'1': 'view', '2': 'continue', '3': 'pause', 'q': 'cancel'}),
+    ('Recheck readiness or exit setup?', 'restoration-readiness', (
+        'Recheck readiness', 'Exit setup'),
+     {'1': 'recheck', '2': 'exit', 'q': 'cancel'}),
 )
 
 

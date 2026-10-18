@@ -42,22 +42,49 @@ change. The worker independently reacquires this lock before the integration
 lock and retains it through migration, verification and service restoration.
 Only then does the worker isolate the empty maintenance target; the service's
 `IgnoreOnIsolate` boundary keeps it independent of that target's start job.
-A durable `isolation_requested` marker precedes every authentication mask or
-isolation command. A busy lock before that marker cannot stop or restore any
-services; an untouched request is recorded as aborted when the integration lock
-permits, otherwise the pending evidence remains for explicit recovery.
+A durable `masking` phase precedes authentication masking. The worker refreshes
+its owned-mask list after the delayed handoff to preserve masks installed in the
+interim. A partial masking failure removes only owned masks and never submits
+an isolation transaction. A durable `isolation_requested` marker is saved only
+after masking, immediately before the first session-stop command. A busy lock
+before masking cannot stop or restore services; an untouched request is recorded
+as aborted when the integration lock permits, otherwise pending evidence remains
+for explicit recovery. Administrators must not race maintenance with unrelated
+service configuration changes; the integration lock coordinates LocalPIN tools.
+
+Before isolation, the worker synchronously stops the display manager, loaded
+`user@*.service` and `user-runtime-dir@*.service` instances, and `user.slice`.
+A slice stop alone does not wait for every delegated manager's shutdown job.
+Ordinary services remain available to desktop shutdown
+workers. This avoids deliberately stopping CUPS concurrently with Plasma's
+printing-worker teardown. This ordering addresses the observed dependency
+hazard; it does not establish the destination or cause of the reported blocked
+CUPS request. [Targeted installed KDE acceptance](../development/accounting-maintenance-abort.md)
+passed for the recorded candidate; the physical-machine failure remains unproven.
 
 The maintenance target conflicts with `user.slice` and orders itself after that
 slice, the display manager, logind and user-session service. During isolation,
 their stop jobs therefore finish before the target's start job completes. The
-explicit slice stop also drains delegated user managers and runtime-directory
-services that otherwise ignore isolation, so their lifecycle cleanup finishes
-before the final freezer/kill boundary. This lets the desktop restore its virtual
-terminal and avoids carrying stale user-manager state into the next login; an
+explicit manager/runtime stop jobs before isolation drain delegated user managers
+and runtime-directory services that otherwise ignore isolation, so their
+lifecycle cleanup finishes before the final freezer/kill boundary. Merely
+stopping the slice does not establish that drain. This lets the desktop restore
+its virtual terminal and avoids carrying stale user-manager state into the next login; an
 otherwise empty target can complete while unrelated service stops are still
 running. These ordering edges do not start those services or depend on the
 maintenance worker. The bounded isolation command and subsequent kernel
 exclusion proof remain mandatory.
+
+After isolation, the worker waits at most ten seconds for short-lived systemd
+executors to leave `init.scope`. Only PID 1 alone satisfies the wait, and both
+the preflight and frozen inventories still require that exact membership.
+With the watchdog running and barrier-entry journal durable, the worker freezes
+and observes `init.scope` first, then takes a fresh inventory of allowed
+cgroups. A drained slice removed by the manager before its freeze therefore
+does not remain in a stale barrier inventory. The worker freezes the remaining
+groups, rechecks topology, and kills and observes all old non-init tasks before
+copying. A missing inventory, timeout, or extra process in the frozen init scope
+refuses maintenance; the wait does not replace the kernel exclusion proof.
 
 The migration inventories every native tally because the configuration change
 is global. It retains exact source backups, rejects unsafe metadata or
@@ -81,12 +108,32 @@ original same-boot volatile authority remains intact and no snapshot, backup or
 copy has begun. A durable barrier-entry phase prevents an interrupted barrier
 from being mistaken for that untouched state. The aborted request is retained.
 
-After successful migration, a bounded, nonsecret root-owned hint identifies the
-setup owner and request. A packaged KDE autostart launcher opens only the fixed
+Checked commands carry closed operation identifiers, exit status and bounded
+fixed diagnostic categories. Raw command output is never retained. Original
+failure evidence and restoration failure evidence have separate files; cleanup
+does not replace the initiating failure.
+
+Terminal accounting outcomes separately record login restoration as
+`not-needed`, `pending` or `restored`. Queuing a nonblocking graphical isolation
+does not prove restoration: the worker observes pending systemd jobs (excluding
+its own start job) and the required active login services within a fixed bound.
+Pending restoration blocks setup and another maintenance request. Administrator
+recovery can retry restoration of a proven terminal transaction without copying
+or comparing current tally bytes to stale snapshots; current policy, native
+metadata and the presence of completed persistent history remain required.
+Unsafe nonterminal interruptions retain the emergency path. A proven safe abort
+exits normally to avoid the unit's emergency failure handler, while emitting its
+actual result and restoration state to the journal.
+
+After successful migration or a verified abort, a bounded, nonsecret root-owned
+hint identifies the setup owner, request and distinct outcome. A packaged KDE
+autostart launcher opens only the fixed
 normal-user `localpin setup` command. A user cache suppresses duplicate windows;
 it provides no authority. Setup rechecks privileged state, and enrollment still
 requires a fresh account password. No secret or client authorization is saved
-across logout.
+across logout. An abort explains the failed operation when known and requires
+new explicit sign-out approval before any retry. It never supplies a successful
+migration hint.
 
 Actual PIN/password tests, administrator-console recovery rehearsal, fresh
 enrollment after recovery, and explicit activation remain required. This

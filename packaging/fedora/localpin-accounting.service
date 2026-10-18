@@ -10,7 +10,9 @@ OnFailure=emergency.target
 Type=oneshot
 Slice=localpinmaintenance.slice
 ExecStart=/usr/libexec/localpin/localpin-accounting run
-TimeoutStartSec=120
+# Session drain, target isolation, watchdog barrier and observed restoration
+# each have their own bound. Retain enough time for all four plus preflight.
+TimeoutStartSec=240
 TimeoutStopSec=10
 KillMode=process
 UMask=0077
